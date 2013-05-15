@@ -13,16 +13,12 @@
 start() -> start("").
 
 api_start(Prefix)->
-    ?LOG_APPLICATION,
     prolog:create_inner_structs(Prefix),
     ?INCLUDE_HBASE( Prefix )
     
 .
 
 start(default) ->
-    inets:start(),
-    crypto:start(),
-    ?LOG_APPLICATION,
     prolog:create_inner_structs(""),
     ?INCLUDE_HBASE(""),
     server("") 
