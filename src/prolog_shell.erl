@@ -13,8 +13,6 @@
 start() -> start("").
 
 api_start(Prefix)->
-    inets:start(),
-    crypto:start(),
     ?LOG_APPLICATION,
     prolog:create_inner_structs(Prefix),
     ?INCLUDE_HBASE( Prefix )
@@ -275,7 +273,7 @@ shell_var_match_str({ { Key }, Val} ) when is_binary(Val) ->
 			    shell_var_match_str({ { Key }, unicode:characters_to_list(Val) } );
 			    
 shell_var_match_str({ { Key }, []} )-> 
-    io_lib:format("<strong>~p</strong> = nothins ~n", [Key, [] ])
+    io_lib:format("<strong>~p</strong> = nothins ~n", [Key ])
 ;
 shell_var_match_str({ { Key }, Val} )-> 
 
