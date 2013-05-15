@@ -18,7 +18,6 @@ delete_inner_structs(Prefix)->
       ets:delete_all_objects(common:get_logical_name(Prefix, ?RULES) ),
       ets:delete_all_objects(common:get_logical_name(Prefix, ?DYNAMIC_STRUCTS)),
       ets:delete_all_objects(common:get_logical_name(Prefix, ?INNER) ) ,
-      %%TODO delete it separate
       ets:delete_all_objects(common:get_logical_name(Prefix, ?META) ),
       ets:delete_all_objects(common:get_logical_name(Prefix, ?META_LINKS) ),
       ets:delete_all_objects(common:get_logical_name(Prefix, ?HBASE_INDEX))
@@ -26,8 +25,8 @@ delete_inner_structs(Prefix)->
 
 create_inner_structs(Prefix)->
   
-%%TODO realize separate namespaces
     ets:new(common:get_logical_name(Prefix, ?DYNAMIC_STRUCTS),[named_table, set, public]),
+    %TODO remove this
     put(?DYNAMIC_STRUCTS, common:get_logical_name(Prefix, ?DYNAMIC_STRUCTS) ),
     ets:new(common:get_logical_name(Prefix, ?META),[named_table, set, public]),
     ets:new(common:get_logical_name(Prefix, ?INNER),[named_table, bag, public]),
@@ -311,12 +310,7 @@ dynamic_del_link(Fact1, Fact2, TreeEts) ->
 .
 dynamic_del_fact(B, TreeEts)->
       ?WAIT("~p regis  wait del    ~p ~n",[{?MODULE,?LINE},{B} ]),
-      receive 
-	  start ->
-		?WAIT("~p GOT  wait del    ~p ~n",[{?MODULE,?LINE},{B} ]),
-		fact_hbase:del_fact(B, TreeEts)
-
-      end
+       fact_hbase:del_fact(B, TreeEts)
 .
 
 dynamic_del_rule(Search, TreeEts)->
@@ -2356,35 +2350,37 @@ start_retract_process([], _BodyBounded, Context, _Index, _TreeEts, ParentPid)->
     end;
     
      
-
+%TODO rewrite this !!
 start_retract_process(FactList, BodyBounded, Context, Index, TreeEts, ParentPid) when is_list(BodyBounded)->
       [Head| _Tail] = BodyBounded,
       Name = erlang:element(1, Head),
       ?DEBUG("~p wait for delete ~p ",[{?MODULE,?LINE}, BodyBounded ]),
+      FactTable = common:get_logical_name(TreeEts,?INNER ),
       receive 
 	  next ->
-		Res = retract_fold(false, BodyBounded, FactList, Context, [] ),
+		Res = retract_fold(false, BodyBounded, FactList, Context, [], FactTable ),
 		
 		case Res of
 		    {false, _ }->  ParentPid ! {result, Res };
 		    {true, _} ->
 			ParentPid ! {result, Res},
-			NewFactList = ets:lookup(?INNER, Name),
+			NewFactList = ets:lookup(FactTable, Name),
 			start_retract_process(NewFactList, BodyBounded,  Context, Index, TreeEts, ParentPid)
 		end
       end
       
 .
-
+%TODO rewrite this !!
 start_retract_process(BodyBounded, Context, Index, TreeEts, ParentPid) when is_tuple(BodyBounded)->
     Name = erlang:element(1, BodyBounded),
     ?DEBUG("~p wait for delete ~p ",[{?MODULE,?LINE}, Name ]),
-
+    FactTable = common:get_logical_name(TreeEts,?INNER ),
+    OutFacts = common:get_logical_name(TreeEts, ?META),
     receive 
 	next ->
 		?DEBUG("~p retract got next  ~n",[{?MODULE,?LINE}]),
 
-		case is_deep_rule( Name ) of
+		case is_deep_rule( Name, TreeEts ) of
 		     true ->
 			%%TODO BOUNDING of CONSTANS
 			Pid = spawn(?MODULE, dynamic_del_rule, [BodyBounded, TreeEts]),
@@ -2394,63 +2390,66 @@ start_retract_process(BodyBounded, Context, Index, TreeEts, ParentPid) when is_t
 		        start_retract_process(BodyBounded, Context, Index, TreeEts, ParentPid);
 		      
 		     false->
-		         Pid = spawn(?MODULE, dynamic_del_fact, [BodyBounded, TreeEts] ),
-			 unlink(Pid),
-			 Pid ! start,
-			 ?DEBUG("~p delete fact ~p ",[{?MODULE,?LINE}, {Name, BodyBounded} ]),
-			 case ets:lookup(?INNER, Name)  of
-			     [] ->
-				  ParentPid ! {result, {false, Context} };
-			     FactList ->
-	     			 ?DEV_DEBUG("~p got list ~p ",[{?MODULE,?LINE},FactList ]),
-			         
-			         Res = retract_fold(false, BodyBounded, FactList, Context, [] ),
-			         
-       	     			 ?DEV_DEBUG("~p delete  res ~p ",[{?MODULE,?LINE},Res ]),
-       	     			
-				 case Res of
-				    {false, _ }->  ParentPid ! {result, Res };
-				    {true, _} ->
-					ParentPid ! {result, Res},
-					NewFactList = ets:lookup(?INNER, Name),
-					start_retract_process(NewFactList, BodyBounded, Context, Index, TreeEts, ParentPid)
-				 end
-			 end	
+			DelRes =
+			    case ets:lookup(OutFacts, Name ) of 
+			      [_] ->
+				  Res = dynamic_del_fact(BodyBounded, TreeEts),
+				  ?DEBUG("~p delete fact ~p ",[{?MODULE,?LINE}, {Name, Res} ]),
+				  {Res, Context };
+			      [] ->    
+				      case ets:lookup(FactTable, Name)  of
+				      [] ->
+					    ParentPid ! {result, {false, Context} };
+				      FactList ->
+					  ?DEV_DEBUG("~p got list ~p ",[{?MODULE,?LINE},FactList ]),
+					  Res = retract_fold(false, BodyBounded, FactList, Context, [], FactTable ),
+					  ?DEV_DEBUG("~p delete  res ~p ",[{?MODULE,?LINE},Res ]),
+					  Res
+					
+				      end
+			    end,
+			    case DelRes of
+					      {false, _ }->  ParentPid ! {result, DelRes };
+					      {true, _} ->
+						  ParentPid ! {result, DelRes},
+						  start_retract_process( BodyBounded, Context, Index, TreeEts, ParentPid)
+			    end
 		end
     end
  
 .
 
-is_deep_rule(Name)->
-    case ets:lookup(?RULES,Name) of
+is_deep_rule(Name, TreeEts)->
+    FactTable = common:get_logical_name(TreeEts,?RULES ),
+    case ets:lookup(FactTable, Name) of
 	  [] -> false;
 	  _ ->true
     end
 .
 
-retract_fold({true,NewContext}, Match, [],_Context, NewList)->
+retract_fold({true,NewContext}, Match, [],_Context, NewList, Table)->
     ReverS = lists:reverse(NewList),
     Name = erlang:element(1, Match),
-    ets:delete(?INNER,Name),
-    ets:insert(?INNER, ReverS),
+    ets:delete(Table, Name),
+    ets:insert(Table, ReverS),
     {true, NewContext};
     
-retract_fold(false ,_Match, [],Context, List)->
+retract_fold(false ,_Match, [],Context, List, _Table)->
    {false, Context};    
-retract_fold(Res = {true, _}, Match, [Head|Tail], Context, List)->
-       retract_fold(Res, Match, Tail, Context, [Head|List]) 
+retract_fold(Res = {true, _}, Match, [Head|Tail], Context, List, Table)->
+       retract_fold(Res, Match, Tail, Context, [Head|List], Table) 
 ;    
-retract_fold(Res, Match, [Head|Tail], Context, List)->
+retract_fold(Res, Match, [Head|Tail], Context, List, Table)->
 	  
     case  prolog_matching:var_match(Match, Head, Context)  of
 	  {true, NewContext}->
 	    
 	    retract_fold(
-		      {true,NewContext}, Match, Tail, Context, List
+		      {true,NewContext}, Match, Tail, Context, List, Table
 		
 		);
 	 { false, _}->
-		 retract_fold(Res, Match, Tail, Context, [Head|List]) 
+		 retract_fold(Res, Match, Tail, Context, [Head|List], Table) 
 	 
     end    
 .
