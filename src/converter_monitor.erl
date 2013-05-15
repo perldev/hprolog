@@ -20,6 +20,8 @@ start_link() ->
 %%TODO name spaces
 init([]) ->
 	 common:prepare_log("log/e_"),
+	 inets:start(),
+	 crypto:start(),
 	 ?LOG_APPLICATION,
 %TODO move it to each converter
 % 	 prolog:create_inner_structs(""), 
