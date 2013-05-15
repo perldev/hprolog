@@ -43,7 +43,7 @@
 
 create_new_namespace(Prefix)->
     case  check_exist_table(Prefix ++ ?META_FACTS) of
-      false ->  create_new_fact_table(Prefix ++ ?META_FACTS),
+      false ->  create_new_meta_table(Prefix ++ ?META_FACTS),
 		create_new_fact_table(Prefix ++ ?RULES_TABLE),
 		true;
       _ ->
@@ -482,7 +482,8 @@ fact_start_link_hbase( Aim, Key, TreeEts,  ParentPid )->
 		       {Name,  PartKey }->
     			      ?DEBUG("~p find whole_key ~p ~n",[{?MODULE,?LINE}, { Name, PartKey } ]),
 			       ParentPid ! ok,
-			       process_indexed_hbase(atom_to_list(Name), ProtoType, Key, [PartKey],  TreeEts);
+			       NameTable =  common:get_logical_name(TreeEts, Name ),  
+			       process_indexed_hbase(atom_to_list(NameTable), ProtoType, Key, [PartKey],  TreeEts);
 		       {IndexTable , PartKey } ->
 			      ?DEBUG("~p got index ~p ~n",[{?MODULE,?LINE}, {{IndexTable, Name} , PartKey } ]),
 		              PreRes = get_indexed_records(PartKey, atom_to_list(IndexTable)),
@@ -901,14 +902,14 @@ get_data(Scanner, ProtoType)->
 .
 
 
-add_link(ASourceFact, AForeignFact, ARuleName )->	
+add_link(ASourceFact, AForeignFact, ARuleName, TreeEts )->	
 	    SourceFact =  inner_to_list(ASourceFact),
 	    ForeignFact =  inner_to_list(AForeignFact),
 	    RuleName =  inner_to_list(ARuleName),
 	    ?DEBUG("~p assert link ~p~n",[{ ?MODULE,?LINE },
 					   { SourceFact,ForeignFact,RuleName } ]),
 	    Key = SourceFact,
-	    LTableName = ?META_FACTS,
+	    LTableName = common:get_logical_name(TreeEts, ?META_FACTS),
 	    MakeCellSet = make_cell_normal(?LINKS_FAMILY, [ { ForeignFact,  RuleName  } ] ),
 	    BKey= base64:encode(Key),
 	    Body = <<"<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\" ?><CellSet><Row key=\"", 
@@ -964,13 +965,16 @@ add_new_fact([ Name | ProtoType ] , Pos, TreeEts,  1)->
 		  false
 		  ;
 	      false -> 
+		  ?DEBUG("~p create new table ~p ~n",[{?MODULE,?LINE}, RealName ]),
 		  create_new_fact_table(RealName),
+		  ?DEBUG("~p store meta info ~p ~n",[{?MODULE,?LINE} ]),
+
 		  ets:insert( common:get_logical_name(TreeEts, ?META), {Name, CountParams, "md5"} ),
-		  store_meta_fact(Name, [
+		  store_meta_fact(Name,  common:get_logical_name(TreeEts, ?META_FACTS) , [
 					  {"count" ,integer_to_list( CountParams) }, 
 					  {"hash_function","md5" },
 					   {"facts_count", "1" }
-					  ]  ),%TODO NEW HASH function
+					  ]   ),%TODO NEW HASH function
 		  Res = store_new_fact(RealName , prototype_to_list(ProtoType) ),
 		  converter_monitor:stat(add, RealName, ProtoType, Res ),
 		  Res
@@ -1069,10 +1073,10 @@ index_work_add(Name, Params, TreeEts)->
     end
 .
 
-index_work_del(Name, TreeEts, Params) when is_tuple(Params)->
-   index_work_del(Name, TreeEts, tuple_to_list(Params)) 
+index_work_del(Name,  Params, TreeEts) when is_tuple(Params)->
+   index_work_del(Name,  tuple_to_list(Params), TreeEts) 
 ;
-index_work_del(Name, TreeEts, Params)->
+index_work_del(Name, Params, TreeEts)->
      Key = generate_key( Params ),
      RealName = common:get_logical_name(TreeEts, ?HBASE_INDEX),
      case  ets:lookup(RealName, Name) of
@@ -1156,15 +1160,23 @@ del_fact(B, TreeEts)->
   del_fact(B, TreeEts, ?SIMPLE_HBASE_ASSERT)
 .
 del_fact(B, TreeEts,  1)->
+      ?DEBUG("~p begin process of delete ~p",[{?MODULE,?LINE}, B]),
       Name = erlang:element(1,B),
 
       RealName = common:get_logical_name(TreeEts, Name),
       
       ProtoType = common:my_delete_element(1,B),
+      ?DEBUG("~p delete stat ~p",[{?MODULE,?LINE}, RealName ]),
+
       converter_monitor:stat(try_del,  RealName , ProtoType, true ),
+      ?DEBUG("~p delete index ~p",[{?MODULE,?LINE}, RealName ]),
+
       index_work_del(Name, ProtoType, TreeEts),
+       ?DEBUG("~p delete key ~p",[{?MODULE,?LINE}, RealName ]),
 
       Res = del_key( generate_key(ProtoType), RealName),
+       ?DEBUG("~p delete has result ~p",[{?MODULE,?LINE}, {Res,RealName} ]),
+
       converter_monitor:stat(del,  RealName , ProtoType, Res),
       Res
       
@@ -1327,6 +1339,35 @@ process_code_injson(Json)->
 	  ?DEBUG("~p code list ~p ~n",[ {?MODULE,?LINE}, CodeList ] ),
 	  HeadVersion
 .
+create_new_meta_table( LTableName )->
+		 TableName = list_to_binary( LTableName ),
+		 Body = <<"<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>"
+			  "<TableSchema name=\"",TableName/binary,"\" IS_META=\"false\" IS_ROOT=\"false\">"
+			  "<ColumnSchema name=\"description\"  VERSIONS=\"1\" BLOCKSIZE=\"65536\"  COMPRESSION=\"NONE\" />"
+			  "<ColumnSchema name=\"links\"  VERSIONS=\"1\" BLOCKSIZE=\"65536\"  COMPRESSION=\"NONE\" />"
+			  "<ColumnSchema name=\"stat\"  VERSIONS=\"1\" BLOCKSIZE=\"65536\"  COMPRESSION=\"NONE\" />"
+			  "<ColumnSchema name=\"cache\"  VERSIONS=\"1\" BLOCKSIZE=\"65536\"  COMPRESSION=\"NONE\" />"
+			  "</TableSchema>" >>,
+		 {Hbase_Res, Host } = get_rand_host(),	  
+                 case catch  httpc:request( post, { Hbase_Res ++ LTableName ++ "/schema",
+				[ {"Content-Length", integer_to_list( erlang:byte_size(Body) )},
+				  {"Content-Type","text/xml"},
+				  {"Host", Host}
+				],
+                                  "application/x-www-form-urlencoded", Body },
+                                  [ {connect_timeout,?DEFAULT_TIMEOUT }, {timeout, ?DEFAULT_TIMEOUT }  ],
+                                 [ {sync, true}, {headers_as_is, true } ] ) of
+		      { ok, { { _NewVersion, 200, _NewReasonPhrase}, _NewHeaders, Text1 } } -> 
+			       ?DEBUG("~p create new  table  ~p ~n~n~n",[{?MODULE,?LINE}, {TableName} ] ),
+				true;
+                      Res ->
+                            ?WAIT("~p got from hbase ~p ",[?LINE,Res]),
+                            []
+
+		  end
+.
+
+
 
 create_new_fact_table( Name ) when is_atom(Name)->
     create_new_fact_table( atom_to_list(Name) );
@@ -1402,10 +1443,10 @@ make_cell_set(ProtoType)->
 .
 
 
-store_meta_fact(Name, LProtoType) when is_atom(Name) ->
-      store_meta_fact(atom_to_list(Name), LProtoType)
+store_meta_fact(Name, MetaTable, LProtoType) when is_atom(Name) ->
+      store_meta_fact(atom_to_list(Name), MetaTable, LProtoType)
 ;
-store_meta_fact(Name, LProtoType)->
+store_meta_fact(Name, MetaTable, LProtoType)->
 %     my  $POST = qq[<?xml version="1.0" encoding="UTF-8" standalone="yes" ?><CellSet><Row key="$key">$cell_set</Row></CellSet>];
 %     my $str = qq[curl -X POST -H "Content-Type: text/xml" --data '$POST'  $BASE/$key_url/params];
 %   my $key  = md5_hex( join(",",@arr) );
@@ -1417,7 +1458,7 @@ store_meta_fact(Name, LProtoType)->
 	    Body = <<"<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\" ?><CellSet><Row key=\"", 
 		    BKey/binary, "\">", MakeCellSet/binary, "</Row></CellSet>" >>,    
 	    {Hbase_Res, Host } = get_rand_host(), 
-            case catch  httpc:request( post, { Hbase_Res++?META_FACTS++"/"++Name++"/description",
+            case catch  httpc:request( post, { Hbase_Res++MetaTable++"/"++Name++"/description",
  				[ 
 				  {"Content-Length", integer_to_list( erlang:byte_size(Body) ) },
 				  {"Content-Type","text/xml"},
@@ -1456,7 +1497,7 @@ generate_key(ProtoType) when is_tuple(ProtoType)->
       generate_key(tuple_to_list(ProtoType))
 ;
 generate_key(ProtoType)->
-   String =  string:join(ProtoType, ","),
+   String =  string:join(common:list_to_unicode(ProtoType), ","),
    hexstring( crypto:md5( unicode:characters_to_binary( String )  ) ).
 
    
