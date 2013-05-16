@@ -59,6 +59,18 @@ process_card(Card)->
 	[Head,$*,F,S]
 .
 
+list_to_unicode(List)->
+      lists:map(fun to_unicode/1, List )
+.
+to_unicode(E) when is_integer(E)->
+      integer_to_list(E);
+to_unicode(E) when is_float(E)->
+      inner_float_to_list(E);   
+to_unicode(E) when is_atom(E)->
+      atom_to_list(E);          
+to_unicode(E) when is_list(E)->
+      E.
+
 prepare_log(Base) ->
         File = make_filename(Base),
         case filelib:ensure_dir(File) of

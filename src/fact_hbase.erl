@@ -1129,7 +1129,9 @@ add_new_rule(Tree = { ':-', ProtoType, BodyRule}, Pos, TableName, 1 )->
        [ Name | _ProtoType ] = tuple_to_list(ProtoType),
        PrologCode =  erlog_io:write1(Tree),
        V2 = list_to_binary( lists:flatten(PrologCode)++"." ),
-       case check_exist_rule( Name ) of
+      	?DEBUG("~p new rule table is  ~p ~n",[ {?MODULE,?LINE}, TableName ] ),
+
+       case check_exist_rule( TableName ) of
 	    false -> 
 		store_new_rule(Name, V2, TableName  );
 	     PrevCode ->

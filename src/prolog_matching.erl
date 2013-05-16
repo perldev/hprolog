@@ -413,29 +413,6 @@ process_var(Head, InVar, Context)->
 .
 
 
-%SearchVal is unbound variable
-% process_var(Head, {Var}, Dict ) when is_atom(Var)->
-% 	?DEV_DEBUG("~p  var ~p~n",[{?MODULE,?LINE}, { {Var} , Head } ]),
-% 	{Head, Dict};
-% 
-% process_var(Head, SearchVal, Dict )->
-% 		    ?DEV_DEBUG("~p  process  var ~p~n",[{?MODULE,?LINE}, { Head , SearchVal } ]),
-% 		     case is_var(Head) of
-% 			  true -> 
-% 				case find_var(Dict, Head) of
-% 				      nothing -> 	  NewV = store_var({Head,SearchVal}, Dict ), {Head, NewV};
-% 				      ExistVal -> case  ExistVal of	
-% 						      SearchVal->
-% 								{Head, Dict}; % if in SearchVal something
-% 						      _SomeThingElse-> 
-% 								{false, Dict}
-% 						   end
-% 				end;			
-% 			  SearchVal -> 
-% 				{Head, Dict};  %%or if it match to the fact
-% 			  _ ->	{false, Dict}
-% 		     end
-% .
 %%in case wheather pattern is list
 match_process_list(false, _, _ , Dict, _MatchedStruct)->
       ?DEV_DEBUG("~p triggered ~n",[{?MODULE,?LINE}]),
@@ -495,13 +472,7 @@ match_process_list(_, Pattern, Search, Dict, MatchedStruct  )->
 		Search ->
 			 {MatchedStruct, Dict};
 		SomeThingElse ->
-% 			?DEV_DEBUG("~p match  ~p ~n",[{?MODULE,?LINE}, {SomeThingElse, Search} ]),
-% 			case process_var(SomeThingElse, Search, Dict) of
-% 			    {false, _}->
-% 				{false, Dict};
-% 			    {_, NewDict}->
-% 				  {MatchedStruct, NewDict}
-% 			end
+
 			 case   is_var(Search) of
  			      true -> process_var(Pattern, Search, Dict);
  			      _Pat  ->

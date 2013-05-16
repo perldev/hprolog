@@ -1,7 +1,11 @@
 -module(prolog).
 -compile(export_all).
+%%% File    : prolog_shell.erl
+%%% Author  : Bogdan Chaicka
+%%% Purpose : A simple  shell.
+%%This module provides prolog kernel work with parsed code 
 
-% 
+
 -include("prolog.hrl").
 
 
@@ -10,7 +14,6 @@ compile(Prefix, File)->
     delete_inner_structs(Prefix),
     lists:foldl(fun process_term/2, Prefix,  Terms ),
     ok
-      
 .
 
 delete_inner_structs(Prefix)->
@@ -28,6 +31,7 @@ create_inner_structs(Prefix)->
     ets:new(common:get_logical_name(Prefix, ?DYNAMIC_STRUCTS),[named_table, set, public]),
     %TODO remove this
     put(?DYNAMIC_STRUCTS, common:get_logical_name(Prefix, ?DYNAMIC_STRUCTS) ),
+    
     ets:new(common:get_logical_name(Prefix, ?META),[named_table, set, public]),
     ets:new(common:get_logical_name(Prefix, ?INNER),[named_table, bag, public]),
     ets:new(common:get_logical_name(Prefix, ?RULES),[named_table, bag, public]),
@@ -94,15 +98,7 @@ fill_context_from_list([Head| Not], [ Search | Tail], Context)->
     {true, NewContext} = prolog_matching:var_match(Search, Head, Context),
     fill_context_from_list(Not, Tail, NewContext )
     
-%     case prolog_matching:is_var(Search) of
-% 	 true -> 
-% 	      NewContext = prolog_matching:store_var({Search, Head }, Context ),
-% 	      fill_context_from_list(Not, Tail, NewContext );
-% 	 _ -> 
-% 	      %TODO ???
-% 		
-% 		fill_context_from_list(Not, Tail, Context )
-%     end
+
 ;
 fill_context_from_list(List, Search, Context)->
     prolog_matching:store_var({Search, List }, Context )
@@ -154,7 +150,7 @@ fill_context([{'_'}| List], [_| Tail], Context )  ->
     fill_context(List, Tail, Context );    
 fill_context([_| List], [{'_'}| Tail], Context )  ->
     fill_context(List, Tail, Context );   
-%%TODO rewrite it
+%%TODO rewrite it, this function is too big
 fill_context([Head| List], [Search| Tail], Context )->
       ?DEV_DEBUG("~p fill context  ~p~n",[{?MODULE,?LINE}, {Head, Search, dict:to_list(Context ) } ]),
       case prolog_matching:is_var(Search) of
@@ -220,11 +216,9 @@ bound_list(List, Context)->
     bound_list(List, Context, [])
 .
 bound_list([], _Context, Res)->
-%      lists:flatten(
-% 	    flat( 
+	  %TODO a lot of operation you must avoid this
 	    lists:reverse( Res )
-% 	    ) 
-%  );
+
 ;
 bound_list([ Head | Tail ], Context, Res) when is_list(Tail) ->
       NewHead = prolog_matching:bound_body(Head, Context),
@@ -234,7 +228,6 @@ bound_list( [Head|Tail], Context, PreRes) -> %we know that it's not a list
 	?DEV_DEBUG("~p  bounding ~p~n",[{?MODULE,?LINE}, [Head,Tail, PreRes]  ]),
 	NewHead = prolog_matching:bound_body(Head, Context),
 	
-%         Res = [ NewHead| PreRes ],
 	NewTail = prolog_matching:bound_body(Tail, Context),
        ?DEV_DEBUG("~p finished bounding ~p~n",[{?MODULE,?LINE}, {PreRes,NewHead, NewTail }  ]),
 	lists:reverse( PreRes ) ++ [ NewHead| NewTail ] 
@@ -243,7 +236,6 @@ bound_list( [Head|Tail], Context, PreRes) -> %we know that it's not a list
 hack_match_results_aim(Body, Result, Context)->
  	Name = element(1,Body ),
 	NewResult = list_to_tuple( [Name |  tuple_to_list(Result) ] ),
-%  	[_SearchList|Params] = tuple_to_list(Body),
          prolog_matching:var_match(  Body, NewResult,  Context).	
 	
 
@@ -262,7 +254,6 @@ bound_vars(Search, Context) ->
 
 
 
-% member(Elem, List)
 var_generator_name(Name)->
        { list_to_atom( Name ) }
 .
@@ -369,8 +360,7 @@ dynamic_new_rule(Tree = {':-',ProtoType, Body} , first, TreeEts )->
 	       ets:delete(RulesName, Name),%%TODO replace it
 	       ets:insert(RulesName,  [ New  | List]  )
 	      
-      end,
-      ?DEBUG("~p result rule after insert ~p ~n",[{?MODULE,?LINE}, ets:lookup(?RULES, Name  ) ])
+      end
       
 ;
 dynamic_new_rule(Tree = {':-',ProtoType, Body} , last, TreeEts )->
@@ -379,8 +369,7 @@ dynamic_new_rule(Tree = {':-',ProtoType, Body} , last, TreeEts )->
      ?LOG("~n compile new rule last ~p ~n",[ Name  ]),
      New =  { Name, Args, Body },
      fact_hbase:add_new_rule(Tree, last, TreeEts),
-     ets:insert(common:get_logical_name(?RULES, TreeEts),  New ),
-     ?DEBUG("~p result rule after insert ~p ~n",[{?MODULE,?LINE}, ets:lookup(?RULES, Name  ) ])
+     ets:insert(common:get_logical_name( TreeEts, ?RULES),  New )
 ;
 dynamic_new_rule(SomeThing ,_ ,_)->
 	io:format("error ~p  ~n",[SomeThing]).
@@ -2327,6 +2316,16 @@ bound_aim(ProtoType, Context)->
 	BoundedSearch
 .
 
+%%HACK avoid this 
+-ifdef(USE_HBASE).
+
+operators( Op )->
+  no
+.
+
+-else.
+
+
 operators( Op )->
   Table = get(?DYNAMIC_STRUCTS),
   case ets:lookup(Table, Op) of
@@ -2339,7 +2338,7 @@ operators( Op )->
       []-> no
   end
 .
-
+-endif.
 
 %%%HACK rewrite to tail recursion
 start_retract_process([], _BodyBounded, Context, _Index, _TreeEts, ParentPid)->
