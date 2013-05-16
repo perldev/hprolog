@@ -9,7 +9,6 @@
 
 bound_body(Var = { _ }, Context)->%just variable
          ?DEV_DEBUG("~p try find there ~p~n",[{?MODULE,?LINE},{ Var ,dict:to_list(Context)} ]),
-
 	 case  find_var(Context, Var ) of
 	       nothing-> Var;
 	       Body-> bound_body(Body, Context)
@@ -20,7 +19,7 @@ bound_body({Operator, Var1, Var2}, Context)->
 	
          BoundVar2 = bound_body(Var2, Context),
          BoundVar1 = bound_body(Var1, Context),
-        ?DEV_DEBUG("~p match find there ~p~n",[{?MODULE,?LINE},{ {Operator, Var1, Var2},{Operator, BoundVar1, BoundVar2}, dict:to_list(Context)} ]),
+         ?DEV_DEBUG("~p match find there ~p~n",[{?MODULE,?LINE},{ {Operator, Var1, Var2},{Operator, BoundVar1, BoundVar2}, dict:to_list(Context)} ]),
          {Operator, BoundVar1, BoundVar2}   
 ;
 bound_body(Var, Context) when is_tuple(Var)->
@@ -31,7 +30,7 @@ bound_body(Var, Context) when is_tuple(Var)->
 			 end , tuple_to_list(Var) ),
 	 list_to_tuple(BoundVar)
 ;
-bound_body(Var, Context) when is_list(Var)-> %TODO 
+bound_body(Var, Context) when is_list(Var)->  
      bound_body_list(Var, Context) 
     
 ;
@@ -453,7 +452,7 @@ match_process_list(_, [Pattern| TailPattern], [SearchVal| Tail ], Dict, MatchedS
 			 match_process_list(Res, TailPattern, Tail, NewDict, MatchedStruct ) ;
 		SearchVal ->
 			 match_process_list(SearchVal, TailPattern, Tail, Dict, MatchedStruct );
-		SomeThingElse ->
+		_SomeThingElse ->
 			{Res, NewDict} = process_var(Pattern, SearchVal, Dict  ),
 			match_process_list(Res, TailPattern, Tail, NewDict, MatchedStruct ) 
 % % 			 {false, Dict}

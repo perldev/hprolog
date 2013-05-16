@@ -68,6 +68,8 @@ to_unicode(E) when is_float(E)->
       inner_float_to_list(E);   
 to_unicode(E) when is_atom(E)->
       atom_to_list(E);          
+to_unicode(E) when is_binary(E)->
+      unicode:characters_to_list(E);
 to_unicode(E) when is_list(E)->
       E.
 
