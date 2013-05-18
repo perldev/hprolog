@@ -1,7 +1,8 @@
 
-
+-define(META_INFO_BATCH, 3). %%for using as batch param for scanner meta info
 
 -define(USE_HBASE,1).
+-define(UPDATE_STAT_INTERVAL,20000).%%interval of updating meta stat of prolog statements
 
 -define(SIMPLE_HBASE_ASSERT,1).
 
@@ -24,6 +25,7 @@
 
 -endif.
 
+-define(FACT_STAT(Ets), io:format("Facts  ~p ~n",[ ets:tab2list(Ets)  ]) ).
 
 -define(SYSTEM_STAT(Ets), io:format("System ~p prolog ~p ~n",[ length(processes()), ets:info(Ets,size) ]) ).
 
@@ -78,7 +80,7 @@
 
 -ifdef(LOGGING).
 
--define('LOG'(Str, Pars ), log4erl:info(Str, Pars) ).
+-define('LOG'(Str, Pars ), io:format(Str, Pars) ).
 -else.
 -define('LOG'(Str, Pars ), true ).
 -endif.
