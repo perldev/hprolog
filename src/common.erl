@@ -16,12 +16,16 @@ inner_to_list(E) ->
   E.  
   
 inner_to_int(E) when is_list(E)->
-  list_to_integer(E);
+  case catch list_to_integer(E) of
+      {'EXIT', _}-> 0;
+      Number-> Number
+  end
+;
 inner_to_int(E) when is_atom(E)->
-  list_to_integer(atom_to_list(E));
- 
+   inner_to_int(atom_to_list(E))
+; 
 inner_to_int(E) when is_binary(E)->
-  list_to_integer(binary_to_list(E));  
+    inner_to_int(binary_to_list(E));
 inner_to_int(E) ->
   E.
   
