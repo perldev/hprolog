@@ -3,12 +3,15 @@
 %%% File    : prolog_shell.erl
 %%% Author  : Bogdan Chaicka
 %%% Purpose : A simple  shell.
-%%This module provides prolog kernel work with parsed code 
+%%This module provides prolog kernel work with parsed code before
+%%% code is presented as a tree using tuples
+
+
 
 
 -include("prolog.hrl").
 
-
+%%compile inner memory
 compile(Prefix, File)->
     {ok, Terms } = erlog_io:read_file(File),
     delete_inner_structs(Prefix),
@@ -280,6 +283,8 @@ bound_results( Vars, Elem, LocalContext )->
 % {ok,Term} ->
 % 		    [Term|read_stream(Fd, L1)];
 % 		{error,What} -> throw({error,What})
+
+%%this is used for prolog predicat retract
 dynamic_del_link(Fact1, Fact2, TreeEts) ->
     ?WAIT("~p regis  wait del link   ~p ~n",[{?MODULE,?LINE},{Fact1, Fact2} ]),
     TableName = common:get_logical_name( TreeEts, ?META_LINKS),
@@ -346,7 +351,7 @@ dynamic_del_rule(Search, TreeEts)->
 			    end, NewRuleList )
       end
 .
-
+%%used by prolog operator assert
 dynamic_new_rule(Tree = {':-',ProtoType, Body} , first, TreeEts )->
      Name  = element(1, ProtoType),
      Args =  common:my_delete_element(1,ProtoType),
@@ -374,7 +379,7 @@ dynamic_new_rule(Tree = {':-',ProtoType, Body} , last, TreeEts )->
 dynamic_new_rule(SomeThing ,_ ,_)->
 	io:format("error ~p  ~n",[SomeThing]).
 
-
+%%operators op
 add_operator({op, OrderStatus, Type, Name }, TreeEts) when is_integer(OrderStatus)->
     case OrderStatus>1200 of 
 	true -> false;
@@ -433,25 +438,16 @@ check_functor(Some, Name, Count, Context)->
 % {',',{fact,{'X'}},{',',{arg,5, {fgg,5,t},Val},{fact,x1}}}
 %%TODO 
 check_arg(Some, Count, Value, Context ) ->
-      true
-%       NewCount
-% 	  case Count of
-% 	      {Key}-> %%means Var
-% 		   case find_var(Context, Body)  of
-% 			nothing -> false;
-% 			Some when is_integer(Some)->
-% 			      Some;
-% 			Some when is_list(Some)->	
-% 			     string:to_integer(Some).
-% 			  
-		  
-    
-    
-
- 
+      true     
 .
 
-
+%%%inner predicates of our system
+aim(Body = { 'meta', _FactName, _ParamName, Val }, Context, _Index, TreeEts  )->
+    NewBody = prolog_matching:bound_body(Body, Context),
+    Res = fact_hbase:meta_info(NewBody,  TreeEts),     
+    {MainRes ,NewContext} = prolog_matching:var_match(Res, Val, Context),
+    {MainRes ,NewContext}
+;
 aim({ functor, Body, Name, Count }, Context, _Index, _  )->
       Res  =
 	  case Body of
@@ -505,6 +501,12 @@ aim({ atom, Body  }, Context, _Index, _  ) ->
 	end,
     {Res, Context}  
 ;
+%%TODO 
+aim({ change_namespace, Name  }, Context, _Index, _  ) ->
+%     Res = fact_hbase:create_new_namespace(Name),
+    {true, Context}   
+;
+
 aim({ create_namespace, Name  }, Context, _Index, _  ) ->
     Res = fact_hbase:create_new_namespace(Name),
     {Res, Context}   
@@ -701,6 +703,10 @@ aim(Body = {system_stat,true}, Context, _Index, TreeEts  ) ->
     ?SYSTEM_STAT(TreeEts),
     {true, Context}
 ; 
+aim(Body = {fact_statistic, true}, Context, _Index, TreeEts  ) ->
+    ?FACT_STAT(?STAT),
+    {true, Context}
+; 
 
 %%new binary operator via  ор( 600, хfу, &)  :- ор( 500, fy, ~).
 
@@ -835,6 +841,7 @@ aim( {'=\\=', First, Second }, Context, _Index, _TreeEts )->
     Res
    
 ;
+%%%user defined aims
 aim(Body = {';', _, _ }, Context, Index, TreeEts) ->	
 
       case ets:lookup(TreeEts, Index ) of
@@ -926,7 +933,8 @@ aim(ProtoType, Context, Index, TreeEts )->
 	      {?EMPTY, Context}
       end
 .
-
+%% function for work with temp aims
+%% TODO rewrite it for use ets - table instead of processes
 aim_rule(Pid,  Atom, Context )->
     ?DEBUG("~p call to aim  ~p ~n",[{?MODULE,?LINE},{Pid} ]),
     Pid ! Atom,
@@ -945,9 +953,7 @@ aim_rule(Pid,  Atom, Context )->
     end     
 .
 
-
 aim_fact(ProtoType, Context, Index, TreeEts )->
-%   ProtoType = proc_vars_hack(PreProtoType),
  
   { Time, Res } = timer:tc( fact_hbase, get_facts, [ Index, TreeEts ] ),
   
@@ -966,7 +972,6 @@ aim_fact(ProtoType, Context, Index, TreeEts )->
 		    Some ->
 			  ?WAIT("~p got  wait aim rule    ~p ~n",[{?MODULE,?LINE}, {Index, ProtoType} ]),
 			  ?DEBUG("~p exit aim ~p~n",[{?MODULE,?LINE},Some]),
-% 			  delete_about_me(Index, TreeEts ),
 			  {?EMPTY, Context}
 	       end;
       [Record]-> 
@@ -975,13 +980,12 @@ aim_fact(ProtoType, Context, Index, TreeEts )->
   end
 .
 
-%%work 
+%%working with linked facts this is the first step for implementation expert dynamic  system
 worker_linked_rules(Body, Prefix)->
       TreeEts = ets:new(some_name ,[set,public]),
       ets:insert(TreeEts, {?PREFIX, Prefix }),
       FactName = erlang:element(1,Body ),
       ProtoType = tuple_to_list( common:my_delete_element(1, Body) ),
-%       fact_hbase:add_new_fact( Body, last),     
       ets:insert(TreeEts, {?DEBUG_STATUS, false}), %%turn off debugging
       List = ets:lookup( common:get_logical_name(Prefix,?META_LINKS) , FactName),
       foldl4(FactName, List, TreeEts, ProtoType),
@@ -1008,8 +1012,8 @@ worker_linked_rules_conv( Body)->
 	
 .
 
+%TODO process the Hbase mistakes and timeouts
 repeat(Count, Module ,Func, Params )->
-
   repeat(0,Count, Module ,Func, Params )
 
 .
@@ -1035,8 +1039,6 @@ repeat(Index, Count, Module ,Func, Params )->
 		repeat(Index+1, Count, Module ,Func, Params )
     end
 .
-
-
 
 
 foldl4(FactName, [], _TreeEts, _ProtoType)->
@@ -1068,8 +1070,6 @@ foldl4(FactName, [ Head  | Tail], _Prev ,true, TreeEts, ProtoType )->
 
 
 repeated_linked_rules(FactName, RuleCall, TreeEts)->
-    
-
     Pid = new_rule_process(RuleCall, dict:new(), erlang:now(), TreeEts, self() ),
     Res = linked_loop( FactName, RuleCall ),
     unlink(Pid),
@@ -1128,7 +1128,8 @@ linked_loop(FactName, RuleCall)->
 
 .
 
-
+%TODO rewrite to use ets tables instead of processes
+%%start the  process for work with temp aim for work with rule
 new_rule_process(ProtoType, Context, Index, TreeEts, ParentPid )-> 
      SearchBounded  = bound_aim(ProtoType, Context), %%HACK can be replaced
      {TempSearchBound  ,_} =  prolog_shell:make_temp_aim(SearchBounded),
@@ -1152,6 +1153,7 @@ start_rule(ProtoType, Context, Index, TreeEts, ParentPid)->
 	   RuleList = ets:lookup(RulesTable, Name),
 	    %%get all prototypes
 	   ?DEBUG("~p got rules by ~p~n",[{?MODULE,?LINE}, {Name, RuleList, Search} ]), %%find matching rules
+	   %TODO do not try find all matched prototypes
 	   MatchedRules  = lists:foldr(fun(E, Hash)->  
 				      Pat = erlang:element(2, E  ) ,
 				      ?DEBUG("~p pattern compare ~p ~n",[{?MODULE,?LINE}, {Pat,Search}]),		      
@@ -1172,7 +1174,8 @@ start_rule(ProtoType, Context, Index, TreeEts, ParentPid)->
 	    ?DEBUG("~p aim process rules by ~p~n",[{?MODULE,?LINE}, {Name, Search, MatchedRules} ]),
 	    NewIndex = erlang:now(),
             ?WAIT("~p regis   rule    ~p ~n",[{?MODULE,?LINE}, {Index, ProtoType} ]),
-
+	    %start the body of the rule
+	    %TODO to ets
 	    ChildPid = receive 
 			  start ->
 			      ?WAIT("~p GOT   rule    ~p ~n",[{?MODULE,?LINE}, {Index, ProtoType} ]),
@@ -1183,6 +1186,7 @@ start_rule(ProtoType, Context, Index, TreeEts, ParentPid)->
 	    get_loop(Name, ChildPid, ParentPid, Context, TreeEts, Index, ProtoType)
    %%match return bounded prototype
 .
+%%get the result
 get_loop(Name, ChildPid, ParentPid, Context, TreeEts, Index, MatchedRules)->
     ?WAIT("~p regis  rule result    ~p ~n",[{?MODULE,?LINE}, {Index, ChildPid, MatchedRules} ]),
     receive 
@@ -1236,6 +1240,7 @@ get_loop(Name, ChildPid, ParentPid, Context, TreeEts, Index, MatchedRules)->
 delete_about_me(Index,TreeEts)->
     ets:delete(TreeEts, Index).
     
+%%function process the last aim in the tree
 
 aim_loop([{false, _ }], _, _, _, _, _, Context, _MainProtoType)->
       {false, Context }
@@ -1448,7 +1453,7 @@ conv3(MainProtoType, { ',', '!', Body }, Context, ParentPid, Index, TreeEts )->
 %			    }
 %		}
 
-
+%%working with our tree
 conv3(MainProtoType, { ';', Rule, Body }, Context, ParentPid, Index, TreeEts )->
 	?DEBUG("~p  process of ;  ~p ~n",[{?MODULE,?LINE}, {Rule, Body, dict:to_list(Context) } ]),
 	%%%form params for 
@@ -1582,6 +1587,7 @@ conv3(MainProtoType, Body, Context, ParentPid, Index, TreeEts )-> %%last rule in
 	aim_loop(Res, Child4Stick, ParentPid,   Index, TreeEts, Body, Context, MainProtoType)
 .
 
+
 partion_results_foldl({?EMPTY,_}, _Params, _Index, _TreeEts, 
 	      _Child4Stick, Rule, Context  )->
    ?DEV_DEBUG("~p false of rule ~p",[{?MODULE,?LINE}, Rule]),
@@ -1707,6 +1713,13 @@ foldl3( { SearchHead, _Context } , PrevSearch, Body, LocalContext, ParentPid, In
 %       }
 
 %%TODO optimize this
+%%%atom 'one' tell us about none duality of the aim
+
+start_fact_listener_process({'fact_statistic',true}, Context,Index,  TreeEts)->           
+      ?TRACE(Index , TreeEts,  'fact_statistic', Context),
+      one
+
+;
 start_fact_listener_process({'system_stat',true}, Context,Index,  TreeEts)->           
       ?TRACE(Index , TreeEts,  'system_stat', Context),
       one
@@ -1810,6 +1823,11 @@ start_fact_listener_process(Body = {'retract',Var }, Context, Index,  TreeEts)->
       Pid =  spawn_link(?MODULE, start_retract_process, [BodyBounded, Context, Index, TreeEts, erlang:self()] ),
       ets:insert(TreeEts, { Index, { Pid, rule } } ),
       Pid
+
+;
+start_fact_listener_process(Body = {'meta',_,_,_}, Context, Index,  TreeEts)->  %%links 
+        ?TRACE(Index , TreeEts,  Body, Context),
+	one
 
 ;
 start_fact_listener_process(Body = {'retract',_,_,_}, Context, Index,  TreeEts)->  %%links 
@@ -1956,7 +1974,6 @@ start_fact_listener_process(false,  Context, Index,  TreeEts)->
 	one
 
 ;
-
 %sub body
 start_fact_listener_process(Body = {';',_,_},  Context, Index,  TreeEts)->      
       fill_rule(TreeEts, Index),
@@ -2203,6 +2220,7 @@ arithmetic_process( Name = {'-',Var}, Context )->
 	
        case arithmetic_process(NewVar, Context) of 
 	    false -> false;
+	    
 	    X when is_float(X) -> -1*X;
 	    X when is_integer(X) -> -1*X;
 	    X when is_atom(X) -> false;
@@ -2237,12 +2255,14 @@ arithmetic_process( Name = {_Var}, Context )->
 		    {_}-> false;
 		    _ -> NewVar1
 		  end,
+	%cause the hbase store only strings
+	%%in normal case all non-number it must fail
        case arithmetic_process(NewVar, Context) of 
 	    nothing -> false;
 	    X when is_float(X) -> X;
 	    X when is_integer(X) -> X;
 	    X when is_atom(X) -> false;
-	    X when is_binary(X)->
+	    X when is_binary(X)-> 
 		{First, _Second} = string:to_float( binary_to_list(X)++".0" ),
 		  my_float( First );	  
 	    X ->
@@ -2367,7 +2387,6 @@ start_retract_process(FactList, BodyBounded, Context, Index, TreeEts, ParentPid)
 			start_retract_process(NewFactList, BodyBounded,  Context, Index, TreeEts, ParentPid)
 		end
       end
-      
 .
 %TODO rewrite this !!
 start_retract_process(BodyBounded, Context, Index, TreeEts, ParentPid) when is_tuple(BodyBounded)->
@@ -2417,6 +2436,7 @@ start_retract_process(BodyBounded, Context, Index, TreeEts, ParentPid) when is_t
     end
  
 .
+%TODO avoid this by saving facts and rules in one tabl
 
 is_deep_rule(Name, TreeEts)->
     FactTable = common:get_logical_name(TreeEts,?RULES ),

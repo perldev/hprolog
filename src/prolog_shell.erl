@@ -18,16 +18,14 @@ api_start(Prefix)->
     
 .
 
-start(default) ->
-    prolog:create_inner_structs(""),
-    ?INCLUDE_HBASE(""),
-    server("") 
-;
-
 start(Prefix)-> 
     inets:start(),
     crypto:start(),
     ?LOG_APPLICATION,
+    case lists:member(converter_monitor, global:registered_names() ) of
+	  false -> converter_monitor:start_link();
+	  true-> do_nothing
+    end,
     prolog:create_inner_structs(Prefix),
     ?INCLUDE_HBASE( Prefix ),
     server(Prefix) 

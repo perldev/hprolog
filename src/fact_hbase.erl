@@ -59,11 +59,8 @@ load_rules2ets(Prefix)->
       FamilyLinks = create_hbase_family_filter(?LINKS_FAMILY),
       CacheLinks = create_hbase_family_filter(?CACHE_FAMILY),
       ScannerCache  = generate_scanner(1024,  CacheLinks),
-      
-      ScannerMeta  = generate_scanner(3,  Family),
-      
+      ScannerMeta  = generate_scanner(?META_INFO_BATCH,  Family),      
       ScannerAiMeta  = generate_scanner(1024,  FamilyLinks),
-      
       ScannerUrlCacheMeta  = get_scanner(common:get_logical_name(Prefix, ?META_FACTS), ScannerCache),
       ScannerUrlAiMeta  = get_scanner(common:get_logical_name(Prefix, ?META_FACTS), ScannerAiMeta),
       ScannerUrlMeta  = get_scanner(common:get_logical_name(Prefix, ?META_FACTS), ScannerMeta),
@@ -84,8 +81,10 @@ get_cache_meta_info(Scanner, Table)->
 	Host = get_host(Scanner),
         case catch  httpc:request( get, { Scanner,[ {"Accept","application/json"}, {"Host", Host}]},
 				    [{connect_timeout,?DEFAULT_TIMEOUT },
-						{timeout, ?DEFAULT_TIMEOUT }  ],
-				    [ {sync, true} ] ) of
+				     {timeout, ?DEFAULT_TIMEOUT }
+				     
+				     ],
+				    [ {sync, true},{ body_format, binary } ] ) of
                     { ok, { {_NewVersion, 200, _NewReasonPhrase}, _NewHeaders, Text1 } } ->
 			    process_cache_link( Text1, Table ),
 			    get_cache_meta_info(Scanner, Table);%% TODO another solution
@@ -137,10 +136,10 @@ process_cache_link(Meta, Table)->
 	lists:foreach(fun(Elem)->
  		        ?DEBUG("~p read ~p ", [{?MODULE,?LINE}, Elem ] ), 
 			[ {_KeyNameProps, RowName64 }, {_, RowCells }  ] = Elem,	  
-			RowName = inner_to_atom( base64:decode(RowName64) ),
+			RowName = common:inner_to_atom( base64:decode(RowName64) ),
 			lists:foreach( fun(E)-> 
 					  CacheInfo  =  get_val(E, <<"column">>) ,
-					  Col = inner_to_atom( cut_family( ?CACHE_FAMILY, CacheInfo )  ),
+					  Col = common:inner_to_atom( cut_family( ?CACHE_FAMILY, CacheInfo )  ),
 					  Val = binary_to_list( get_val(E, <<"$">> ) ) ,
 					  ?DEBUG("~p insert cache info ~p ~n",[ {?MODULE,?LINE}, 
 										   { RowName, Col, Val  } ] ),
@@ -167,7 +166,9 @@ get_link_meta_info(Scanner, Table)->
 	Host = get_host(Scanner),
         case catch  httpc:request( get, { Scanner,[ {"Accept","application/json"}, {"Host", Host}]},
 				    [{connect_timeout,?DEFAULT_TIMEOUT },
-						{timeout, ?DEFAULT_TIMEOUT }  ],
+				     {timeout, ?DEFAULT_TIMEOUT },
+				     { body_format, binary }
+				     ],
 				    [ {sync, true} ] ) of
                     { ok, { {_NewVersion, 200, _NewReasonPhrase}, _NewHeaders, Text1 } } ->
 			    process_meta_link( Text1, Table ),
@@ -217,11 +218,11 @@ process_meta_link(Meta, Table)->
        lists:foreach(fun(Elem)->
  		        ?DEBUG("~p read ~p ", [{?MODULE,?LINE}, Elem ] ), 
 			[ {_KeyNameProps, RowName64 }, {_, RowCells }  ] = Elem,	  
-			RowName = inner_to_atom( base64:decode(RowName64) ),
+			RowName = common:inner_to_atom( base64:decode(RowName64) ),
 			lists:foreach( fun(E)-> 
 					  Cache  =  get_val(E, <<"column">>) ,
-					  Col = inner_to_atom( cut_family( ?LINKS_FAMILY, Cache )  ),
-					  Val = inner_to_atom( get_val(E, <<"$">>) ),
+					  Col = common:inner_to_atom( cut_family( ?LINKS_FAMILY, Cache )  ),
+					  Val = common:inner_to_atom( get_val(E, <<"$">>) ),
   					  ?DEBUG("~p insert link info ~p ~n",[ {?MODULE,?LINE}, {Col,Val} ] ), 
 					  ets:insert(Table, { RowName, Col, Val  })
 					end, RowCells) 
@@ -238,8 +239,9 @@ get_meta_facts(Scanner, Table)->
 	Host = get_host(Scanner),
         case catch  httpc:request( get, { Scanner,[ {"Accept","application/json"}, {"Host", Host}]},
 				    [ {connect_timeout,?DEFAULT_TIMEOUT },
-						{timeout, ?DEFAULT_TIMEOUT } ],
-				    [ {sync, true} ] ) of
+				      {timeout, ?DEFAULT_TIMEOUT }
+				      ],
+				    [ {sync, true},{ body_format, binary } ] ) of
                     { ok, { {_NewVersion, 200, _NewReasonPhrase}, _NewHeaders, Text1 } } ->
 			    process_meta( Text1, Table ),
 			    get_meta_facts(Scanner, Table);%% TODO another solution
@@ -261,8 +263,8 @@ get_and_load_rules(Scanner, Table)->
 	Host = get_host(Scanner),
         case catch  httpc:request( get, { Scanner,[ {"Accept","application/json"}, {"Host", Host}]},
 				    [ {connect_timeout,?DEFAULT_TIMEOUT },
-						{timeout, ?DEFAULT_TIMEOUT } ],
-				    [ {sync, true} ] ) of
+				      {timeout, ?DEFAULT_TIMEOUT }],
+				    [ {sync, true},{ body_format, binary } ] ) of
                     { ok, { {_NewVersion, 200, _NewReasonPhrase}, _NewHeaders, Text1 } } ->
 			    process_code( Text1, Table ),
 			    get_and_load_rules(Scanner, Table);%% TODO another solution
@@ -296,8 +298,10 @@ get_and_load_rules(Scanner, Table)->
 %                            {<<"$">>,
 %                             <<"ZmFjdDIoWCkgOi0gZmFjdDMoWCkgLCBmYWN0NShYMSkgLCBmYWN0NihYMSkuZmFjdDIoWCkgOi0gZmFjdDIoWCkgLCBmYWN0MyhYMSkgLCBmYWN0KFgxKS4=">>}]]}]]}]
 
-
-process_meta([], Table )->
+process_meta(<<"">>, _Table )->
+     []
+; 
+process_meta([], _Table )->
      []
 ; 
 process_meta(Meta, Table ) when is_list(Meta)->
@@ -342,7 +346,9 @@ get_column(Columns, Find)->
 		end,"", Columns)
 .
 
-
+process_code(<<"">>, _Table ) ->
+      []
+;   
 process_code([], _Table ) ->
       []
 ;    
@@ -401,9 +407,11 @@ fact_start_link( Aim, Key, TreeEts, ParentPid ) when is_atom(Aim)->
 fact_start_link( Aim, Key, TreeEts, ParentPid )->
       ?DEBUG("~p check find in facts ~p ~n",[{?MODULE,?LINE},  Aim ]),
       Name = element(1,Aim),%%from the syntax tree get name of fact
-%       Search =  common:my_delete_element(1, Aim),%%get prototype
       ?WAIT("~p regis wait in fact ~p ~n",[{?MODULE,?LINE},{Name, Aim, Key} ]),
       FactTable = common:get_logical_name( TreeEts, ?INNER),
+      RealName = common:get_logical_name( TreeEts, Name),
+      converter_monitor:stat('search',  RealName , Aim, true ),
+
       receive 
 	  start ->
 	      case ets:lookup(FactTable , Name ) of
@@ -511,8 +519,8 @@ get_indexed_records(PartKey, IndexTable)->
 					  [ {"Accept","application/json"}, {"Host", Host}] 
 					},
 					  [ {connect_timeout,?DEFAULT_TIMEOUT },
-						      {timeout, ?DEFAULT_TIMEOUT } ],
-					  [ {sync, true} ] ) of
+					    {timeout, ?DEFAULT_TIMEOUT }],
+					  [ {sync, true},{ body_format, binary } ] ) of
 			  { ok, { {_NewVersion, 200, _NewReasonPhrase}, _NewHeaders, Text1 } } ->
 				  ?LOG("~p got indexed keys ~p ~n",[ {?MODULE,?LINE}, Text1 ] ),
 				  Res = process_key_data(Text1),
@@ -531,7 +539,9 @@ get_indexed_records(PartKey, IndexTable)->
 %                                      {<<"timestamp">>,1364553734408},
 %                                      {<<"$">>,
 %                                       <<"ZTVjMDc5YTg0MmM5MTg5YzRiZjkyMGFiMzZiZTQ3ZDU=">>}]]} ]]  }] 
-
+process_key_data(<<"">>)->
+    []
+;
 process_key_data([])->
     []
 ;
@@ -578,17 +588,15 @@ process_indexed_hbase(Table, ProtoType, Key, PreRes, TreeEts)->
 		  ?WAIT("~p GOT  exit for hbase indexed ~p ~n",[{?MODULE,?LINE}, {From, Reason} ])
 	end
 .
-
-
-
 hbase_get_key(Table,  Key)->
       { Hbase_Res, Host } = get_rand_host(),
        case catch  httpc:request( get, 
 				    { Hbase_Res++Table++"/"++Key++"/",
 				    [ {"Accept","application/json"}, {"Host", Host }]},
 				    [ {connect_timeout,?DEFAULT_TIMEOUT },
-				      {timeout, ?DEFAULT_TIMEOUT } ],
-				    [ {sync, true} ] ) of
+				      {timeout, ?DEFAULT_TIMEOUT }
+				    ],
+				    [ {sync, true},{ body_format, binary } ] ) of
                     { ok, { {_NewVersion, 200, _NewReasonPhrase}, _NewHeaders, Text1 } } ->  
 			    Result = process_key_data( Text1),
 			    Result ;
@@ -600,16 +608,15 @@ hbase_get_key(Table,  Key)->
                             []         
 	end
 .
-
-
 hbase_get_key(ProtoType, Table, Family, Key)->
       { Hbase_Res, Host } = get_rand_host(),
        case catch  httpc:request( get, 
 				    { Hbase_Res++Table++"/"++Key++"/"++Family,
 				    [ {"Accept","application/json"}, {"Host", Host }]},
 				    [ {connect_timeout,?DEFAULT_TIMEOUT },
-				      {timeout, ?DEFAULT_TIMEOUT } ],
-				    [ {sync, true} ] ) of
+				      {timeout, ?DEFAULT_TIMEOUT }
+				       ],
+				    [ {sync, true},{ body_format, binary } ] ) of
                     { ok, { {_NewVersion, 200, _NewReasonPhrase}, _NewHeaders, Text1 } } ->  
 			    Result = process_data( Text1, ProtoType),
 			    Result ;
@@ -621,6 +628,8 @@ hbase_get_key(ProtoType, Table, Family, Key)->
                             []         
 	end
 .
+
+
 
 
 check_index(ProtoType, Name, TreeEts)->
@@ -681,9 +690,8 @@ process_loop_hbase(Key, Scanner, Res, ProtoType, TreeEts)->
 
         receive 
 	    {PidReciverResult ,get_pack_of_facts} ->
-	  	  ?WAIT("~p GOT  wait in fact hbase ~p ~n",[{?MODULE,?LINE},{Key, ProtoType} ]),
-
-		   ?DEBUG("~p got new request ~p ~n",[{?MODULE,?LINE}, {Key, Res} ]),
+	  	    ?WAIT("~p GOT  wait in fact hbase ~p ~n",[{?MODULE,?LINE},{Key, ProtoType} ]),
+		    ?DEBUG("~p got new request ~p ~n",[{?MODULE,?LINE}, {Key, Res} ]),
 		    PidReciverResult ! Res,
 		    NewList = get_data( Scanner, ProtoType),
 		    process_loop_hbase(Key, Scanner, NewList, ProtoType, TreeEts);
@@ -819,7 +827,7 @@ get_scanner(Facts, Scanner)->
 				      Hbase_Res++Facts++"/scanner",
 				      erlang:byte_size(Scanner) } ] ),
 
-         case catch  httpc:request( post, { Hbase_Res++Facts++"/scanner",
+         case catch  httpc:request( 'post', { Hbase_Res++Facts++"/scanner",
 				[ {"Content-Length", integer_to_list( erlang:byte_size(Scanner) )},
 				  {"Content-Type","text/xml"},
 				  {"Host", Host}
@@ -888,7 +896,7 @@ get_data(Scanner, ProtoType)->
         case catch  httpc:request( get, { Scanner,[ {"Accept","application/json"}, {"Host", Host }]},
 				    [ {connect_timeout,?DEFAULT_TIMEOUT },
 				      {timeout, ?DEFAULT_TIMEOUT } ],
-				    [ {sync, true} ] ) of
+				    [ {sync, true},{ body_format, binary } ] ) of
                     { ok, { {_NewVersion, 200, _NewReasonPhrase}, _NewHeaders, Text1 } } ->
 			    
 			    Result = process_data( Text1, ProtoType),
@@ -903,9 +911,9 @@ get_data(Scanner, ProtoType)->
 
 
 add_link(ASourceFact, AForeignFact, ARuleName, TreeEts )->	
-	    SourceFact =  inner_to_list(ASourceFact),
-	    ForeignFact =  inner_to_list(AForeignFact),
-	    RuleName =  inner_to_list(ARuleName),
+	    SourceFact =  common:inner_to_list(ASourceFact),
+	    ForeignFact =  common:inner_to_list(AForeignFact),
+	    RuleName =  common:inner_to_list(ARuleName),
 	    ?DEBUG("~p assert link ~p~n",[{ ?MODULE,?LINE },
 					   { SourceFact,ForeignFact,RuleName } ]),
 	    Key = SourceFact,
@@ -916,7 +924,7 @@ add_link(ASourceFact, AForeignFact, ARuleName, TreeEts )->
 		    BKey/binary, "\">", MakeCellSet/binary, "</Row></CellSet>" >>,    
 	    {Hbase_Res, Host } = get_rand_host(),
 	    
-            case catch  httpc:request( post, { Hbase_Res++LTableName++"/"++Key++"/"++?LINKS_FAMILY,
+            case catch  httpc:request( 'post', { Hbase_Res++LTableName++"/"++Key++"/"++?LINKS_FAMILY,
  				[ {"Content-Length", integer_to_list( erlang:byte_size(Body) )},
 				  {"Content-Type","text/xml"},
  				  {"Host", Host}
@@ -931,7 +939,7 @@ add_link(ASourceFact, AForeignFact, ARuleName, TreeEts )->
                             ?WAIT("~p got from hbase ~p ",[?LINE,Res]),
                             true
 
-       end
+	    end
   
   
 .
@@ -946,20 +954,15 @@ add_new_fact(Body, Pos, TreeEts,  1) when is_tuple(Body)->
 add_new_fact([ Name | ProtoType ] , Pos, TreeEts,  1)->
 	  ?DEBUG("~p new fact there ~p ~n",[{?MODULE,?LINE}, [ Name | ProtoType ]  ]),
 	  CountParams = length(ProtoType),
-	  
 	  RealName = common:get_logical_name(TreeEts, Name),
-	  
 	  converter_monitor:stat(try_add,  RealName , ProtoType, true ),
-	  
 	  case check_params_facts( Name, TreeEts ) of
 	      {CountParams, _HashFunction } ->
 		  Params = prototype_to_list(ProtoType),
 		  index_work_add(Name, Params, TreeEts),%%TODO spawn this
 		  Res = store_new_fact(RealName, Params ),
 		  converter_monitor:stat(add,  RealName , ProtoType, Res ),
-		  Res;
-		  
-		  
+		  Res;  
 	      {CountParams1, _HashFunction } ->
 		  ?DEBUG("~p params have not matched with exists~p",[{?MODULE,?LINE}, {CountParams1,CountParams } ]),
 		  false
@@ -973,8 +976,15 @@ add_new_fact([ Name | ProtoType ] , Pos, TreeEts,  1)->
 		  store_meta_fact(Name,  common:get_logical_name(TreeEts, ?META_FACTS) , [
 					  {"count" ,integer_to_list( CountParams) }, 
 					  {"hash_function","md5" },
-					   {"facts_count", "1" }
-					  ]   ),%TODO NEW HASH function
+					  {"facts_count", "1" }%%deprecated
+					  ],
+					  "description"  ),%TODO NEW HASH function
+		  store_meta_fact(Name,  common:get_logical_name(TreeEts, ?META_FACTS) , [
+					  {"facts_count", "1" },
+					  {"facts_reqs","1"},
+					  {"facts_w","1"}
+					  ],
+					  "stat"  ),
 		  Res = store_new_fact(RealName , prototype_to_list(ProtoType) ),
 		  converter_monitor:stat(add, RealName, ProtoType, Res ),
 		  Res
@@ -1131,7 +1141,7 @@ add_new_rule(Tree = { ':-', ProtoType, BodyRule}, Pos, TableName, 1 )->
        V2 = list_to_binary( lists:flatten(PrologCode)++"." ),
       	?DEBUG("~p new rule table is  ~p ~n",[ {?MODULE,?LINE}, TableName ] ),
 
-       case check_exist_rule( TableName ) of
+       case check_exist_rule( TableName, Name ) of
 	    false -> 
 		store_new_rule(Name, V2, TableName  );
 	     PrevCode ->
@@ -1270,48 +1280,51 @@ store_new_rule(Key, Body, LTableName)->
 	    end
 .
 
-check_exist_table(TableName)->
-	    {Hbase_Res, Host } = get_rand_host(),
-	   
-            case catch   httpc:request( 'get', { Hbase_Res,
+
+get_table_list()->
+	  {Hbase_Res, Host } = get_rand_host(),
+	  case catch   httpc:request( 'get', { Hbase_Res,
 				    [  {"Host", Host}]},
 				    [{connect_timeout,?DEFAULT_TIMEOUT },
 						{timeout, ?DEFAULT_TIMEOUT }  ],
 				    [ {sync, true} ] ) of
 			 { ok, { {_NewVersion, 200, _NewReasonPhrase}, _NewHeaders, Text1 } } ->
 			    	?DEBUG("~p process data with ~n ~p ~n~n~n",[{?MODULE,?LINE}, {Text1} ] ),
-			    	lists:member(TableName, string:tokens(Text1, "\n") );
+				 string:tokens(Text1, "\n");
                         Res ->
                             ?DEBUG("~p got from hbase ~p ",[?LINE,Res]),
-                            false
+                            []
 
 	    end
-    
 
 .
 
 
-check_exist_rule(Name) when is_atom(Name)->
+check_exist_table(TableName)->
+	    List =   get_table_list(),
+	    lists:member(TableName, List ).
+
+check_exist_rule(TableName, Name) when is_atom(Name)->
  LName = atom_to_list(Name),
- check_exist_rule(LName)
+ check_exist_rule(TableName, LName)
 ;
-check_exist_rule(Name) when is_integer(Name)->
+check_exist_rule(TableName, Name) when is_integer(Name)->
  LName = integer_to_list(Name),
- check_exist_rule(LName)
+ check_exist_rule(TableName, LName)
 ;
-check_exist_rule(LName)->
+check_exist_rule(TableName, LName)->
    
     {Hbase_Res, Host } = get_rand_host(),
-    case catch  httpc:request( 'get', { Hbase_Res++?RULES_TABLE++"/"++LName++"/"++?FAMILY++":"++?CODE_COLUMN,
+    case catch  httpc:request( 'get', { Hbase_Res++TableName++"/"++LName++"/"++?FAMILY++":"++?CODE_COLUMN,
 				    [ {"Accept","application/json"}, {"Host", Host}]},
-				    [{connect_timeout,?DEFAULT_TIMEOUT },
-						{timeout, ?DEFAULT_TIMEOUT }  ],
-				    [ {sync, true} ] ) of
+				    [ {connect_timeout, ?DEFAULT_TIMEOUT },
+				      {timeout, ?DEFAULT_TIMEOUT }],
+				    [ {sync, true}, { body_format, binary } ] ) of
                     { ok, { {_NewVersion, 200, _NewReasonPhrase}, _NewHeaders, Text1 } } ->
 			    	?DEBUG("~p process data with ~n ~p ~n~n~n",[{?MODULE,?LINE}, {Text1} ] ),
 % 				    "{\"Row\":[{\"key\":\"ZmFjdA==\",\"Cell\":[{\"column\":\"cGFyYW1zOmNvZGU=\",\"timestamp\":1361291589351,\"$\":
 % 				    \"ZmFjdChYKSA6LSBmYWN0MShYKSAsIGZhY3QyKFgxKSAsIGZhY3QoWDEpLg==\"}]}]}"
-				Json = jsx:decode(list_to_binary(Text1)),
+				Json = jsx:decode(Text1),
 				?DEBUG("~p process data with ~n ~p ~n~n~n",[{?MODULE,?LINE}, Json ] ),
 				process_code_injson(Json);
 % 				{"table":[{"name":"pay"},{"name":"table"}]}
@@ -1320,6 +1333,7 @@ check_exist_rule(LName)->
                            false
     end
 .
+
 
 process_code_injson(Json)->
   % 			    	 [{<<"Row">>,
@@ -1425,10 +1439,10 @@ store_new_fact(LTableName, LProtoType)->
                                    [ {connect_timeout,?DEFAULT_TIMEOUT },{timeout, ?DEFAULT_TIMEOUT }  ],
                                 [ {sync, true}, {headers_as_is, true } ] ) of
 			 { ok, { {_NewVersion, 200, _NewReasonPhrase}, _NewHeaders, Text1 } } ->
-			    	?DEBUG("~p process data with ~n ~p ~n~n~n",[{?MODULE,?LINE}, {Text1} ] ),
+			    	?DEBUG("~p process data with ~n ~p ~n~n~n",[{?MODULE,?LINE}, Text1 ] ),
 				true;
                         Res ->
-                            ?WAIT("~p got from hbase ~p ~n",[?LINE,{Res,LTableName,LProtoType }]),
+                            ?WAIT("~p got from hbase ~p ~n",[?LINE,{Res,LTableName, LProtoType }]),
                             false
 
 	    end
@@ -1445,22 +1459,22 @@ make_cell_set(ProtoType)->
 .
 
 
-store_meta_fact(Name, MetaTable, LProtoType) when is_atom(Name) ->
-      store_meta_fact(atom_to_list(Name), MetaTable, LProtoType)
+store_meta_fact(Name, MetaTable, LProtoType, Type) when is_atom(Name) ->
+      store_meta_fact(atom_to_list(Name), MetaTable, LProtoType, Type)
 ;
-store_meta_fact(Name, MetaTable, LProtoType)->
+store_meta_fact(Name, MetaTable, LProtoType, Type)->
 %     my  $POST = qq[<?xml version="1.0" encoding="UTF-8" standalone="yes" ?><CellSet><Row key="$key">$cell_set</Row></CellSet>];
 %     my $str = qq[curl -X POST -H "Content-Type: text/xml" --data '$POST'  $BASE/$key_url/params];
 %   my $key  = md5_hex( join(",",@arr) );
 % %       POST /<table>/schema
 % http://avias-db-2.ceb.loc:60050/table/key_name/family
 
-	    MakeCellSet = make_cell_normal("description", LProtoType ),
+	    MakeCellSet = make_cell_normal(Type, LProtoType ),
 	    BKey= base64:encode(Name),
 	    Body = <<"<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\" ?><CellSet><Row key=\"", 
 		    BKey/binary, "\">", MakeCellSet/binary, "</Row></CellSet>" >>,    
 	    {Hbase_Res, Host } = get_rand_host(), 
-            case catch  httpc:request( post, { Hbase_Res++MetaTable++"/"++Name++"/description",
+            case catch  httpc:request( post, { Hbase_Res++MetaTable++"/"++Name++"/"++Type,
  				[ 
 				  {"Content-Length", integer_to_list( erlang:byte_size(Body) ) },
 				  {"Content-Type","text/xml"},
@@ -1491,7 +1505,7 @@ make_cell_normal(Family, ProtoType)->
 .
 
 prototype_to_list(E)->
-    lists:map(fun(Elem)-> inner_to_list(Elem)  end, E)
+    lists:map(fun(Elem)-> common:inner_to_list(Elem)  end, E)
 
 .
 
@@ -1504,34 +1518,7 @@ generate_key(ProtoType)->
 
    
 
-inner_to_list(E) when is_list(E)->
-  E;
-inner_to_list(E) when is_atom(E)->
-  atom_to_list(E);
-  
-inner_to_list(E) when is_integer(E)->
-  integer_to_list(E);
 
-inner_to_list(E) when is_float(E)->
-  float_to_list(E);
-inner_to_list(E) ->
-  E.  
-
-inner_to_atom(E) when is_atom(E)->
-    E
-;
-inner_to_atom(E) when is_binary(E)->
-    list_to_atom( binary_to_list(E)   )
-;
-inner_to_atom(E) when is_list(E)->
-    list_to_atom(E)
-;
-inner_to_atom(E) when is_integer(E)->
-   list_to_atom( integer_to_list(E) )
-; 
-inner_to_atom(E) when is_float(E)->
-   list_to_atom( float_to_list(E) )
-.
 
     
 get_list_facts()->
@@ -1539,8 +1526,8 @@ get_list_facts()->
 	{Hbase_Res, Host } = get_rand_host(),
 	case catch  httpc:request( get, { Hbase_Res,[ {"Accept","application/json"}, {"Host", Host}]},
 				    [ {connect_timeout,?DEFAULT_TIMEOUT },
-						{timeout, ?DEFAULT_TIMEOUT } ],
-				    [ {sync, true} ] ) of
+				      {timeout, ?DEFAULT_TIMEOUT }],
+				    [ {sync, true},{ body_format, binary } ] ) of
                     { ok, { {_NewVersion, 200, _NewReasonPhrase}, _NewHeaders, Text1 } } ->
 			    	?DEBUG("~p process data with ~n ~p ~n~n~n",[{?MODULE,?LINE}, {Text1} ] ),
 % 			    	[ {<<"table">>,
@@ -1550,7 +1537,7 @@ get_list_facts()->
 % 				      ]
 %       			 }
 % 				]
-				[{ Tale, ListTables }] = jsx:decode(  list_to_binary( Text1 )   ),
+				[{ Tale, ListTables }] = jsx:decode(   Text1  ),
 				?DEBUG("~p got data with ~n ~p ~n~n~n",[{?MODULE,?LINE}, ListTables ] ),
 				lists:map(fun([Elem])-> Elem end, ListTables );
 % 				{"table":[{"name":"pay"},{"name":"table"}]}
@@ -1590,21 +1577,24 @@ get_all_lines(Device) ->
         Line -> Line ++ get_all_lines(Device)
     end.
 
+process_data(<<"">>, _ProtoType)->
+    [];
 process_data([], _ProtoType)->
     [];
+process_data(Text, ProtoType) when is_list(Text)->
+    process_data(list_to_binary(Text), ProtoType)
+;
 process_data(Text1, ProtoType)->
 	?DEBUG("~p process data with ~n ~p ~n~n~n",[{?MODULE,?LINE}, {ProtoType,Text1} ] ),
-	Pro = jsx:decode(  list_to_binary( Text1  )  ),
+	Pro = jsx:decode(   Text1   ), 
 	?DEBUG("~p got  ~n ~p ~n~n~n",[{?MODULE,?LINE}, Pro ] ),
 	[ { Row, Keys } ] = Pro,
 
 	
 	MainResult = dict:new(),%%%storing there all results
 	Result =
-	lists:map(fun(Elem)->
-% 		    io:format(" read ~p ", [ Elem ] ), 
-		    
-		    [  KeyRow, {_, RowCells }  ] = Elem,	    
+	lists:map(fun(Elem)->	    
+		     [  KeyRow, {_, RowCells }  ] = Elem,	    
 		     lists:map( fun(E)-> 
 				    Col = get_val(E, <<"column">>),
 				    Val = get_val(E, <<"$">>),
@@ -1625,7 +1615,6 @@ process_data(Text1, ProtoType)->
 				end, Columns) )
 				
 		  end, Result),
-% %  	io:format("got result ~p ",[Got]),
 	Got
 .
 
@@ -1648,7 +1637,7 @@ delete_scanner(Scanner)->
     delete_host(Scanner),
     case catch  httpc:request( delete, { Scanner,[ {"Accept","application/json"}, {"Host", Host}]},
 				    [ {connect_timeout,?DEFAULT_TIMEOUT },
-						{timeout, ?DEFAULT_TIMEOUT } ],
+				      {timeout, ?DEFAULT_TIMEOUT } ],
 				    [ {sync, true} ] ) of
                     { ok, { {_NewVersion, 200, _NewReasonPhrase}, _NewHeaders, Text1 } } ->
 			    ?LOG("~p delete normal scanner ~p ~n",[ {?MODULE,?LINE}, Scanner ] ),
@@ -1709,7 +1698,97 @@ cut_family(Family, Val ) when is_list(Family)->
     binary:part(Val, {byte_size(FamB), byte_size(Val) - byte_size(FamB) })
   
 .
+%META Facts must   chang manually
+%   store_meta_fact(Name,  common:get_logical_name(TreeEts, ?META_FACTS) , [
+% 					  {"facts_count", "1" },
+% 					  {"facts_reqs","1"},
+% 					  {"facts_w","1"}
+meta_info({'meta', FactName, count, Val },  Prefix) when is_atom(FactName) ->
+      MetaTable = common:get_logical_name(Prefix, ?META_FACTS),
+      FactNameL = erlang:atom_to_list(FactName),
+      common:inner_to_int(hbase_low_get_key(MetaTable, FactNameL,"stat", "facts_count"))
+
+;
+meta_info({'meta', FactName, requests, Val },  Prefix) when is_atom(FactName) ->
+      MetaTable = common:get_logical_name(Prefix, ?META_FACTS),
+      FactNameL = erlang:atom_to_list(FactName),
+       common:inner_to_int(hbase_low_get_key(MetaTable, FactNameL, "stat", "facts_reqs"))
+      
+;
+meta_info({'meta', FactName, weight, Val },  Prefix) when is_atom(FactName) ->
+      MetaTable = common:get_logical_name(Prefix, ?META_FACTS),
+      FactNameL = erlang:atom_to_list(FactName),      
+       common:inner_to_int(hbase_low_get_key(MetaTable, FactNameL, "stat",  "facts_w"))
+;
+meta_info(_, _)  ->
+ false
+.
 
 
+hbase_low_put_key(Table, Key, Family, Key2, Value)->
 
+%  curl -X POST -H "Content-Type: text/xml" 
+% --data '<?xml version="1.0" encoding="UTF-8" standalone="yes" ?>
+% <CellSet><Row key="bmV3X3Jvd19mcm9t"><Cell column="cGFyYW1zOmRhdGE=">aHJlbl90ZXN0</Cell></Row></CellSet>'
+% http://hd-test-2.ceb.loc:60050/test_fact/row6/params:data
+    { Hbase_Res, Host } = get_rand_host(),
+    MakeCellSet = make_cell_normal(Family, [ { Key2,  Value  } ] ),
+    BKey= base64:encode(Key),
+    Body = <<"<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\" ?><CellSet><Row key=\"", 
+		    BKey/binary, "\">", MakeCellSet/binary, "</Row></CellSet>" >>,    
+    
+    case catch  httpc:request( 'post', { Hbase_Res++Table++"/"++Key++"/"++?LINKS_FAMILY,
+ 				[ {"Content-Length", integer_to_list( erlang:byte_size(Body) )},
+				  {"Content-Type","text/xml"},
+ 				  {"Host", Host}
+				],
+                                   "application/x-www-form-urlencoded",Body },
+                                   [ {connect_timeout,?DEFAULT_TIMEOUT }, {timeout, ?DEFAULT_TIMEOUT }  ],
+                                [ {sync, true}, {headers_as_is, true } ] ) of
+			 { ok, { {_NewVersion, 200, _NewReasonPhrase}, _NewHeaders, Text1 } } ->
+			    	?DEBUG("~p process data with ~n ~p ~n~n~n",[{?MODULE,?LINE}, {Text1} ] ),
+				true;
+                        Res ->
+                            ?WAIT("~p got from hbase ~p ",[?LINE,Res]),
+                            true %TODO process  mistakes this case
+
+    end
+    
+
+.
+
+hbase_low_get_key(Table, Key, Family,  SecondKey)->
+       { Hbase_Res, Host } = get_rand_host(),
+       case catch  httpc:request( get, 
+				    { Hbase_Res++Table++"/"++Key++"/"++Family++":"++SecondKey,
+				    [ { "Accept","application/json"}, {"Host", Host }]},
+				    [ { connect_timeout,?DEFAULT_TIMEOUT },
+				      { timeout, ?DEFAULT_TIMEOUT }
+				      
+				    ],
+				    [ {sync, true}, { body_format, binary } ] ) of
+                    { ok, { {_NewVersion, 200, _NewReasonPhrase}, _NewHeaders, Text1 } } ->  
+			     ?DEBUG("~p process key value ~p~n",[{?MODULE,?LINE}, Text1]),
+			     onevalue(Text1);		   
+                    Res -> 
+			    ?DEBUG("~p  got  key   return ~p ~n  ~p  ~n",
+				    [{?MODULE,?LINE},
+				    {Table, Key, Family,  SecondKey}, Res ]),
+                            []         
+	end
+.
+
+		  
+onevalue(Text)->
+
+      Json = jsx:decode( Text  ),
+%       [{<<"Row">>,
+%                                                         [[{<<"key">>,<<"dGVzdF9mYWN0">>},
+%                                                           {<<"Cell">>,
+%                                                            [[{<<"column">>,<<"c3RhdDpmYWN0c19yZXFz">>},
+%                                                              {<<"timestamp">>,1368882465730},
+%                                                              {<<"$">>,<<"MQ==">>}]]}]]}]
+      [ { _Row, [[ _KeyRow, { _Cell, [ OneValue ] } ]] } ] = Json, 
+      get_val(OneValue, <<"$">>)      
+.
 

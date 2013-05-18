@@ -3,7 +3,7 @@
 
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2, terminate/2, code_change/3]).
 -export([start_link/0, stop/0, status/0,stat/4,statistic/0, regis_timer_restart/1, regis/2 ,regis/1, kill_process_after/1 ]).
--export([stop_converter/0, start_converter/0, start_statistic/0 ]).
+-export([stop_converter/0, start_converter/0, start_statistic/0, update_hbase_stat/0]).
 
 
 
@@ -28,7 +28,7 @@ init([]) ->
 %          ?INCLUDE_HBASE(""),
          ets:new(?ERWS_LINK, [set, public,named_table ]),
          start_statistic(),
-         converter_monitor:start_converter(),
+         timer:apply_interval(?UPDATE_STAT_INTERVAL, ?MODULE, update_hbase_stat, [] ),
          { ok, #monitor{proc_table = ets:new( process_information, [named_table ,public ,set ] ) } }
 .
 
@@ -125,12 +125,11 @@ status()->
 
 statistic()->
     ListType = ets:foldl(fun( {  { Type, Name }  , {true, TrueCount, false, FalseCount } }, In )->
-% 		  jsx:encode( [ {'Type', [  [{'Name', 2}], [{'Name2',1}]    ]  }  ]).
-		  NewVal = [ {Type, [   [ { Name, TrueCount } ], [ {Name, FalseCount } ]  ]  }  ],
+		  NewVal = [ { Type, [   [ { Name, TrueCount } ], [ {Name, FalseCount } ]  ]  }  ],
 		  [NewVal | In]
 		  end, [], ?STAT),
-    ListType
-    .
+    ListType.
+    
     
     
 regis_timer_restart(Pid)->
@@ -148,10 +147,101 @@ stop_converter()->
     ets:insert(?APPLICATION,{converter_run, false}).
 start_converter()->
     ets:insert(?APPLICATION,{converter_run, true}).   
+
     
+%%update statistic of     
+-ifdef(USE_HBASE).
+update_hbase_stat()->
+      
+      TableList = fact_hbase:get_table_list(),
+      %HACK
+      
+      
+      MetaTables = lists:filter(fun(E) ->  
+			Name = lists:reverse(E),
+			%%find all meta tables called meta
+			case Name of
+			   [$a,$t,$e,$m|_Tail]-> true;
+			   _ -> false
+			end
+			
+		   end, TableList  ),
+		   
+      NameSpaces = lists:foldl( fun(E, Acum)->
+				    Name = lists:reverse(E),
+				    [$a,$t,$e,$m|Tail] = Name,
+				    [ lists:reverse(Tail) | Acum]
+				end,[],MetaTables),
+      Stat = ets:tab2list(?STAT),
+      ?LOG("~p update  stat of hbase   ~p~n",[{?MODULE,?LINE}, {NameSpaces, Stat} ]),
+      lists:foldl(fun process_stat/2, NameSpaces, Stat  ),	 
+      ets:delete_all_objects(?STAT).
+      
+      
+%TODO do not add inner predicates
+%    hbase_low_get_key(MetaTable, "stat", FactNameL, "facts_count")
+% 
+% ;
+% meta_info({'meta', FactName, requests, Val },  Prefix) when is_atom(FactName) ->
+%       MetaTable = common:get_logical_name(Prefix, ?META_FACTS),
+%       FactNameL = erlang:atom_to_list(FactName),
+%       hbase_low_get_key(MetaTable, "stat", FactNameL, "facts_reqs")
+%       
+
+process_stat({ {add, RealFactName }, {_, TrueCount,_, _FalseCount }  }, Acum)->
+	  %HACK replace it
+	  {Name, MetaTable} = find_shortes(RealFactName, Acum),
+	  ?LOG("~p save count to stat hbase ~p to ~p ~n",[{?MODULE,?LINE}, {RealFactName, TrueCount},{Name, MetaTable} ]),
+	  PreVal  = common:inner_to_int( fact_hbase:hbase_low_get_key(MetaTable,  Name, "stat", "facts_count") ),
+	  ?LOG("~p new count ~p ~n",[{?MODULE,?LINE}, {Name, MetaTable, PreVal} ]),
+	  fact_hbase:hbase_low_put_key(MetaTable, Name, "stat", "facts_count", integer_to_list( PreVal + TrueCount ) ),
+	  Acum
+	  
+;
+process_stat({ {'search', RealFactName }, {_, TrueCount,_, _FalseCount }  }, Acum )->
+	  {Name, MetaTable} = find_shortes(RealFactName, Acum),
+  	  ?LOG("~p save count to stat hbase ~p to ~p ~n",[{?MODULE,?LINE}, {RealFactName, TrueCount}, {Name, MetaTable} ]),
+	  PreVal  = common:inner_to_int( fact_hbase:hbase_low_get_key(MetaTable,  Name, "stat", "facts_reqs") ),
+	  ?LOG("~p new count  ~p ~n",[{?MODULE,?LINE}, {Name, MetaTable, PreVal} ]),
+	  fact_hbase:hbase_low_put_key(MetaTable, Name, "stat", "facts_reqs", integer_to_list( PreVal + TrueCount ) ),
+	  Acum
+;
+
+process_stat(Nothing, Acum )->
+	 ?LOG("~p dont logging this ~p  ~n",[{?MODULE,?LINE}, Nothing]),
+	 Acum
+.
+
+find_shortes(LongName, Prefixes) when is_atom(LongName) ->
+  find_shortes(atom_to_list(LongName), Prefixes);
+find_shortes(LongName, Prefixes) ->
+    NameSpace = lists:foldl(fun(E, Prefix)-> 
+				      case lists:prefix(E, LongName) of
+					    true ->
+						 case length(Prefix)>length(E) of
+						    true  -> Prefix;
+						    false ->  E
+						 end; 
+					    false ->
+						  Prefix
+				      end
+			     end, "" , Prefixes ),
+    Name = common:get_namespace_name(NameSpace, LongName),		     
+    { Name, common:get_logical_name(NameSpace, ?META_FACTS) }
+.
+	
+-else.
+update_hbase_stat()->
+	ets:delete_all_objects(?STAT).
+
+   
+-endif.
+
+   
 %%prototype do not use     
 stat(Type, Name,  _ProtoType, Res)->
     Key  =  { Type, Name },
+     ?LOG("~p stat  ~p  ~n",[{?MODULE,?LINE}, Key]),
     case ets:lookup(?STAT, { Type, Name }) of
 	[ {Key, {true, TrueCount, false, FalseCount  }} ]->
 		case Res of

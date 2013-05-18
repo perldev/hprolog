@@ -2,6 +2,54 @@
 -compile(export_all).
 -include("prolog.hrl").
 
+inner_to_list(E) when is_list(E)->
+  E;
+inner_to_list(E) when is_atom(E)->
+  atom_to_list(E);
+  
+inner_to_list(E) when is_integer(E)->
+  integer_to_list(E);
+
+inner_to_list(E) when is_float(E)->
+  float_to_list(E);
+inner_to_list(E) ->
+  E.  
+  
+inner_to_int(E) when is_list(E)->
+  list_to_integer(E);
+inner_to_int(E) when is_atom(E)->
+  list_to_integer(atom_to_list(E));
+ 
+inner_to_int(E) when is_binary(E)->
+  list_to_integer(binary_to_list(E));  
+inner_to_int(E) ->
+  E.
+  
+  
+  
+
+inner_to_atom(E) when is_atom(E)->
+    E
+;
+inner_to_atom(E) when is_binary(E)->
+    list_to_atom( binary_to_list(E)   )
+;
+inner_to_atom(E) when is_list(E)->
+    list_to_atom(E)
+;
+inner_to_atom(E) when is_integer(E)->
+   list_to_atom( integer_to_list(E) )
+; 
+inner_to_atom(E) when is_float(E)->
+   list_to_atom( float_to_list(E) )
+.
+
+
+
+
+get_namespace_name(NameSpace, RealFactName)->
+    lists:sublist(RealFactName, length(NameSpace)+1, length( RealFactName )- length(NameSpace) )
+.
 
 get_logical_name(Prefix, Name) when is_list(Name), is_list(Prefix) ->
      Prefix ++ Name 
