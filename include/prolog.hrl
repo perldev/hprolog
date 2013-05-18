@@ -6,7 +6,7 @@
 
 -define(SIMPLE_HBASE_ASSERT,1).
 
--define(ENABLE_LOG,1).
+%-define(ENABLE_LOG,1).
 
 -define(PREFIX, prefix).
 
@@ -80,7 +80,7 @@
 
 -ifdef(LOGGING).
 
--define('LOG'(Str, Pars ), io:format(Str, Pars) ).
+-define('LOG'(Str, Pars ), log4erl:info(Str, Pars) ).
 -else.
 -define('LOG'(Str, Pars ), true ).
 -endif.
