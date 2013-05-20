@@ -473,6 +473,7 @@ fact_start_link_hbase( Aim, Key, TreeEts,  ParentPid )->
       CountParams = length(ProtoType),
       ?DEBUG("~p generate scanner ~p ~n",[{?MODULE,?LINE}, {Name,ProtoType } ]),
       process_flag(trap_exit, true),%%for deleting scanners
+      NameTable =  common:get_logical_name(TreeEts, Name ),  
       
       case check_params_facts(Name, TreeEts) of
 	  {CountParams, HashFunction} ->
@@ -490,7 +491,6 @@ fact_start_link_hbase( Aim, Key, TreeEts,  ParentPid )->
 		       {Name,  PartKey }->
     			      ?DEBUG("~p find whole_key ~p ~n",[{?MODULE,?LINE}, { Name, PartKey } ]),
 			       ParentPid ! ok,
-			       NameTable =  common:get_logical_name(TreeEts, Name ),  
 			       process_indexed_hbase(atom_to_list(NameTable), ProtoType, Key, [PartKey],  TreeEts);
 		       {IndexTable , PartKey } ->
 			      ?DEBUG("~p got index ~p ~n",[{?MODULE,?LINE}, {{IndexTable, Name} , PartKey } ]),
@@ -501,7 +501,7 @@ fact_start_link_hbase( Aim, Key, TreeEts,  ParentPid )->
 				_ -> 
 				      ParentPid ! ok
 			      end,
-			      process_indexed_hbase(atom_to_list(IndexTable), ProtoType, Key, PreRes,  TreeEts)
+			      process_indexed_hbase(atom_to_list(NameTable), ProtoType, Key, PreRes,  TreeEts)
 		end;
 	  Res->
 	      ?DEBUG("~p count  params not matched ~p ~n",[{?MODULE,?LINE}, {Res, CountParams } ]),
@@ -610,13 +610,16 @@ hbase_get_key(Table,  Key)->
 .
 hbase_get_key(ProtoType, Table, Family, Key)->
       { Hbase_Res, Host } = get_rand_host(),
+      Url = lists:flatten(Hbase_Res ++ Table++"/"++Key++"/"++Family),
+      ?DEBUG("~p get indexed  key by url ~p",[{?MODULE,?LINE}, Url]),
        case catch  httpc:request( get, 
-				    { Hbase_Res++Table++"/"++Key++"/"++Family,
+				    { Url,
 				    [ {"Accept","application/json"}, {"Host", Host }]},
 				    [ {connect_timeout,?DEFAULT_TIMEOUT },
 				      {timeout, ?DEFAULT_TIMEOUT }
 				       ],
-				    [ {sync, true},{ body_format, binary } ] ) of
+				    [ {sync, true},
+				      { body_format, binary } ] ) of
                     { ok, { {_NewVersion, 200, _NewReasonPhrase}, _NewHeaders, Text1 } } ->  
 			    Result = process_data( Text1, ProtoType),
 			    Result ;
@@ -970,7 +973,7 @@ add_new_fact([ Name | ProtoType ] , Pos, TreeEts,  1)->
 	      false -> 
 		  ?DEBUG("~p create new table ~p ~n",[{?MODULE,?LINE}, RealName ]),
 		  create_new_fact_table(RealName),
-		  ?DEBUG("~p store meta info ~p ~n",[{?MODULE,?LINE} ]),
+		  ?DEBUG("~p store meta info  ~n",[{?MODULE,?LINE} ]),
 
 		  ets:insert( common:get_logical_name(TreeEts, ?META), {Name, CountParams, "md5"} ),
 		  store_meta_fact(Name,  common:get_logical_name(TreeEts, ?META_FACTS) , [
