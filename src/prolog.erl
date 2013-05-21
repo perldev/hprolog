@@ -456,8 +456,8 @@ aim(Body = {read, X }, Context, _Index, TreeEts)->
     case TempX of
 	{ ok, Term } ->
 	      Res = prolog_matching:var_match( Term, X, Context ),
-	      Res
-	{} ->
+	      Res;
+	_ ->
 	    ?WRITELN("i can parse input"),
 	    {false, Context}
     end
