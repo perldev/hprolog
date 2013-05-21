@@ -6,7 +6,7 @@
 
 -define(SIMPLE_HBASE_ASSERT,1).
 
-%-define(ENABLE_LOG,1).
+-define(ENABLE_LOG,1).
 
 -define(PREFIX, prefix).
 
@@ -38,6 +38,9 @@
 -define(COMPILE_TRACE, 1).
 -define('WRITE'(X),io:format("~p",[X])).
 -define('WRITELN'(X),io:format("~p~n",[X])).
+-define(GET_CHAR, io:get_chars("", 1)).
+-define(READ, erlog_io:read('') ).
+
 
 -define(NL,io:format("~n",[])).
 
