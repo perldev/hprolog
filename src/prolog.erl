@@ -47,22 +47,26 @@ create_inner_structs(Prefix)->
 
 process_term(Rule  = {':-',Name, Body}, Prefix) when is_atom(Name)->
      ?DEBUG("~p got rule ~p~n",[{?MODULE,?LINE}, Rule  ]),    
-     ets:insert(common:get_logical_name(Prefix, ?RULES), { Name, { true }, Body } )
+     ets:insert(common:get_logical_name(Prefix, ?RULES), { Name, { true }, Body } ),
+     Prefix
 ;
 process_term(Rule  = {':-',ProtoType, Body}, Prefix)->
      ?DEBUG("~p got rule ~p~n",[{?MODULE,?LINE}, Rule  ]),
      Name  = element(1, ProtoType),
      Args =  common:my_delete_element(1,ProtoType),
      ?DEBUG("~p compile rule ~p~n",[{?MODULE,?LINE}, Rule  ]),
-     ets:insert(common:get_logical_name(Prefix,?RULES),  { Name, Args, Body } )
+     ets:insert(common:get_logical_name(Prefix,?RULES),  { Name, Args, Body } ),
+     Prefix
 ;
 process_term(Aim, Prefix) when is_atom(Aim)->
      ?DEBUG("~p compile fact ~p~n",[{?MODULE,?LINE}, Aim  ]),
-     ets:insert(common:get_logical_name(Prefix,?INNER), {Aim, true} )
+     ets:insert(common:get_logical_name(Prefix,?INNER), {Aim, true} ),
+     Prefix
 ;
 process_term(Body, Prefix )->
      ?DEBUG("~p compile fact ~p~n",[{?MODULE,?LINE}, Body  ]),
-     ets:insert(common:get_logical_name(Prefix,?INNER), Body )
+     ets:insert(common:get_logical_name(Prefix,?INNER), Body ),
+     Prefix
 .
 
 %%%calculate all with patterns
@@ -442,6 +446,22 @@ check_arg(Some, Count, Value, Context ) ->
 .
 
 %%%inner predicates of our system
+aim(Body = {get_char, X }, Context, _Index, TreeEts)-> 
+    TempX = ?GET_CHAR, %%only one character
+    {MainRes, NewContext} = prolog_matching:var_match( list_to_atom(TempX), X, Context ),
+    {MainRes, NewContext}
+;
+aim(Body = {read, X }, Context, _Index, TreeEts)->
+    TempX = ?READ, %%read prolog term
+    case TempX of
+	{ ok, Term } ->
+	      Res = prolog_matching:var_match( Term, X, Context ),
+	      Res
+	{} ->
+	    ?WRITELN("i can parse input"),
+	    {false, Context}
+    end
+;
 aim(Body = { 'meta', _FactName, _ParamName, Val }, Context, _Index, TreeEts  )->
     NewBody = prolog_matching:bound_body(Body, Context),
     Res = fact_hbase:meta_info(NewBody,  TreeEts),     
@@ -1714,6 +1734,15 @@ foldl3( { SearchHead, _Context } , PrevSearch, Body, LocalContext, ParentPid, In
 
 %%TODO optimize this
 %%%atom 'one' tell us about none duality of the aim
+start_fact_listener_process(  {'read', _X}, Context,Index,  TreeEts)->           
+      ?TRACE(Index, TreeEts, 'read', Context),
+      one
+;
+start_fact_listener_process(  {'get_char', _X}, Context,Index,  TreeEts)->           
+      ?TRACE(Index, TreeEts, 'get_char', Context),
+      one
+;
+
 
 start_fact_listener_process({'fact_statistic',true}, Context,Index,  TreeEts)->           
       ?TRACE(Index , TreeEts,  'fact_statistic', Context),
@@ -2355,6 +2384,7 @@ operators( Op )->
       [ {Op, Status1, Status2, Status3 } ] -> 
 	  ?DEBUG("~p find custom operator ~p ",[{?MODULE,?LINE}, {Op, Status1, Status2, Status3 } ]),
 	  {yes,  Status1, Status2, Status3  };
+      _ -> no;
       []-> no
   end
 .
