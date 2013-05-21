@@ -24,7 +24,7 @@ start(Prefix)->
     ?LOG_APPLICATION,
     case lists:member(converter_monitor, global:registered_names() ) of
 	  false -> converter_monitor:start_link();
-	  true-> do_nothing
+	  true  -> do_nothing
     end,
     prolog:create_inner_structs(Prefix),
     ?INCLUDE_HBASE( Prefix ),
@@ -181,118 +181,6 @@ server_loop(P0, TraceOn) ->
 	    server_loop(P0, TraceOn)
     end.
 
-    
-    
-process_prove_erws(TempAim , Goal, BackPid, WebPid,  StartTime)->
-      ProtoType = common:my_delete_element(1, Goal),
-      receive 
-	   
-	    {'EXIT',FromPid,Reason}->
-		  ?DEBUG(" ~p exit aim ~p~n",[?LINE,FromPid]),
-		  MainRes = io_lib:format("No<br/>",[]),
-		  FinishTime = erlang:now(),
-		  ElapsedTime = time_string(FinishTime, StartTime ), 
-		  Main =  concat_result( [MainRes,ElapsedTime] ),
-		  ?LOG("~p send back restul to web console ~p",[{?MODULE,?LINE},{Main, WebPid}]),
-		  WebPid ! {result, Main, finish, self() },
-		  finish_web_session();
-		
-	    finish ->
-		   MainRes = io_lib:format("No<br/>",[]),FinishTime = erlang:now(),
-    		   ElapsedTime = time_string(FinishTime, StartTime),
-    		   Main =  concat_result( [MainRes,ElapsedTime] ),
-		   WebPid ! {result, Main, finish, self() },
-		   finish_web_session();
-
-	    {result, {false, _ } }->
-		   MainRes = io_lib:format("No<br/>",[]),FinishTime = erlang:now(),
-     		  ElapsedTime = time_string(FinishTime, StartTime),
-     		   Main =  concat_result( [MainRes,ElapsedTime] ),
-		   WebPid ! {result, Main, finish, self() },
-		   finish_web_session();
-
-	    {result, {empty, _ } }->
-		   MainRes = io_lib:format("No<br/>",[]),FinishTime = erlang:now(),
-    		  ElapsedTime = time_string(FinishTime, StartTime),
-    		   Main =  concat_result( [MainRes,ElapsedTime] ),
-		   WebPid ! {result, Main, finish, self() },
-		   finish_web_session();
-
-	    {result, {Result, SomeContext} }->
-   		   ?DEBUG("~p got from prolog shell aim ~p~n",[?LINE, {Result,  ProtoType, SomeContext} ]),
-		  FinishTime = erlang:now(),
-		  NewLocalContext = prolog:fill_context( 
-					Result, 
-					ProtoType,
-					dict:new() ), 
-					
-		  ?DEBUG("~p got from prolog shell aim ~p~n",[?LINE, {WebPid,Result,  ProtoType, NewLocalContext} ]),
-		  VarsRes = lists:map(fun shell_var_match_str/1, dict:to_list(NewLocalContext) ),
-		  ElapsedTime = time_string(FinishTime, StartTime),
-  		  ResStr = io_lib:format("<br/>Yes looking next ?",[] ),
-		  Main =  concat_result( [VarsRes, ResStr, ElapsedTime] ),
-		  
-		  WebPid ! {result, Main, has_next, self() },
- 		  receive 
-			{Line, NewWebPid} ->
-			  case Line of
-			      finish ->
-				    VarRes = io_lib:format("Yes~n",[]),
-				    WebPid ! {result, concat_result(VarRes), finish, self() },
-				    exit(BackPid, kill),
-				    finish_web_session();
-			      _ ->
-				    ?DEBUG("~p send next to pid ~p",[{?MODULE,?LINE}, BackPid]),
-				    BackPid ! next,
-				    process_prove_erws( TempAim , Goal, BackPid, NewWebPid, erlang:now() )		    
-			  end
-		end
-      end     
-.
-
-finish_web_session()->
-    true.
-
-concat_result(List)->
-    list_to_binary(lists:flatten(List)).
-
-
-shell_var_match_str({ { Key }, Val} ) when is_tuple(Val)->
-        shell_var_match_str({ { Key },  io_lib:format("~p",[Val]) } );
-shell_var_match_str({ { Key }, Val} ) when is_float(Val)->
-        shell_var_match_str({ { Key }, float_to_list(Val) } );
-shell_var_match_str({ { Key }, Val} ) when is_integer(Val)->
-	shell_var_match_str({ { Key }, integer_to_list(Val) } );
-shell_var_match_str({ { Key }, Val} ) when is_binary(Val) -> 
-			    shell_var_match_str({ { Key }, unicode:characters_to_list(Val) } );
-			    
-shell_var_match_str({ { Key }, []} )-> 
-    io_lib:format("<strong>~p</strong> = nothins ~n", [Key ])
-;
-shell_var_match_str({ { Key }, Val} )-> 
-
-    case shell_check(Val) of
-	true ->
-	    ?DEBUG("~p fill shell vars ~p",[{?MODULE,?LINE}, {  Key , Val} ]),
-	    io_lib:format("<strong>~p</strong> = ~ts ~n", [Key,Val]);
-	false->
-	    io_lib:format("<strong>~p</strong> = ~p ~n", [Key,Val])
-    end; 
-    
-shell_var_match_str( V )->
-    "".    
-shell_check([])->
-    true;
-shell_check([Head|Tail]) when Head<20->
-    false
-;
-shell_check([Head|Tail]) when is_integer(Head)->
-    shell_check(Tail)
-;
-
-shell_check(_L)->
-    false
-.
 
 process_prove(  TempAim , Goal, BackPid, StartTime)->
       ProtoType = common:my_delete_element(1, Goal),
@@ -471,9 +359,5 @@ get_code_memory_html()->
 	   ResBin = << "<br/>", MetaCode/binary, FactsCode/binary,FormatedCode/binary >>,
 	   ResBin.
 	   
-	   
-time_string(FinishTime, StartTime)->
-  io_lib:format("<br/><span class='time'> elapsed time ~p secs </span><br/>", [ timer:now_diff(FinishTime, StartTime)*0.000001 ] )
-.
 
  
