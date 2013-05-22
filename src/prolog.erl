@@ -2376,8 +2376,8 @@ operators( Op )->
       [ {Op, Status1, Status2, Status3 } ] -> 
 	  ?DEBUG("~p find custom operator ~p ",[{?MODULE,?LINE}, {Op, Status1, Status2, Status3 } ]),
 	  {yes,  Status1, Status2, Status3  };
-      _ -> no;
-      []-> no
+      []-> no;
+      _ ->no
   end
 .
 -endif.
