@@ -2369,7 +2369,7 @@ operators( Op )->
 
 operators( Op )->
   Table = get(?DYNAMIC_STRUCTS),
-  case ets:lookup(Table, Op) of
+  case catch ets:lookup(Table, Op) of
       [ {Op, Status1, Status2 } ] -> 
 	  ?DEBUG("~p find custom operator ~p ",[{?MODULE,?LINE}, {Op, Status1, Status2 } ]),
 	 {yes,  Status1, Status2  };
