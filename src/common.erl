@@ -2,6 +2,10 @@
 -compile(export_all).
 -include("prolog.hrl").
 
+
+regis_io_server(TreeEts, Io)->
+    ets:insert(TreeEts, {?IO_SERVER, Io} )
+.
 parse_as_term(S)->
       {ok, Terms , _L1} = erlog_scan:string( S ),
       erlog_parse:term(Terms).
@@ -22,8 +26,10 @@ console_nl(_)->
 
 %TODO adding parsing predicates
 
-web_console_read(Parent)->
-	Parent ! {result, get_char, erlang:self() },
+web_console_read(TreeEts)->
+	[{_, Parent}] = ets:lookup(TreeEts, ?IO_SERVER ),
+
+	Parent ! {result, read, erlang:self() },
 	receive 
 	     {read, List }->
 		  Term = inner_to_list(List),
@@ -32,7 +38,8 @@ web_console_read(Parent)->
 	end.
       
        
-web_console_get_char(Parent)->
+web_console_get_char(TreeEts)->
+	[{_, Parent}] = ets:lookup(TreeEts, ?IO_SERVER ),
         Parent ! {result, get_char, erlang:self() },
 	receive
 	      {char, Char } ->
@@ -40,14 +47,21 @@ web_console_get_char(Parent)->
 	%TODO add after statement
         end.
        
-web_console_write(Parent, X)->
+web_console_write(TreeEts, X)->
       Str  = io_lib:format("~p",[X]),
+      [{_, Parent}] = ets:lookup(TreeEts, ?IO_SERVER ),
       Parent ! {result, write, Str}.
-web_console_writenl(Parent, X)->    
-    Str =  io_lib:format("~p~n",[X]),
-    Parent ! {result, writenl, Str}.
-web_console_nl(Parent)->
+      
+web_console_writenl(TreeEts, X)->    
+      Str =  io_lib:format("~p~n",[X]),
+      [{_, Parent}] = ets:lookup(TreeEts, ?IO_SERVER ),
+      Parent ! {result, writenl, Str}.
+      
+web_console_nl(TreeEts)->
+
+      [{_, Parent}] = ets:lookup(TreeEts, ?IO_SERVER ),
       Parent ! {result, nl}. 
+
 	
 
     
