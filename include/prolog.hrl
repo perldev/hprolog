@@ -36,13 +36,24 @@
 -define(LOG_CONF,"log.conf").
 
 -define(COMPILE_TRACE, 1).
--define('WRITE'(X),io:format("~p",[X])).
--define('WRITELN'(X),io:format("~p~n",[X])).
--define(GET_CHAR, io:get_chars("", 1)).
--define(READ, erlog_io:read('') ).
 
 
--define(NL,io:format("~n",[])).
+-ifdef(WEB).
+
+-define('WRITE'(Parent,X), common:web_console_write(Parent, X)  ).
+-define('WRITELN'(Parent,X), common:web_console_writenl(Parent, X) ).
+-define(GET_CHAR(Parent),  common:web_console_get_char(Parent) ).
+-define(READ(Parent), common:web_console_read(Parent) ).
+-define(NL(Parent),common:web_console_nl(Parent) ).   
+
+-else.
+-define('WRITE'(Parent,X), common:console_write(Parent, X)  ).
+-define('WRITELN'(Parent,X), common:console_writenl(Parent, X) ).
+-define(GET_CHAR(Parent),  common:console_get_char(Parent) ).
+-define(READ(Parent), common:console_read(Parent) ).
+-define(NL(Parent),common:console_nl(Parent) ).     
+       
+-endif.
 
 -ifdef( COMPILE_TRACE).
 -define( 'TRACE'(I, Tree,  Body, Context),  prolog_trace:trace(I, Tree,  Body, Context) ).

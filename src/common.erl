@@ -2,6 +2,56 @@
 -compile(export_all).
 -include("prolog.hrl").
 
+parse_as_term(S)->
+      {ok, Terms , _L1} = erlog_scan:string( S ),
+      erlog_parse:term(Terms).
+
+%TODO adding parsing predicates
+console_read(_)->
+       erlog_io:read('').
+console_get_char(_)->
+       io:get_chars("", 1).
+console_write(_, X)->
+      io:format("~p",[X]).
+      
+console_writenl(_, X)->      
+    io:format("~p~n",[X]).
+    
+console_nl(_)->
+	io:format("~n",[]).
+
+%TODO adding parsing predicates
+
+web_console_read(Parent)->
+	Parent ! {result, get_char, erlang:self() },
+	receive 
+	     {read, List }->
+		  Term = inner_to_list(List),
+		  (catch parse_as_term(Term) )
+	     %TODO add after statement
+	end.
+      
+       
+web_console_get_char(Parent)->
+        Parent ! {result, get_char, erlang:self() },
+	receive
+	      {char, Char } ->
+		  inner_to_atom(Char)
+	%TODO add after statement
+        end.
+       
+web_console_write(Parent, X)->
+      Str  = io_lib:format("~p",[X]),
+      Parent ! {result, write, Str}.
+web_console_writenl(Parent, X)->    
+    Str =  io_lib:format("~p~n",[X]),
+    Parent ! {result, writenl, Str}.
+web_console_nl(Parent)->
+      Parent ! {result, nl}. 
+	
+
+    
+
 inner_to_list(E) when is_list(E)->
   E;
 inner_to_list(E) when is_atom(E)->
@@ -12,6 +62,8 @@ inner_to_list(E) when is_integer(E)->
 
 inner_to_list(E) when is_float(E)->
   float_to_list(E);
+inner_to_list(E)  when is_binary(E)->
+  unicode:characters_to_list(E);
 inner_to_list(E) ->
   E.  
   

@@ -445,30 +445,14 @@ check_arg(Some, Count, Value, Context ) ->
       true     
 .
 
-%%%inner predicates of our system
-aim(Body = {get_char, X }, Context, _Index, TreeEts)-> 
-    TempX = ?GET_CHAR, %%only one character
-    {MainRes, NewContext} = prolog_matching:var_match( list_to_atom(TempX), X, Context ),
-    {MainRes, NewContext}
-;
-aim(Body = {read, X }, Context, _Index, TreeEts)->
-    TempX = ?READ, %%read prolog term
-    case TempX of
-	{ ok, Term } ->
-	      Res = prolog_matching:var_match( Term, X, Context ),
-	      Res;
-	_ ->
-	    ?WRITELN("i can parse input"),
-	    {false, Context}
-    end
-;
-aim(Body = { 'meta', _FactName, _ParamName, Val }, Context, _Index, TreeEts  )->
+
+aim(Body = { 'meta', _FactName, _ParamName, Val }, Context, _Index, TreeEts  , _ParentPid)->
     NewBody = prolog_matching:bound_body(Body, Context),
     Res = fact_hbase:meta_info(NewBody,  TreeEts),     
     {MainRes ,NewContext} = prolog_matching:var_match(Res, Val, Context),
     {MainRes ,NewContext}
 ;
-aim({ functor, Body, Name, Count }, Context, _Index, _  )->
+aim({ functor, Body, Name, Count }, Context, _Index, _  , _ParentPid)->
       Res  =
 	  case Body of
 	      {Key}->  %means var
@@ -485,7 +469,7 @@ aim({ functor, Body, Name, Count }, Context, _Index, _  )->
 	end,
     {Res,Context}
 ;
-aim({ arg, Count, Body, Value }, Context, _Index, _  )->
+aim({ arg, Count, Body, Value }, Context, _Index, _  , _ParentPid)->
 	Res  =
 	  case Body of
 	      {Key}->  %means var
@@ -505,7 +489,7 @@ aim({ arg, Count, Body, Value }, Context, _Index, _  )->
     
     
 ;
-aim({ atom, Body  }, Context, _Index, _  ) ->
+aim({ atom, Body  }, Context, _Index, _  , _ParentPid)->
 
     Res =
 	case Body of
@@ -521,18 +505,18 @@ aim({ atom, Body  }, Context, _Index, _  ) ->
 	end,
     {Res, Context}  
 ;
-%%TODO 
-aim({ change_namespace, Name  }, Context, _Index, _  ) ->
+%%TODO this
+aim({ change_namespace, Name  }, Context, _Index, _  , _ParentPid)->
 %     Res = fact_hbase:create_new_namespace(Name),
     {true, Context}   
 ;
 
-aim({ create_namespace, Name  }, Context, _Index, _  ) ->
+aim({ create_namespace, Name  }, Context, _Index, _  , _ParentPid)->
     Res = fact_hbase:create_new_namespace(Name),
     {Res, Context}   
 ;
 
-aim({ integer, Body  }, Context, _Index, _  ) ->
+aim({ integer, Body  }, Context, _Index, _  , _ParentPid)->
     Res =
 	case Body of
 	      Body when is_integer(Body)->
@@ -547,7 +531,7 @@ aim({ integer, Body  }, Context, _Index, _  ) ->
 	end,
     {Res, Context}   
 ;
-aim({ 'list', Body  }, Context, _Index, _  ) ->
+aim({ 'list', Body  }, Context, _Index, _  , _ParentPid)->
     Res =
 	case Body of
 	      Body when is_list(Body)->
@@ -562,7 +546,7 @@ aim({ 'list', Body  }, Context, _Index, _  ) ->
 	end,
     {Res, Context}     
 ;
-aim({ atomic, Body  }, Context, _Index, _  ) ->
+aim({ atomic, Body  }, Context, _Index, _  , _ParentPid)->
    Res =
 	case Body of
 	      Body when is_atom(Body)->
@@ -580,7 +564,7 @@ aim({ atomic, Body  }, Context, _Index, _  ) ->
 	end,
       {Res, Context}      
 ;
-aim({ 'float', Body  }, Context, _Index, _  ) ->
+aim({ 'float', Body  }, Context, _Index, _  , _ParentPid)->
         Res =
 	case Body of
 	      Body when is_float(Body)->
@@ -597,7 +581,7 @@ aim({ 'float', Body  }, Context, _Index, _  ) ->
 
     
 ;
-aim({ 'var', Body  }, Context, _Index, _  ) ->
+aim({ 'var', Body  }, Context, _Index, _  , _ParentPid)->
       Res =
 	case Body of
 	  {Key} when is_atom(Key)->
@@ -612,7 +596,7 @@ aim({ 'var', Body  }, Context, _Index, _  ) ->
 	end,
     {Res, Context}
 ;
-aim({ 'nonvar', Body  }, Context, _Index, _  ) ->
+aim({ 'nonvar', Body  }, Context, _Index, _  , _ParentPid)->
       
       Res =
 	case Body of
@@ -631,10 +615,10 @@ aim({ 'nonvar', Body  }, Context, _Index, _  ) ->
 %%TODO for assert adding result not only true  think about it
 
 %%this is an asserting of links between two facts and describe its connection through prolog rules
-aim({ 'assertz', SourceFact, ForeignFact,  Body = {':-', _ProtoType, _Body1 }  }, Context, Index, TreeEts  ) ->
-  aim( { 'assert',  SourceFact, ForeignFact,  Body   }, Context, Index, TreeEts  )
+aim({ 'assertz', SourceFact, ForeignFact,  Body = {':-', _ProtoType, _Body1 }  }, Context, Index, TreeEts  , ParentPid)->
+  aim( { 'assert',  SourceFact, ForeignFact,  Body   }, Context, Index, TreeEts, ParentPid )
 ;
-aim({ 'assert', SourceFact,  ForeignFact, Body = {':-', ProtoType, _Body1 }  }, Context, _Index, TreeEts ) ->
+aim({ 'assert', SourceFact,  ForeignFact, Body = {':-', ProtoType, _Body1 }  }, Context, _Index, TreeEts , _ParentPid)->
       dynamic_new_rule(Body, last, TreeEts),
       RuleName = erlang:element(1, ProtoType),
       fact_hbase:add_link(SourceFact, ForeignFact, RuleName, TreeEts ),
@@ -642,34 +626,34 @@ aim({ 'assert', SourceFact,  ForeignFact, Body = {':-', ProtoType, _Body1 }  }, 
       {true, Context} 
 ;
 
-aim({ 'assertz', SourceFact, ForeignFact,  RuleName  }, Context, Index, TreeEts  ) ->
-  aim( { 'assert',  SourceFact, ForeignFact,  RuleName   }, Context, Index, TreeEts   )
+aim({ 'assertz', SourceFact, ForeignFact,  RuleName  }, Context, Index, TreeEts  , ParentPid)->
+  aim( { 'assert',  SourceFact, ForeignFact,  RuleName   }, Context, Index, TreeEts, ParentPid   )
 ;
 
-aim({ 'assert', SourceFact,  ForeignFact, RuleName }, Context, _Index, TreeEts ) ->
+aim({ 'assert', SourceFact,  ForeignFact, RuleName }, Context, _Index, TreeEts , _ParentPid)->
       fact_hbase:add_link(SourceFact, ForeignFact, RuleName, TreeEts ),
       ets:insert( common:get_logical_name(TreeEts, ?META_LINKS), 
 		  {SourceFact, ForeignFact, RuleName  }),
       {true, Context}
 ;
 %%%usual assert
-aim({ 'assertz', Body = {':-', _ProtoType, _Body1 }  }, Context, Index, TreeEts  ) ->
-  aim( { 'assert', Body   }, Context, Index, TreeEts   )
+aim({ 'assertz', Body = {':-', _ProtoType, _Body1 }  }, Context, Index, TreeEts  , ParentPid)->
+  aim( { 'assert', Body   }, Context, Index, TreeEts, ParentPid   )
 ;
-aim({ 'assert', Body = {':-', _ProtoType, _Body1 }  }, Context, _Index, TreeEts ) ->
+aim({ 'assert', Body = {':-', _ProtoType, _Body1 }  }, Context, _Index, TreeEts , _ParentPid)->
       dynamic_new_rule(Body, last, TreeEts),
       {true, Context}
 
 ;
-aim({ 'asserta', Body = {':-', _ProtoType, _Body1 }   }, Context, _Index, TreeEts  )->
+aim({ 'asserta', Body = {':-', _ProtoType, _Body1 }   }, Context, _Index, TreeEts  , _ParentPid)->
      dynamic_new_rule(Body, first, TreeEts),
      {true,Context}
     
 ;
-aim({ 'assertz', Body   }, Context, Index, TreeEts  ) when is_tuple(Body)->
-    aim( { 'assert', Body   }, Context, Index, TreeEts   )
+aim({ 'assertz', Body   }, Context, Index, TreeEts, ParentPid  ) when is_tuple(Body)->
+    aim( { 'assert', Body   }, Context, Index, TreeEts, ParentPid   )
 ;
-aim({ 'assert', Body   }, Context, _Index, TreeEts  ) when is_tuple(Body)->
+aim({ 'assert', Body   }, Context, _Index, TreeEts, _ParentPid  ) when is_tuple(Body)->
 %       Name = element(1,Body),
       BodyBounded = bound_aim(Body, Context),
       case is_rule(BodyBounded) of 
@@ -682,7 +666,7 @@ aim({ 'assert', Body   }, Context, _Index, TreeEts  ) when is_tuple(Body)->
       ?DEBUG(" add ~p  yes ~n",[Body ]),
       {true,Context}
 ;
-aim({ 'asserta', Body   }, Context, _Index, TreeEts  ) when is_tuple(Body)->
+aim({ 'asserta', Body   }, Context, _Index, TreeEts , _ParentPid ) when is_tuple(Body)->
 %       Name = element(1,Body),
       BodyBounded = bound_aim(Body, Context),
       case is_rule( BodyBounded ) of 
@@ -695,35 +679,52 @@ aim({ 'asserta', Body   }, Context, _Index, TreeEts  ) when is_tuple(Body)->
       ?LOG(" add ~p  yes ~n",[Body ]),
       {true, Context}
 ;
-aim({ 'retract', FirstFact, SecondFact } , Context, _Index, TreeEts  ) when is_atom(FirstFact)->
+aim({ 'retract', FirstFact, SecondFact } , Context, _Index, TreeEts , _ParentPid ) when is_atom(FirstFact)->
 	Pid = spawn(?MODULE, dynamic_del_link, [ FirstFact, SecondFact, TreeEts ] ),
 	unlink(Pid),
 	Pid ! start,
         ?LOG("~p del ~p  yes ~n",[ {?MODULE,?LINE}, {  FirstFact, SecondFact } ] ), 
         {true, Context}
 ;
-aim(Body = { 'write', X }, Context, _Index, _TreeEts  ) ->
+%%%inner predicates of our system
+aim(Body = {'get_char', X }, Context, _Index, TreeEts, ParentPid)-> 
+    TempX = ?GET_CHAR(ParentPid), %%only one character
+    {MainRes, NewContext} = prolog_matching:var_match( list_to_atom(TempX), X, Context ),
+    {MainRes, NewContext}
+;
+aim(Body = {'read', X }, Context, _Index, TreeEts, ParentPid)->
+    TempX = ?READ(ParentPid), %%read prolog term
+    case TempX of
+	{ ok, Term } ->
+	      Res = prolog_matching:var_match( Term, X, Context ),
+	      Res;
+	_ ->
+	    ?WRITELN(ParentPid, "i can parse input"),
+	    {false, Context}
+    end
+;
+aim(Body = { 'write', X }, Context, _Index, _TreeEts  , ParentPid)->
     X1 = prolog_matching:bound_body( X, Context),
     ?DEBUG("~p write ~p ~n",[X, dict:to_list(Context)]),
-    ?WRITE(X1),
+    ?WRITE(ParentPid, X1),
     {true, Context}
 ;
-aim(Body = { 'writeln', X }, Context, _Index, _TreeEts  ) ->
+aim(Body = { 'writeln', X }, Context, _Index, _TreeEts  , ParentPid)->
     X1 = prolog_matching:bound_body(X, Context),
     ?DEBUG("~p write ~p ~n",[X, dict:to_list(Context)]),
-    ?WRITELN(X1),
+    ?WRITELN(ParentPid, X1),
     {true, Context}
 ;
-aim(Body = {nl,true}, Context, _Index, _TreeEts  ) ->
-    ?NL,
+aim(Body = {nl,true}, Context, _Index, _TreeEts  , ParentPid)->
+    ?NL(ParentPid),
     {true, Context}
 ;  
 
-aim(Body = {system_stat,true}, Context, _Index, TreeEts  ) ->
+aim(Body = {system_stat,true}, Context, _Index, TreeEts  , _ParentPid)->
     ?SYSTEM_STAT(TreeEts),
     {true, Context}
 ; 
-aim(Body = {fact_statistic, true}, Context, _Index, TreeEts  ) ->
+aim(Body = {fact_statistic, true}, Context, _Index, TreeEts  , _ParentPid)->
     ?FACT_STAT(?STAT),
     {true, Context}
 ; 
@@ -733,30 +734,30 @@ aim(Body = {fact_statistic, true}, Context, _Index, TreeEts  ) ->
 %%infix
     
 
-aim(Body = { op, _OrderStatus, _, Name }, Context, _Index, TreeEts  ) when is_atom(Name) ->
+aim(Body = { op, _OrderStatus, _, Name }, Context, _Index, TreeEts , _ParentPid ) when is_atom(Name) ->
     Res = add_operator( Body, TreeEts ),
     {Res, Context}
 ;   
 
-aim({ op, _OrderStatus, _, _Name }, Context, _Index, _TreeEts  ) ->
+aim({ op, _OrderStatus, _, _Name }, Context, _Index, _TreeEts , _ParentPid ) ->
     {false, Context}
 ;  
 %%TODO make operators of == > < \\=
 % false, true, fail standart prolog operators
 
-aim({false,false}, Context, _Index, _TreeEts  )->
+aim({false,false}, Context, _Index, _TreeEts, _ParentPid  )->
     {?EMPTY,Context}
 ;
-aim(false, Context, _Index, _TreeEts  )->
+aim(false, Context, _Index, _TreeEts, _ParentPid  )->
     {?EMPTY,Context}
 ;
-aim(fail, Context, _Index, _TreeEts  )->
+aim(fail, Context, _Index, _TreeEts , _ParentPid )->
     {?EMPTY,Context}
 ;
-aim({true, true}, Context, _Index, _TreeEts  )->
+aim({true, true}, Context, _Index, _TreeEts , _ParentPid )->
     {true, Context}
 ;
-aim(true, Context, _Index, _TreeEts  )->
+aim(true, Context, _Index, _TreeEts , _ParentPid )->
     {true, Context}
 ;
 
@@ -768,7 +769,7 @@ aim(true, Context, _Index, _TreeEts  )->
 %%{',',{is,{'+',{'X1'},{'Y3'}},{'+',{'Y'},{'X'}}}
 %%{Accum} it means that we work only with one X = X1 + XY, but not  X+C1 = X1 + XY!!
 
-aim( Body = {'date', _Ini, _Typei, _Accumi },  Context, Index, TreeEts)->
+aim( Body = {'date', _Ini, _Typei, _Accumi },  Context, Index, TreeEts, _ParentPid)->
 	
 
       {In, Type, Accum} = bound_vars( common:my_delete_element(1, Body) , Context ),
@@ -787,20 +788,20 @@ aim( Body = {'date', _Ini, _Typei, _Accumi },  Context, Index, TreeEts)->
       {Res, Context}      
 ;
 aim( {'is',  NewVarName = { _Accum }, Expr },
-		  Context, _Index , _TreeEts )->
+		  Context, _Index , _TreeEts, _ParentPid )->
 	CalcRes = common_process_expr(Expr, Context),
 	?DEBUG("~p calc expression ~p ~n",[{?MODULE,?LINE},{ NewVarName, Expr, CalcRes  } ]),
 	prolog_matching:var_match(NewVarName, CalcRes, Context)
 
 ;
-aim({ '=:=', First, Second }, Context, _Index, _TreeEts  )->
+aim({ '=:=', First, Second }, Context, _Index, _TreeEts, _ParentPid  )->
     One = arithmetic_process(First, Context),
     Two = arithmetic_process(Second, Context),
     Res ={ compare(One,Two), Context },
     Res
     
 ;
-aim({ '=', First, Second }, Context, _Index, _TreeEts  )->
+aim({ '=', First, Second }, Context, _Index, _TreeEts  , _ParentPid)->
     ?DEBUG("~p aim = ~p",[{?MODULE,?LINE}, { '=', First, Second } ]),
     Res = prolog_matching:var_match(First, Second, Context ),
     ?DEV_DEBUG("~p aim = ~p",[{?MODULE,?LINE}, Res ]),
@@ -808,7 +809,7 @@ aim({ '=', First, Second }, Context, _Index, _TreeEts  )->
 
     
 ;
-aim({ '\\=', First, Second }, Context, _Index, _TreeEts  )->
+aim({ '\\=', First, Second }, Context, _Index, _TreeEts  , _ParentPid)->
     ?DEBUG("~p aim = ~p",[{?MODULE,?LINE}, { '=', First, Second } ]),
     case prolog_matching:var_match(First, Second, Context ) of
 	{false, _ } -> {true, Context};
@@ -816,12 +817,12 @@ aim({ '\\=', First, Second }, Context, _Index, _TreeEts  )->
     end
     
 ;
-aim({ '==', First, Second }, Context, _Index, _TreeEts  )->
+aim({ '==', First, Second }, Context, _Index, _TreeEts  , _ParentPid)->
    {Res, _ } = prolog_matching:var_match(First, Second, Context ),
    {Res, Context}
     
 ;
-aim({ '>=', First, Second }, Context, _Index, _TreeEts  )->
+aim({ '>=', First, Second }, Context, _Index, _TreeEts  , _ParentPid)->
     
     One = arithmetic_process(First, Context),
     Two = arithmetic_process(Second, Context),
@@ -831,13 +832,13 @@ aim({ '>=', First, Second }, Context, _Index, _TreeEts  )->
    
     
 ;
-aim({'=<', First, Second }, Context, _Index, _TreeEts  )->
+aim({'=<', First, Second }, Context, _Index, _TreeEts  , _ParentPid)->
 	    
     One = arithmetic_process(First, Context),
     Two = arithmetic_process(Second, Context),
     Res = { One =< Two, Context }, Res
 ;
-aim({ '>', First, Second }, Context, _Index, _TreeEts  )->
+aim({ '>', First, Second }, Context, _Index, _TreeEts  , _ParentPid)->
     
     One = arithmetic_process(First, Context),
     Two = arithmetic_process(Second, Context),
@@ -847,14 +848,14 @@ aim({ '>', First, Second }, Context, _Index, _TreeEts  )->
    
     
 ;
-aim({'<', First, Second }, Context, _Index, _TreeEts  )->
+aim({'<', First, Second }, Context, _Index, _TreeEts  , _ParentPid)->
 	    
     One = arithmetic_process(First, Context),
     Two = arithmetic_process(Second, Context),
     Res = { One < Two, Context },
     Res
 ;
-aim( {'=\\=', First, Second }, Context, _Index, _TreeEts )->
+aim( {'=\\=', First, Second }, Context, _Index, _TreeEts , _ParentPid)->
     One = arithmetic_process(First, Context),
     Two = arithmetic_process(Second, Context),
     Res = { not_compare(One ,Two), Context },
@@ -862,7 +863,7 @@ aim( {'=\\=', First, Second }, Context, _Index, _TreeEts )->
    
 ;
 %%%user defined aims
-aim(Body = {';', _, _ }, Context, Index, TreeEts) ->	
+aim(Body = {';', _, _ }, Context, Index, TreeEts, _ParentPid)->	
 
       case ets:lookup(TreeEts, Index ) of
 	  [ {_Key,{ ?EMPTY, rule } } ] -> 
@@ -890,7 +891,7 @@ aim(Body = {';', _, _ }, Context, Index, TreeEts) ->
 	      {?EMPTY, Context}
       end
 ;
-aim(Body = {',', _, _ }, Context, Index, TreeEts) ->	
+aim(Body = {',', _, _ }, Context, Index, TreeEts, _ParentPid)->	
 
 %       ?DEBUG("~p etses there ~p~n",[ {?MODULE, ?LINE}, {Body,
 % 							 ets:tab2list(TreeEts),
@@ -918,7 +919,7 @@ aim(Body = {',', _, _ }, Context, Index, TreeEts) ->
 	      {?EMPTY, Context}
       end
 ;
-aim(ProtoType, Context, Index, TreeEts )->
+aim(ProtoType, Context, Index, TreeEts, _ParentPid)->
     
 %       ?DEBUG("~p etses there ~p~n",[ {?MODULE,?LINE}, {ProtoType,
 % 							 ets:tab2list(TreeEts),
@@ -1279,8 +1280,7 @@ aim_loop({Result, _SomeContext}, one, ParentPid,  Index, _TreeEts, true, LocalCo
 	BoundedSearch = bound_vars(MainProtoType, LocalContext ),
       	ParentPid ! {result, {BoundedSearch, LocalContext} }, %%first time
        ?WAIT("~p regis  aim loop     ~p ~n",[{?MODULE,?LINE}, {ParentPid, MainProtoType} ]),
-
-	receive 
+       receive 
 	     finish ->	  
 		    ?WAIT("~p got finish aim loop     ~p ~n",[{?MODULE,?LINE}, {ParentPid, MainProtoType} ])
 		    ,
@@ -1292,7 +1292,6 @@ aim_loop({Result, _SomeContext}, one, ParentPid,  Index, _TreeEts, true, LocalCo
 	     Some ->
 		?WAIT("~p got  unexpected aim loop     ~p ~n",[{?MODULE,?LINE}, {Some, MainProtoType} ]),
 		?LOG("~p unexpected error ~p ~n",[{?MODULE,?LINE},Some ]),
-% 		 finish
 		  exit( finish)
 	      after ?FATAL_WAIT_TIME ->
 		    ?WAIT("~p got  timeout aim loop     ~p ~n",[{?MODULE,?LINE}, {Index, MainProtoType} ]),
@@ -1373,7 +1372,7 @@ aim_loop({Result, _SomeContext}, Child4Stick, ParentPid,
 	     next -> 
 		  ?WAIT("~p GOT next aim loop     ~p ~n",[{?MODULE,?LINE}, {Index, MainProtoType} ]),
 		  ?TRACE(Index, TreeEts, Body, LocalContext),
-		  {Time , Res} =   timer:tc(?MODULE, 'aim', [ Body, LocalContext,  Index, TreeEts ] ),
+		  {Time , Res} =   timer:tc(?MODULE, 'aim', [ Body, LocalContext,  Index, TreeEts,ParentPid ] ),
   		  ?TRACE2(Index, TreeEts, Res, Body),
 		  ?TC("~p aim process in  ~p ~n",[{?MODULE,?LINE}, {Res ,Time, Body} ]),
 		  
@@ -1527,13 +1526,13 @@ conv3(MainProtoType, { ',', Rule, Body }, Context, ParentPid, Index, TreeEts )->
 					[ Rule,Context ,Index, TreeEts ] ),
 	?DEBUG("~p start_fact_listener_process   ~p ~n",[{?MODULE,?LINE}, {  Child4Stick } ]),
 				
-	{Time , Res} =   timer:tc(?MODULE, 'aim' ,[ Rule, Context,  Index, TreeEts] ),
+	{Time , Res} =   timer:tc(?MODULE, 'aim' ,[ Rule, Context,  Index, TreeEts, ParentPid] ),
         ?TRACE2(Index, TreeEts, Res, Rule),
 	?TC("~p conv3 process in  ~p ~n",[{?MODULE,?LINE}, { Time, Time1 } ]),
 	%%%form params for 
 	NewIndex  = erlang:now(),
 	Params = [ Res, Rule, Body , Context, ParentPid, NewIndex, TreeEts, MainProtoType ],
-	partion_results_foldl(Res, Params, Index, TreeEts, Child4Stick, Rule, Context )	
+	partion_results_foldl(Res, Params, Index, TreeEts, Child4Stick, Rule, Context, ParentPid )	
 ;
 conv3(MainProtoType, '!', Context, ParentPid, Index, TreeEts )-> %%last rule in syntax tree 
 	%%Search bounded need for hbase
@@ -1600,8 +1599,7 @@ conv3(MainProtoType, Body, Context, ParentPid, Index, TreeEts )-> %%last rule in
 	%%Search bounded need for hbase
 	?DEBUG("~p  process  ~p ~n",[{?MODULE,?LINE}, { Body, dict:to_list(Context) } ]),
 	{Time1, Child4Stick} = timer:tc(?MODULE, start_fact_listener_process,[Body, Context, Index, TreeEts]),
-	{Time , Res} =   timer:tc(?MODULE, 'aim', [ Body, Context,  Index, TreeEts ]),
-	
+	{Time , Res} =   timer:tc(?MODULE, 'aim', [ Body, Context,  Index, TreeEts, ParentPid ]),
 	?TRACE2(Index, TreeEts, Res, Body),
 	?TC("~p conv3 process in  ~p ~n",[{?MODULE,?LINE}, {Res, Time, Time1 } ]),
 	aim_loop(Res, Child4Stick, ParentPid,   Index, TreeEts, Body, Context, MainProtoType)
@@ -1609,41 +1607,42 @@ conv3(MainProtoType, Body, Context, ParentPid, Index, TreeEts )-> %%last rule in
 
 
 partion_results_foldl({?EMPTY,_}, _Params, _Index, _TreeEts, 
-	      _Child4Stick, Rule, Context  )->
-   ?DEV_DEBUG("~p false of rule ~p",[{?MODULE,?LINE}, Rule]),
-  {?EMPTY, Context}
+	      _Child4Stick, Rule, Context, _ParentPid  )->
+    ?DEV_DEBUG("~p false of rule ~p",[{?MODULE,?LINE}, Rule]),
+    {?EMPTY, Context}
 ;
 partion_results_foldl({false,_}, _Params, _Index, _TreeEts, 
-	    _Child4Stick, Rule, Context  )->
-  ?DEV_DEBUG("~p false of rule ~p",[{?MODULE,?LINE}, Rule]),
-  {false, Context}
+	    _Child4Stick, Rule, Context, _ParentPid  )->
+    ?DEV_DEBUG("~p false of rule ~p",[{?MODULE,?LINE}, Rule]),
+    {false, Context}
 ;
 %%system function are not contain dual 
-partion_results_foldl(_Res, Params, _Index, _TreeEts, one, _Rule, _Context )->
-    
+partion_results_foldl(_Res, Params, _Index, _TreeEts, one, _Rule, _Context, _ParentPid )->
       erlang:apply( ?MODULE, foldl3, Params )
       
 ;
-partion_results_foldl(_Res, Params, Index, TreeEts, Child4Stick, Rule, Context )->
+partion_results_foldl(_Res, Params, Index, TreeEts, Child4Stick, Rule, Context, ParentPid )->
 
       case erlang:apply( ?MODULE, foldl3, Params )  of 
 	    CurrentRes = {?EMPTY, _SomeContext} -> 	    
 		      ?TRACE(Index , TreeEts,  Rule, Context),
-		      {Time , NewRes} =   timer:tc(?MODULE, 'aim', [ Rule, Context , Index, TreeEts ] ),
+		      {Time , NewRes} =   timer:tc(?MODULE, 'aim', [ Rule, Context , Index, TreeEts, ParentPid ] ),
 		      ?TRACE2(Index, TreeEts, NewRes, Rule),
 		      ?TC("~p conv3 process in  ~p ~n",[{?MODULE,?LINE}, {  Rule, Time, NewRes  } ]),
 		      [_OldRes | OtherParams] = Params,
-		      partion_results_foldl(NewRes, [NewRes| OtherParams], Index, TreeEts, Child4Stick, Rule, Context )
+		      partion_results_foldl(NewRes, [NewRes| OtherParams], Index, TreeEts, 
+					      Child4Stick, Rule, Context, ParentPid)
 		     ;
 	    {false, _}->
       
     		      ?TRACE(Index , TreeEts,  Rule, Context),
-		      {Time , NewRes} =   timer:tc(?MODULE, 'aim', [ Rule, Context , Index, TreeEts ] ),
+		      {Time , NewRes} =   timer:tc(?MODULE, 'aim', [ Rule, Context , Index, TreeEts, ParentPid ] ),
 		      ?TRACE2(Index, TreeEts, NewRes, Rule),
 		      ?TC("~p conv3 process in  ~p ~n",[{?MODULE,?LINE}, {  Rule, Time, NewRes  } ]),
 
 		       [_OldRes | OtherParams] = Params,
-		       partion_results_foldl(NewRes, [NewRes| OtherParams], Index, TreeEts, Child4Stick, Rule, Context )
+		       partion_results_foldl(NewRes, [NewRes| OtherParams], Index, TreeEts,
+						  Child4Stick, Rule, Context,ParentPid )
 		    ;   
 	    finish ->
 		  finish(TreeEts, Index),
@@ -1735,32 +1734,26 @@ foldl3( { SearchHead, _Context } , PrevSearch, Body, LocalContext, ParentPid, In
 %%TODO optimize this
 %%%atom 'one' tell us about none duality of the aim
 start_fact_listener_process(  {'read', _X}, Context,Index,  TreeEts)->           
-      ?TRACE(Index, TreeEts, 'read', Context),
       one
 ;
 start_fact_listener_process(  {'get_char', _X}, Context,Index,  TreeEts)->           
-      ?TRACE(Index, TreeEts, 'get_char', Context),
       one
 ;
 
 
 start_fact_listener_process({'fact_statistic',true}, Context,Index,  TreeEts)->           
-      ?TRACE(Index , TreeEts,  'fact_statistic', Context),
       one
 
 ;
 start_fact_listener_process({'system_stat',true}, Context,Index,  TreeEts)->           
-      ?TRACE(Index , TreeEts,  'system_stat', Context),
       one
 
 ;
 start_fact_listener_process({'nl',true}, Context,Index,  TreeEts)->           
-      ?TRACE(Index , TreeEts,  'nl', Context),
       one
 
 ;
 start_fact_listener_process(Body = {'writeln',_}, Context,Index,  TreeEts)->           
-      ?TRACE(Index , TreeEts,  Body, Context),
       one
 
 ;
@@ -1771,7 +1764,6 @@ start_fact_listener_process(Body = {'use_namespace', _Name}, _Context, _Index,  
       one
 ;
 start_fact_listener_process(Body = {'write',_}, Context,Index,  TreeEts)->           
-      ?TRACE(Index , TreeEts,  Body, Context),
       one
 
 ;
