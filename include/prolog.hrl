@@ -1,7 +1,7 @@
 
 -define(META_INFO_BATCH, 3). %%for using as batch param for scanner meta info
 
--define(USE_HBASE,1).
+%-define(USE_HBASE,1).
 -define(UPDATE_STAT_INTERVAL,20000).%%interval of updating meta stat of prolog statements
 
 -define(SIMPLE_HBASE_ASSERT,1).
