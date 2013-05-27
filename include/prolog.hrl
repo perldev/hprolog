@@ -1,6 +1,6 @@
 
 -define(DEFAULT_TIMEOUT, infinity).%%miliseconds
-
+-define(IO_SERVER, io).
 -define(FATAL_WAIT_TIME, infinity).
 
 -define(META_INFO_BATCH, 3). %%for using as batch param for scanner meta info
@@ -41,7 +41,6 @@
 -define(LOCAL, 1).
 -define(LOG_CONF,"log.conf").
 
--define(COMPILE_TRACE, 1).
 
 
 -ifdef(WEB).
