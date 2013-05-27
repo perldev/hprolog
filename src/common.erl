@@ -46,21 +46,41 @@ web_console_get_char(TreeEts)->
 		  inner_to_atom(Char)
 	%TODO add after statement
         end.
-       
+        
+%TODO add parsing term into string, now we use erlang term
 web_console_write(TreeEts, X)->
-      Str  = io_lib:format("~p",[X]),
+      Str  = io_lib:format("~ts",[to_web_string(X)]),
       [{_, Parent}] = ets:lookup(TreeEts, ?IO_SERVER ),
       Parent ! {result, write, Str}.
       
 web_console_writenl(TreeEts, X)->    
-      Str =  io_lib:format("~p~n",[X]),
+      Str =  io_lib:format("~ts<br/>",[ X ]),
       [{_, Parent}] = ets:lookup(TreeEts, ?IO_SERVER ),
-      Parent ! {result, writenl, Str}.
+      Parent ! {result, write, Str}.
       
 web_console_nl(TreeEts)->
-
       [{_, Parent}] = ets:lookup(TreeEts, ?IO_SERVER ),
-      Parent ! {result, nl}. 
+      Parent ! {result, write,"<br/>"}. 
+    
+    
+to_web_string(X) when is_list(X)->
+    lists:flatten( lists:map(fun to_string/1, X) );   
+to_web_string(X) when is_number(X)->
+    io_lib:format("~p",X);
+to_web_string(X) when is_atom(X)->
+    io_lib:format("~p",X);    
+to_web_string(X) when is_tuple(X)->
+      PrologCode =  erlog_io:write1(X),
+      PrologCode.   
+      
+to_string(X) when is_integer(X)->
+    X;
+to_string(X) when is_tuple(X)->
+    erlog_io:write1(X);   
+to_string(X) when is_float(X)->
+    io_lib:format("~p",X);
+to_string(X) when is_list(X)->
+    io_lib:format("[~ts] ",[to_web_string(X)]).
 
 	
 

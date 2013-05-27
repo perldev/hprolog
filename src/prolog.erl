@@ -667,7 +667,6 @@ aim({ 'assert', Body   }, Context, _Index, TreeEts  ) when is_tuple(Body)->
       {true,Context}
 ;
 aim({ 'asserta', Body   }, Context, _Index, TreeEts  ) when is_tuple(Body)->
-%       Name = element(1,Body),
       BodyBounded = bound_aim(Body, Context),
       case is_rule( BodyBounded ) of 
 	    true -> 
@@ -689,7 +688,7 @@ aim({ 'retract', FirstFact, SecondFact } , Context, _Index, TreeEts  ) when is_a
 %%%inner predicates of our system
 aim(Body = {get_char, X }, Context, _Index, TreeEts)-> 
     TempX = ?GET_CHAR(TreeEts), %%only one character
-    {MainRes, NewContext} = prolog_matching:var_match( list_to_atom(TempX), X, Context ),
+    {MainRes, NewContext} = prolog_matching:var_match( common:inner_to_atom(TempX), X, Context ),
     {MainRes, NewContext}
 ;
 aim(Body = {read, X }, Context, _Index, TreeEts)->

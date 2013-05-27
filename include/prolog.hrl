@@ -1,4 +1,8 @@
 
+-define(DEFAULT_TIMEOUT, infinity).%%miliseconds
+
+-define(FATAL_WAIT_TIME, infinity).
+
 -define(META_INFO_BATCH, 3). %%for using as batch param for scanner meta info
 
 %-define(USE_HBASE,1).
@@ -7,6 +11,8 @@
 -define(SIMPLE_HBASE_ASSERT,1).
 
 -define(ENABLE_LOG,1).
+-define(COMPILE_TRACE, 1).
+
 
 -define(PREFIX, prefix).
 
@@ -137,7 +143,6 @@
 
 -define(RABBIT_SPEED,700).
 -define(SL_TIMER,60000). %minute
--define(DEFAULT_TIMEOUT, infinity).%%miliseconds
 % pay(Re,"75000.00",Currency,Date,From_okpo,To_okpo,From_account,To_account,FromName,ToName,FromMfo,ToMfo, Desc,Ip).
 
 -define(LIMIT,1). %% LIMIT and GET_FACT_PACK must be equal 
@@ -180,7 +185,7 @@
 
 
 -define(EMPTY,{}).
--define(FATAL_WAIT_TIME, infinity).
+
 
 
 %%traces status for prolog kernel
