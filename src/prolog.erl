@@ -555,16 +555,16 @@ inner_defined_aim(NextBody, PrevIndex ,Body = { 'writeln', X }, Context, _Index,
     ?WRITELN(TreeEts, X1),
     {true, Context}
 ;
-inner_defined_aim(NextBody, PrevIndex ,Body = {nl,true}, Context, _Index, TreeEts  ) ->
+inner_defined_aim(NextBody, PrevIndex ,'nl', Context, _Index, TreeEts  ) ->
     ?NL(TreeEts),
    {true, Context}
 ;  
 
-inner_defined_aim(NextBody, PrevIndex ,Body = {system_stat,true}, Context, _Index, TreeEts  ) ->
+inner_defined_aim(NextBody, PrevIndex ,system_stat, Context, _Index, TreeEts  ) ->
     ?SYSTEM_STAT(TreeEts),
      {true, Context}
 ; 
-inner_defined_aim(NextBody, PrevIndex ,Body = {fact_statistic, true}, Context, _Index, TreeEts  ) ->
+inner_defined_aim(NextBody, PrevIndex ,fact_statistic, Context, _Index, TreeEts  ) ->
     ?FACT_STAT(?STAT),%%TODO for web
     {true, Context}
 ; 
@@ -728,7 +728,14 @@ aim(NextBody, PrevIndex, {'call', ProtoType }, Context, Index, TreeEts, Parent )
     aim(NextBody, PrevIndex, BodyBounded, Context, Index, TreeEts, Parent)
 ;
 aim(NextBody, PrevIndex, ProtoType, Context, Index, TreeEts, Parent ) when is_atom(ProtoType)->
-      user_defined_aim(NextBody, PrevIndex, ProtoType, Context, Index, TreeEts, Parent)
+     case inner_meta_predicates(ProtoType) of
+          true -> 
+            ?TRACE(Index, TreeEts, bound_aim(ProtoType, Context), Context),
+             Res = inner_defined_aim(NextBody, PrevIndex, ProtoType, Context, Index, TreeEts),             
+             process_builtin_pred(Res, NextBody,  PrevIndex, Index, TreeEts, Parent);
+          false ->
+             user_defined_aim(NextBody, PrevIndex, ProtoType, Context, Index, TreeEts, Parent)
+    end 
 ;
 aim(NextBody, PrevIndex, ProtoType, Context, Index, TreeEts, Parent )->
     Name = element(1,ProtoType),
