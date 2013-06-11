@@ -28,7 +28,7 @@ parent
 inner_meta_predicates(Name)->
       lists:member(Name, ?BUILTIN_PREDICATES)
 .
-get_index(_)->
+get_index(_Index)->
     now().
     
 
@@ -396,7 +396,8 @@ inner_defined_aim(NextBody, PrevIndex ,{ create_namespace, Name  }, Context, _In
     {Res, Context}
 ;
 
-inner_defined_aim(NextBody, PrevIndex ,{ integer, Body  }, Context, _Index, _  ) ->
+inner_defined_aim(NextBody, PrevIndex ,{ integer, X  }, Context, _Index, _  ) ->
+    Body = prolog_matching:bound_body( X, Context),
     Res =
 	case Body of
 	      Body when is_integer(Body)->
@@ -411,7 +412,9 @@ inner_defined_aim(NextBody, PrevIndex ,{ integer, Body  }, Context, _Index, _  )
 	end,
     {Res, Context}   
 ;
-inner_defined_aim(NextBody, PrevIndex ,{ 'list', Body  }, Context, _Index, _  ) ->
+inner_defined_aim(NextBody, PrevIndex ,{ 'list', X  }, Context, _Index, _  ) ->
+     Body = prolog_matching:bound_body( X, Context),
+
     Res =
 	case Body of
 	      Body when is_list(Body)->
@@ -426,7 +429,9 @@ inner_defined_aim(NextBody, PrevIndex ,{ 'list', Body  }, Context, _Index, _  ) 
 	end,
      {Res, Context}     
 ;
-inner_defined_aim(NextBody, PrevIndex ,{ atomic, Body  }, Context, _Index, _  ) ->
+inner_defined_aim(NextBody, PrevIndex ,{ atomic, X  }, Context, _Index, _  ) ->
+   
+   Body = prolog_matching:bound_body( X, Context),
    Res =
 	case Body of
 	      Body when is_atom(Body)->
@@ -444,7 +449,8 @@ inner_defined_aim(NextBody, PrevIndex ,{ atomic, Body  }, Context, _Index, _  ) 
 	end,
       {Res, Context}      
 ;
-inner_defined_aim(NextBody, PrevIndex ,{ 'float', Body  }, Context, _Index, _  ) ->
+inner_defined_aim(NextBody, PrevIndex ,{ 'float', X  }, Context, _Index, _  ) ->
+        Body = prolog_matching:bound_body( X, Context),
         Res =
 	case Body of
 	      Body when is_float(Body)->
@@ -461,8 +467,9 @@ inner_defined_aim(NextBody, PrevIndex ,{ 'float', Body  }, Context, _Index, _  )
 
     
 ;
-inner_defined_aim(NextBody, PrevIndex ,{ 'var', Body  }, Context, _Index, _  ) ->
-      Res =
+inner_defined_aim(NextBody, PrevIndex ,{ 'var', X  }, Context, _Index, _  ) ->
+        Body = prolog_matching:bound_body( X, Context),
+        Res =
 	case Body of
 	  {Key} when is_atom(Key)->
 % 	        ?DEBUG("~p aim var is ~p~n",[{?MODULE,?LINE}, {Body,dict:to_list(Context) } ]),
@@ -625,8 +632,8 @@ inner_defined_aim(NextBody, PrevIndex ,{ '\\=', First, Second }, Context, _Index
     Res
 ;
 inner_defined_aim(NextBody, PrevIndex ,{ '==', First, Second }, Context, _Index, _TreeEts  )->
-   {Res, _ } = prolog_matching:var_match(First, Second, Context ),
-    {Res, Context}
+    { Res, _ } = prolog_matching:var_match(First, Second, Context ),
+    { Res, Context}
 ;
 inner_defined_aim(NextBody, PrevIndex ,{ '>=', First, Second }, Context, _Index, _TreeEts  )->
     
@@ -661,25 +668,25 @@ inner_defined_aim(NextBody, PrevIndex , {'=\\=', First, Second }, Context, _Inde
     Res.
 
 aim(_NextBody, _PrevIndex ,'fail', Context, _Index, TreeEts, Parent  ) ->
-        {false, Context}
+        false
 ;
 aim(_NextBody, _PrevIndex ,'false', Context, _Index, TreeEts, Parent ) ->
-        {false, Context}
+        false
 ;  
 aim(NextBody, PrevIndex ,'nl', Context, Index, TreeEts, Parent  ) ->
         ?NL(TreeEts),
-        conv3( NextBody, Context, PrevIndex,  get_index(Index), TreeEts, Parent )
+        conv3( NextBody, Context, PrevIndex,  Index, TreeEts, Parent )
 ;  
 aim(NextBody, PrevIndex ,'true', Context,  Index, TreeEts, Parent  ) ->
-        conv3( NextBody, Context, PrevIndex,  get_index(Index), TreeEts, Parent )
+        conv3( NextBody, Context, PrevIndex,  Index, TreeEts, Parent )
 ;  
 aim(NextBody, PrevIndex ,system_stat, Context, Index, TreeEts, Parent  ) ->
-        ?SYSTEM_STAT(TreeEts),
-        conv3( NextBody, Context, PrevIndex,  get_index(Index), TreeEts, Parent )
+        ?SYSTEM_STAT(TreeEts, {Index, PrevIndex, Parent}),
+        conv3( NextBody, Context, PrevIndex,  Index, TreeEts, Parent )
 ; 
 aim(NextBody, PrevIndex ,fact_statistic, Context, Index, TreeEts, Parent  ) ->
         ?FACT_STAT(?STAT),%%TODO for web
-        conv3( NextBody, Context, PrevIndex,  get_index(Index), TreeEts, Parent )
+        conv3( NextBody, Context, PrevIndex,  Index, TreeEts, Parent )
 ;    
 aim(NextBody, _PrevIndex,'!', Context, Index , TreeEts, Parent )->
          
@@ -690,11 +697,11 @@ aim(NextBody, _PrevIndex,'!', Context, Index , TreeEts, Parent )->
          conv3( NextBody, Context, finish,  get_index(Index), TreeEts, Parent )
 ;
 aim(NextBody, PrevIndex, Body = {',', ProtoType, Second }, Context, Index, TreeEts, Parent)->
-       
         case aim(Second, PrevIndex, ProtoType, Context, Index, TreeEts, Parent) of
             {true, NewLocalContext, NewPrev} ->
                     conv3( NextBody, NewLocalContext, NewPrev,  get_index(Index), TreeEts, Parent );
              Res -> %%means false
+                    ?DEV_DEBUG("~p return false from ~p ~n",[{?MODULE,?LINE}, {ProtoType, Index, PrevIndex, Parent} ]),
                     Res
         end
 ;
@@ -733,15 +740,22 @@ aim(NextBody, PrevIndex, ProtoType, Context, Index, TreeEts, Parent )->
     end
 .
         
-process_builtin_pred({false, _Context}, _NextBody, _PrevIndex, _NewIndex2, _TreeEts, Parent )->
-    false
+process_builtin_pred({false, _Context}, _NextBody, PrevIndex, _NewIndex2, TreeEts, Parent )->
+          next_aim(Parent, PrevIndex, TreeEts )
 ;
 %%TODO about NewIndex we are able to get old NewIndex2, if have no such predicate like retract
 %%TODO Index must be rewrited to auto increment
-process_builtin_pred({true, Context}, NextBody, PrevIndex, NewIndex2, TreeEts, Parent )->
-         conv3( NextBody, Context, PrevIndex,  
-         get_index(NewIndex2),
-         TreeEts, Parent )
+process_builtin_pred({true, Context}, NextBody, PrevIndex, NewIndex2, TreeEts, Parent )->               
+%       ets:insert(TreeEts, #aim_record{id = NewIndex2, solutions = [], next = one}),
+        case  conv3( NextBody, Context, PrevIndex, NewIndex2, TreeEts, Parent ) of
+            ProcessRes = {true, _Context, _Prev} -> 
+                            ProcessRes;
+                        false ->
+                            ?DEV_DEBUG("~p work to previouse  ~p ~n",[{?MODULE,?LINE},  PrevIndex ]),
+                            next_aim(Parent, PrevIndex, TreeEts );
+                         Unexpected ->
+                            throw({'EXIT',unexpected_return_value_builtin_pred, {Unexpected,  TreeEts} } )
+        end
 .
 
 user_defined_aim(NextBody, PrevIndex, ProtoType, Context, Index, TreeEts, Parent ) when is_atom(ProtoType)->
@@ -845,6 +859,7 @@ next_aim( Parent, Index, TreeEts )->
                         ProcessRes = {true, _Context, _Prev} -> 
                             ProcessRes;
                         false ->
+                            ?DEV_DEBUG("~p work to previouse  ~p ~n",[{?MODULE,?LINE},  Index ]),
                             next_aim(Parent, Index, TreeEts );
                          Unexpected ->
                             throw({'EXIT',unexpected_return_value, {Unexpected, T, TreeEts} } )
@@ -860,6 +875,8 @@ next_aim( Parent, Index, TreeEts )->
                                   next_in_current_leap(T, TreeEts, ThatLocalContext, 
                                                        Prev, T#aim_record.solutions, T#aim_record.parent  );
                            false ->
+                                  ?DEBUG("~p return false from ~p ~n",[{?MODULE,?LINE}, T ]),
+
                                   ets:insert( TreeEts, T#aim_record{ next = one }),  
                                   next_aim( Parent, Index, TreeEts ); %% it will be  turn to previous index cause one
                             Unexpected ->
@@ -874,11 +891,10 @@ next_aim( Parent, Index, TreeEts )->
 bound_temp_and_original(Context, T)->
       ?DEBUG("~p bound temp and original aims  ~p ~n",[{?MODULE,?LINE},  T  ]),
       BoundProtoType =  bound_aim(T#aim_record.temp_prototype, Context),
-      ?DEBUG("~p bound temp aim  ~p ~n",[{?MODULE,?LINE}, {T#aim_record.prototype, T#aim_record.temp_prototype, BoundProtoType }]),
-
-      {true, NewContext} = prolog_matching:var_match(T#aim_record.prototype, BoundProtoType,T#aim_record.context),
-%       ?DEBUG("~p new context ~p ~n",[{?MODULE,?LINE}, dict:to_list(NewContext) ]),
-      {NewContext, BoundProtoType}  
+      ?DEBUG("~p bound temp aim  ~p ~n",[{?MODULE,?LINE},
+                {T#aim_record.prototype, T#aim_record.temp_prototype, BoundProtoType }]),
+      { true, NewContext} = prolog_matching:var_match(T#aim_record.prototype, BoundProtoType,T#aim_record.context),
+      { NewContext, BoundProtoType}  
 .
 
 
@@ -891,7 +907,7 @@ process_next({true, NewContext, true, Tail}, T, TreeEts, Parent)->
         NewIndex =  get_index(T#aim_record.id), % now(), %T#aim_record.id + 1,
         { NewLocalContext, BoundProtoType } = bound_temp_and_original(NewContext, T),                                                  
         %%TODO remove all logs with dict:to_list functions
-         ?DEBUG("~p process FACT ~p ~n",[{?MODULE,?LINE},  {
+        ?DEBUG("~p process FACT ~p ~n",[{?MODULE,?LINE},  {
                                                             T#aim_record.prototype,
                                                             T#aim_record.temp_prototype,
                                                             T#aim_record.next_leap} ]),
@@ -913,6 +929,7 @@ process_next({ true, NewContext, NextBody, Tail }, T, TreeEts, Parent)->
                 {true, ThatLocalContext, Prev}->
                         next_in_current_leap(T, TreeEts,ThatLocalContext, Prev, Tail, Parent );
                 Res ->  %%means false 
+                        ?DEBUG("~p return false from ~p ~n",[{?MODULE,?LINE}, NextBody ]),
                         ?TRACE2(T#aim_record.id, TreeEts, {T#aim_record.temp_prototype, Res }, T#aim_record.context ),
                         Res
                 
@@ -923,7 +940,7 @@ process_next(Unexpected, T, TreeEts, Parent)->
  
 .
 next_in_current_leap(T = #aim_record{prototype = ?LAMBDA}, TreeEts, ThatLocalContext, Prev, Tail, Parent )->
-
+%%we must check again cause ! inside in rule can cut another leaps
      [NewT] = ets:lookup(TreeEts, T#aim_record.id), %%Think a lot how avoid this
      ets:insert(TreeEts, NewT#aim_record{ next = Prev}),
      
@@ -931,8 +948,9 @@ next_in_current_leap(T = #aim_record{prototype = ?LAMBDA}, TreeEts, ThatLocalCon
      conv3( T#aim_record.next_leap , ThatLocalContext, T#aim_record.id, NewIndex2, TreeEts, Parent )  
 ;
 next_in_current_leap(T, TreeEts, ThatLocalContext, Prev, Tail, Parent )->
-
+    %%we must check again cause ! inside in rule can cut another leaps
     [NewT] = ets:lookup(TreeEts, T#aim_record.id), %%Think a lot how avoid this
+    
      ets:insert(TreeEts, NewT#aim_record{next = Prev}),
      
      { NewLocalContext, BoundProtoType }  = bound_temp_and_original(ThatLocalContext, T),       
@@ -1077,14 +1095,12 @@ conv3({ ',', Rule, Body }, Context, PrevIndex, Index, TreeEts, ParentIndex )->
 	%start process of fact and rule calculation
 % 	?DEBUG("~p  process  ~p ~n",[{?MODULE,?LINE}, {Rule, Body, dict:to_list(Context) } ]),
 	{Time , Res} =   timer:tc(?MODULE, 'aim' ,[ Body, PrevIndex , Rule, Context,  Index, TreeEts, ParentIndex] ),
-	?TC("~p conv3 process in  ~p ~n",[{?MODULE,?LINE}, Time  ]),
+	?TC("~p conv3 process in  ~p ~n",[{?MODULE,?LINE}, {Time,Res}  ]),
 	%%%form params for 
 	Res
 ;
-
 conv3( Body, Context, PrevIndex, Index, TreeEts, ParentIndex )-> %%last rule in syntax tree 
 	%%Search bounded need for hbase
-% 	?DEBUG("~p  process  ~p ~n",[{?MODULE,?LINE}, { Body, dict:to_list(Context) } ]),
 	{Time , Res} =   timer:tc(?MODULE, 'aim', [ 'finish', PrevIndex, Body, Context,  Index, TreeEts, ParentIndex]),
         Res
 .
@@ -1557,11 +1573,14 @@ add_fact(Context, Body, first,TreeEts, 1)->
       end,
       ?LOG(" add ~p  yes ~n",[Body ]),
       {true, Context};
+      
 add_fact(Context, Body, last, TreeEts, 0)->
-      dynamic_new_rule(  {':-', Body, true }, last, TreeEts ),
+      BodyBounded = bound_aim(Body, Context),
+      dynamic_new_rule(  {':-', BodyBounded, true }, last, TreeEts ),
       {true, Context};
 add_fact(Context, Body, first, TreeEts, 0)->
-      dynamic_new_rule(  {':-', Body, true }, first, TreeEts ),
+      BodyBounded = bound_aim(Body, Context),
+      dynamic_new_rule(  {':-', BodyBounded, true }, first, TreeEts ),
       {true, Context}. 
  
       
