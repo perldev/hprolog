@@ -555,19 +555,6 @@ inner_defined_aim(NextBody, PrevIndex ,Body = { 'writeln', X }, Context, _Index,
     ?WRITELN(TreeEts, X1),
     {true, Context}
 ;
-inner_defined_aim(NextBody, PrevIndex ,'nl', Context, _Index, TreeEts  ) ->
-    ?NL(TreeEts),
-   {true, Context}
-;  
-
-inner_defined_aim(NextBody, PrevIndex ,system_stat, Context, _Index, TreeEts  ) ->
-    ?SYSTEM_STAT(TreeEts),
-     {true, Context}
-; 
-inner_defined_aim(NextBody, PrevIndex ,fact_statistic, Context, _Index, TreeEts  ) ->
-    ?FACT_STAT(?STAT),%%TODO for web
-    {true, Context}
-; 
 
 %%new binary operator via  ор( 600, хfу, &)  :- ор( 500, fy, ~).
 
@@ -582,22 +569,6 @@ inner_defined_aim(NextBody, PrevIndex ,Body = { op, _OrderStatus, _, Name }, Con
 inner_defined_aim(NextBody, PrevIndex ,{ op, _OrderStatus, _, _Name }, Context, _Index, _TreeEts  ) ->
     {false, Context}
 ;  
-inner_defined_aim(NextBody, PrevIndex ,{false,false}, Context, _Index, _TreeEts  )->
-    {false,Context}
-;
-inner_defined_aim(NextBody, PrevIndex ,false, Context, _Index, _TreeEts  )->
-    {false,Context}
-;
-inner_defined_aim(NextBody, PrevIndex ,fail, Context, _Index, _TreeEts  )->
-    {?EMPTY,Context}
-;
-inner_defined_aim(NextBody, PrevIndex ,{true, true}, Context, _Index, _TreeEts  )->
-    {true, Context}
-;
-inner_defined_aim(NextBody, PrevIndex ,true, Context, _Index, _TreeEts  )->
-    {true, Context}
-;
-
 % tree represantation  = {'==',
 %                                     {'_A__459399'},
 %                                     {'+',{'+',{'X'},{'Y'}},{'U'}}}
@@ -689,7 +660,27 @@ inner_defined_aim(NextBody, PrevIndex , {'=\\=', First, Second }, Context, _Inde
     Res = { not_compare(One ,Two), Context },
     Res.
 
-
+aim(_NextBody, _PrevIndex ,'fail', Context, _Index, TreeEts, Parent  ) ->
+        {false, Context}
+;
+aim(_NextBody, _PrevIndex ,'false', Context, _Index, TreeEts, Parent ) ->
+        {false, Context}
+;  
+aim(NextBody, PrevIndex ,'nl', Context, Index, TreeEts, Parent  ) ->
+        ?NL(TreeEts),
+        conv3( NextBody, Context, PrevIndex,  get_index(Index), TreeEts, Parent )
+;  
+aim(NextBody, PrevIndex ,'true', Context,  Index, TreeEts, Parent  ) ->
+        conv3( NextBody, Context, PrevIndex,  get_index(Index), TreeEts, Parent )
+;  
+aim(NextBody, PrevIndex ,system_stat, Context, Index, TreeEts, Parent  ) ->
+        ?SYSTEM_STAT(TreeEts),
+        conv3( NextBody, Context, PrevIndex,  get_index(Index), TreeEts, Parent )
+; 
+aim(NextBody, PrevIndex ,fact_statistic, Context, Index, TreeEts, Parent  ) ->
+        ?FACT_STAT(?STAT),%%TODO for web
+        conv3( NextBody, Context, PrevIndex,  get_index(Index), TreeEts, Parent )
+;    
 aim(NextBody, _PrevIndex,'!', Context, Index , TreeEts, Parent )->
          
          [AimRecord] = ets:lookup(TreeEts, Parent),  
@@ -728,14 +719,7 @@ aim(NextBody, PrevIndex, {'call', ProtoType }, Context, Index, TreeEts, Parent )
     aim(NextBody, PrevIndex, BodyBounded, Context, Index, TreeEts, Parent)
 ;
 aim(NextBody, PrevIndex, ProtoType, Context, Index, TreeEts, Parent ) when is_atom(ProtoType)->
-     case inner_meta_predicates(ProtoType) of
-          true -> 
-            ?TRACE(Index, TreeEts, bound_aim(ProtoType, Context), Context),
-             Res = inner_defined_aim(NextBody, PrevIndex, ProtoType, Context, Index, TreeEts),             
-             process_builtin_pred(Res, NextBody,  PrevIndex, Index, TreeEts, Parent);
-          false ->
-             user_defined_aim(NextBody, PrevIndex, ProtoType, Context, Index, TreeEts, Parent)
-    end 
+    user_defined_aim(NextBody, PrevIndex, ProtoType, Context, Index, TreeEts, Parent)
 ;
 aim(NextBody, PrevIndex, ProtoType, Context, Index, TreeEts, Parent )->
     Name = element(1,ProtoType),
