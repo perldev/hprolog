@@ -2,7 +2,6 @@
 -define(DEFAULT_TIMEOUT, infinity).%%miliseconds
 -define(IO_SERVER, io).
 -define(FATAL_WAIT_TIME, infinity).
-
 -define(META_INFO_BATCH, 3). %%for using as batch param for scanner meta info
 
 %-define(USE_HBASE,1).
@@ -10,10 +9,11 @@
 
 -define(SIMPLE_HBASE_ASSERT,1).
 
--define(ENABLE_LOG,1).
--define(COMPILE_TRACE, 1).
+%-define(ENABLE_LOG,1).
+%-define(COMPILE_TRACE, 1).
 
-
+-define('DEV_DEBUG_MATCH'(Str, Pars ), true ).
+-define(ROOT, console_root).
 -define(PREFIX, prefix).
 
 -ifdef(ENABLE_LOG).
@@ -34,6 +34,8 @@
 -define(FACT_STAT(Ets), io:format("Facts  ~p ~n",[ ets:tab2list(Ets)  ]) ).
 
 -define(SYSTEM_STAT(Ets), io:format("System ~p prolog ~p ~n",[ length(processes()), ets:info(Ets,size) ]) ).
+
+
 
 
 -define(PAUSE, io:get_line('pause : ')).
@@ -90,6 +92,9 @@
 
 
 
+
+
+
 -ifdef(SYNC_COUNT).
 
 -define('COUNT'(Str, Pars ), log4erl:info(Str, Pars) ).
@@ -120,6 +125,7 @@
 -endif.
 
 -define(TEMP_SHELL_AIM, temp_shell_aim). 
+-define(LAMBDA, 'lambda;lambda_function'). 
 
 
 -ifdef(LOCAL).
@@ -196,3 +202,50 @@
 -define(DEBUG_STATUS, debug_status).
 
 -record(browscap, { browser = null, version = null, majorver = null, minorver = null, platform = null }).
+
+-define(BUILTIN_PREDICATES,
+[
+'meta',
+'functor',
+'arg',
+'atom',
+'use_namespace',
+'create_namespace',
+'integer',
+'list',
+'atomic',
+'float',
+'var',
+'call',
+'nonvar',
+'assertz',
+'assert',
+'asserta',
+'retract',
+'get_char',
+'read',
+'write',
+'writeln',
+'nl',
+'system_stat',
+'fact_statistic',
+'op',
+'false',
+'fail',
+'true',
+'date',
+'is',
+'=:=',
+'=',
+'\\=',
+'==',
+'>=',
+'=<',
+'>',
+'<',
+'=\\='
+]
+
+).
+
+

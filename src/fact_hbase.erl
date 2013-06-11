@@ -54,6 +54,7 @@ create_new_namespace(Prefix)->
 
 load_rules2ets(Prefix)->
 %       prolog:compile("pro.pl"),
+      
       Scanner  = generate_scanner(1024,<<>>),
       Family = create_hbase_family_filter("description"),
       FamilyLinks = create_hbase_family_filter(?LINKS_FAMILY),

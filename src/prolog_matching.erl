@@ -8,7 +8,7 @@
 
 
 bound_body(Var = { _ }, Context)->%just variable
-         ?DEV_DEBUG("~p try find there ~p~n",[{?MODULE,?LINE},{ Var ,dict:to_list(Context)} ]),
+         ?DEV_DEBUG_MATCH("~p try find there ~p~n",[{?MODULE,?LINE},{ Var ,dict:to_list(Context)} ]),
 	 case  find_var(Context, Var ) of
 	       nothing-> Var;
 	       Body-> bound_body(Body, Context)
@@ -19,7 +19,7 @@ bound_body({Operator, Var1, Var2}, Context)->
 	
          BoundVar2 = bound_body(Var2, Context),
          BoundVar1 = bound_body(Var1, Context),
-         ?DEV_DEBUG("~p match find there ~p~n",[{?MODULE,?LINE},{ {Operator, Var1, Var2},{Operator, BoundVar1, BoundVar2}, dict:to_list(Context)} ]),
+         ?DEV_DEBUG_MATCH("~p match find there ~p~n",[{?MODULE,?LINE},{ {Operator, Var1, Var2},{Operator, BoundVar1, BoundVar2}, dict:to_list(Context)} ]),
          {Operator, BoundVar1, BoundVar2}   
 ;
 bound_body(Var, Context) when is_tuple(Var)->
@@ -73,7 +73,7 @@ var_match(_Var1, _Var1 , Context )->
     {true, Context}
 ;
 var_match({Operator, Var1, Var2  }, {Operator, Var3, Var4  } , Context )->	
-      ?DEV_DEBUG("~p making matching there ~p ~n",[{?MODULE,?LINE},
+      ?DEV_DEBUG_MATCH("~p making matching there ~p ~n",[{?MODULE,?LINE},
 						     {{Operator, Var1, Var2  }, {Operator, Var3, Var4 },
 						       dict:to_list(Context)} ]),
 
@@ -88,7 +88,7 @@ var_match({Operator, Var1, Var2  }, {Operator, Var3, Var4  } , Context )->
     end  
 ;
 var_match({_Operator1, _Var1, _Var2  }, {_Operator, _Var3, _Var4  } , Context )->	
-      ?DEV_DEBUG("~p fail there ~n",[{?MODULE,?LINE}]),
+      ?DEV_DEBUG_MATCH("~p fail there ~n",[{?MODULE,?LINE}]),
       {false, Context}
 ;
 var_match( {'_'}, {'_'} , Context )->	
@@ -101,7 +101,7 @@ var_match(_Var1, {'_'}, Context )->
   {true,Context}
 ;
 var_match(Var1 = {_}, Var2={_} , Context )->	
-      ?DEV_DEBUG("~p making matching there ~p ~n",[{?MODULE,?LINE},
+      ?DEV_DEBUG_MATCH("~p making matching there ~p ~n",[{?MODULE,?LINE},
 						     {Var1, Var2, dict:to_list(Context)} ]),
 						     				     
      BoundVar1 = bound_body(Var1, Context),
@@ -115,7 +115,7 @@ var_match(Var1 = {_}, Var2={_} , Context )->
 var_match(Var1 = {_}, Var2 , Context )->	
       BoundVar1 = bound_body(Var1, Context),
 
-      ?DEV_DEBUG("~p making matching there ~p ~n",[{?MODULE,?LINE},
+      ?DEV_DEBUG_MATCH("~p making matching there ~p ~n",[{?MODULE,?LINE},
 						     {{Var1,BoundVar1}, Var2, dict:to_list(Context)} ]),
     					     
       case BoundVar1 of
@@ -126,18 +126,18 @@ var_match(Var1 = {_}, Var2 , Context )->
 		  of
  		      {true, NewContext} -> 
 			      NewVar =  bound_body(Var1, NewContext),
-			          ?DEV_DEBUG("~p making matching there ~p ~n",[{?MODULE,?LINE},
+			          ?DEV_DEBUG_MATCH("~p making matching there ~p ~n",[{?MODULE,?LINE},
 					     NewVar]),
 			      {true, store_var( { Var1, NewVar }, NewContext) };
  		      Got -> 
-			  ?DEV_DEBUG("~p making matching there ~p ~n",[{?MODULE,?LINE}, Got]),
+			  ?DEV_DEBUG_MATCH("~p making matching there ~p ~n",[{?MODULE,?LINE}, Got]),
 			  {false, Context}
  		  end
 			  
       end
 ;
 var_match(Var1, Var2={_} , Context )->	
-      ?DEV_DEBUG("~p making matching there ~p ~n",[{?MODULE,?LINE},
+      ?DEV_DEBUG_MATCH("~p making matching there ~p ~n",[{?MODULE,?LINE},
 						     {Var1, Var2, dict:to_list(Context)} ]),
      BoundVar2 = bound_body( Var2, Context),
      case BoundVar2 of
@@ -147,11 +147,11 @@ var_match(Var1, Var2={_} , Context )->
 		   var_match(Var1, BoundVar2, Context ) 
 		  of
  		      {true, NewContext} -> 
-			?DEV_DEBUG("~p making matching there ~p ~n",[{?MODULE,?LINE},bound_body(Var2, NewContext)]),
+			?DEV_DEBUG_MATCH("~p making matching there ~p ~n",[{?MODULE,?LINE},bound_body(Var2, NewContext)]),
 
 			  {true, store_var( { Var2, bound_body(Var2, NewContext) }, NewContext) };
  		      Got ->
- 		      ?DEV_DEBUG("~p making matching there ~p ~n",[{?MODULE,?LINE}, Got]),
+ 		      ?DEV_DEBUG_MATCH("~p making matching there ~p ~n",[{?MODULE,?LINE}, Got]),
 			{false, Context}
  		  end
  		  
@@ -161,7 +161,7 @@ var_match(Var1, Var2={_} , Context )->
 
 
 var_match(Var1, Body =  { _Operator, _Var3, _Var4  } , Context )->	
-      ?DEV_DEBUG("~p making matching there ~p ~n",[{?MODULE,?LINE},
+      ?DEV_DEBUG_MATCH("~p making matching there ~p ~n",[{?MODULE,?LINE},
 						     {Var1, Body, dict:to_list(Context)} ]),
      	BoundBody = bound_body(Body, Context),
 	case is_var(Var1) of
@@ -171,13 +171,13 @@ var_match(Var1, Body =  { _Operator, _Var3, _Var4  } , Context )->
 			    Var -> var_match(Var, BoundBody, Context)
 		      end;
 		_ -> 
-		      ?DEV_DEBUG("~p ~p ~n",[{?MODULE,?LINE},
+		      ?DEV_DEBUG_MATCH("~p ~p ~n",[{?MODULE,?LINE},
 						     {Var1, Body, dict:to_list(Context)} ]),
 		      {false, Context}
 	end 
 ;
 var_match(Body = {_Operator, _Var1, _Var2  }, Var3  , Context )->	
-      ?DEV_DEBUG("~p making matching there ~p ~n",[{?MODULE,?LINE},
+      ?DEV_DEBUG_MATCH("~p making matching there ~p ~n",[{?MODULE,?LINE},
 						     {Var3, Body, dict:to_list(Context)} ]),
 	BoundBody = bound_body(Body, Context),
   	case is_var(Var3) of
@@ -188,7 +188,7 @@ var_match(Body = {_Operator, _Var1, _Var2  }, Var3  , Context )->
 			    Var -> var_match(Var, BoundBody, Context)
 		      end;
 		_ ->
-		    ?DEV_DEBUG("~p ~p ~n",[{?MODULE,?LINE},
+		    ?DEV_DEBUG_MATCH("~p ~p ~n",[{?MODULE,?LINE},
 						     {Var3, Body, dict:to_list(Context)} ]), 
 		    {false, Context}
 	end 
@@ -199,7 +199,7 @@ var_match(Body = {_Operator, _Var1, _Var2  }, Var3  , Context )->
 %%%but can be lists :(
 
 var_match(Var1, Var2 , Context )->	
-      ?DEV_DEBUG("~p making matching there ~p ~n",[{?MODULE,?LINE},
+      ?DEV_DEBUG_MATCH("~p making matching there ~p ~n",[{?MODULE,?LINE},
 						     {Var1, Var2, dict:to_list(Context)} ]),
 	case {is_tuple(Var1), is_tuple(Var2)} of
 	     {true,true}->
@@ -207,12 +207,12 @@ var_match(Var1, Var2 , Context )->
 		       VarList2 = tuple_to_list(Var2),
 			prolog_matching:match_common(VarList1, VarList2, Context);  
              _ ->
-		  ?DEV_DEBUG("~p list there ~n",[{?MODULE,?LINE} ]),
+		  ?DEV_DEBUG_MATCH("~p list there ~n",[{?MODULE,?LINE} ]),
 		  case  {is_list(Var1), is_list(Var2) } of
 		        {true, true} ->
 			      var_match_list( Var1, Var2, Context );
 			  _ ->
-		           ?DEV_DEBUG("~p bad match there ~n",[{?MODULE,?LINE} ]),
+		           ?DEV_DEBUG_MATCH("~p bad match there ~n",[{?MODULE,?LINE} ]),
 			  {false, Context}
 		  end
 			  
@@ -263,7 +263,7 @@ match_common([Head1| VarList1], [Head2 | VarList2], Context)->
 	case var_match(Head1, Head2, Context ) of
 	      {true, NewContext}-> match_common(VarList1, VarList2, NewContext);
 	      _ -> 
-		    ?DEV_DEBUG("~p fail common match ~p ",[{?MODULE,?LINE},{Head1, Head2,dict:to_list(Context)}]),
+		    ?DEV_DEBUG_MATCH("~p fail common match ~p ",[{?MODULE,?LINE},{Head1, Head2,dict:to_list(Context)}]),
 		    {false, Context} %%TODO may be troubles
 	end
 .
@@ -301,14 +301,14 @@ match_vars([Head| List], [Search| Tail], Res, Pretend, Dict )->
 				     match_vars(List, Tail, Res, Pretend, NewDict  );
 			  Head ->    match_vars(List, Tail, Res, Pretend, Dict  );
 			  Not -> 
-			      ?DEV_DEBUG("~p match struct ~p~n",[{?MODULE,?LINE}, {Head, Search, Not} ]),
+			      ?DEV_DEBUG_MATCH("~p match struct ~p~n",[{?MODULE,?LINE}, {Head, Search, Not} ]),
 			      Res
 			  
 		    end;
 	    Head -> 
 		    match_vars( List, Tail, Res, Pretend, Dict  );
 	    Not -> 
-		    ?DEV_DEBUG( "~p match struct ~p~n",[ {?MODULE,?LINE}, {Head, Search, Not} ] ),
+		    ?DEV_DEBUG_MATCH( "~p match struct ~p~n",[ {?MODULE,?LINE}, {Head, Search, Not} ] ),
 		    case var_match(Search,Head, Dict  ) of
 			  {true, NewDict } -> match_vars( List, Tail, Res, Pretend, NewDict  );
 			  _ -> Res
@@ -368,11 +368,11 @@ match(false, _Head, _Search, _Dict, Res, _ , _WholeSearch)->
     
 match(_, [],[], Dict, Res, RecRes, WholeSearch)->
     %%after cycle fill all varibles if it exists
-    ?DEV_DEBUG("~p final ~p~n",[{?MODULE,?LINE}, {  Res, RecRes,dict:to_list(Dict) } ]),
+    ?DEV_DEBUG_MATCH("~p final ~p~n",[{?MODULE,?LINE}, {  Res, RecRes,dict:to_list(Dict) } ]),
     Value = lists:map(fun(Elem)-> %%TODO I DONT LIKE THIS  
 			    bound_body(Elem, Dict)
 		      end, lists:reverse(RecRes) ),
-    ?DEV_DEBUG("~p form result matching  ~p~n",[{?MODULE,?LINE}, {Res, Value, WholeSearch,dict:to_list(Dict)} ]),
+    ?DEV_DEBUG_MATCH("~p form result matching  ~p~n",[{?MODULE,?LINE}, {Res, Value, WholeSearch,dict:to_list(Dict)} ]),
     match_vars(Value, WholeSearch, Res, Dict) %%match in var context
 ;
 match(_, [], _SearchVal, _Var, Res, _RecRes,_WholeSearch)->%%case search and patterns not equal - we don't fail
@@ -383,26 +383,26 @@ match(_, _Head, [], _Var, Res, _RecRes,_WholeSearch)->%%case search and patterns
 ;
 match(_, [Pattern|Tail],[SearchVal|Search], Context, Res, RecRes, WholeSearch)->
 
-    ?DEV_DEBUG("~p process matching  ~p ",[{?MODULE,?LINE},
+    ?DEV_DEBUG_MATCH("~p process matching  ~p ",[{?MODULE,?LINE},
 		  { Pattern, SearchVal, Res, dict:to_list(Context), RecRes } ]),
     
     {Prev, NewContext } =  case is_list(Pattern) of
 			    true ->  
-				      ?DEV_DEBUG("~p proc as list ~n",[{?MODULE,?LINE} ]),
+				      ?DEV_DEBUG_MATCH("~p proc as list ~n",[{?MODULE,?LINE} ]),
 				      match_process_list(true, Pattern, SearchVal, Context, SearchVal );
 			    false -> 
-				      ?DEV_DEBUG("~p proc as var ~n",[{?MODULE,?LINE} ]),
+				      ?DEV_DEBUG_MATCH("~p proc as var ~n",[{?MODULE,?LINE} ]),
 				      process_var(Pattern, SearchVal, Context  )
 			end,		    
-    ?DEV_DEBUG("~p got var ~p~n",[{?MODULE,?LINE}, {Prev, dict:to_list(NewContext) } ]),
+    ?DEV_DEBUG_MATCH("~p got var ~p~n",[{?MODULE,?LINE}, {Prev, dict:to_list(NewContext) } ]),
     match(Prev, Tail, Search, NewContext, Res, [ Prev| RecRes], WholeSearch  ).
 
 %%%this procedures work only with on item of pattern
 process_var(Head, {Var}, Dict ) when is_atom(Var)->
- 	?DEV_DEBUG("~p  var ~p~n",[{?MODULE,?LINE}, {  Head, {Var}  } ]),
+ 	?DEV_DEBUG_MATCH("~p  var ~p~n",[{?MODULE,?LINE}, {  Head, {Var}  } ]),
  	{Head, Dict};
 process_var(Head, InVar, Context)->
- 	?DEV_DEBUG("~p  struct ~p~n",[{?MODULE,?LINE}, {  Head, InVar } ]),
+ 	?DEV_DEBUG_MATCH("~p  struct ~p~n",[{?MODULE,?LINE}, {  Head, InVar } ]),
 	
        case var_match(Head, InVar, Context) of
  	  {true, NewContext}-> {Head, NewContext };
@@ -414,37 +414,37 @@ process_var(Head, InVar, Context)->
 
 %%in case wheather pattern is list
 match_process_list(false, _, _ , Dict, _MatchedStruct)->
-      ?DEV_DEBUG("~p triggered ~n",[{?MODULE,?LINE}]),
+      ?DEV_DEBUG_MATCH("~p triggered ~n",[{?MODULE,?LINE}]),
       {false, Dict}
 ;
 match_process_list(true, Pattern, Pattern, Dict, _MatchedStruct )-> %%for constants
-      ?DEV_DEBUG("~p triggered contstants ~p ~n",[{?MODULE,?LINE},Pattern]),
+      ?DEV_DEBUG_MATCH("~p triggered contstants ~p ~n",[{?MODULE,?LINE},Pattern]),
       {Pattern, Dict}
 ;
 match_process_list(_, [] ,Key = {Val}, Dict, MatchedStruct) when is_atom(Val) -> %%if it is empty list but Search isn't it
-  ?DEV_DEBUG("~p triggered var pattern ~p ~n",[{?MODULE,?LINE}, MatchedStruct]),
+  ?DEV_DEBUG_MATCH("~p triggered var pattern ~p ~n",[{?MODULE,?LINE}, MatchedStruct]),
   {MatchedStruct, store_var( { Key, [] }, Dict ) };  
 match_process_list(_, Key = {Val}, [], Dict, MatchedStruct) when is_atom(Val) -> %%if it is empty list but Search isn't it
-  ?DEV_DEBUG("~p triggered var pattern ~p ~n",[{?MODULE,?LINE}, MatchedStruct]),
+  ?DEV_DEBUG_MATCH("~p triggered var pattern ~p ~n",[{?MODULE,?LINE}, MatchedStruct]),
   {MatchedStruct, store_var( { Key, [] }, Dict ) };
   
 match_process_list(_, [], [], Dict, MatchedStruct)-> %%if it is empty list but Search isn't it
-  ?DEV_DEBUG("~p triggered hidden pattern ~p ~n",[{?MODULE,?LINE}, MatchedStruct]),
+  ?DEV_DEBUG_MATCH("~p triggered hidden pattern ~p ~n",[{?MODULE,?LINE}, MatchedStruct]),
   {MatchedStruct ,Dict};
   
 match_process_list(_, [], _Search, Dict, MatchedStruct)-> %%if it is empty list but Search isn't it
-  ?DEV_DEBUG("~p triggered empty pattern ~p ~n",[{?MODULE,?LINE}, MatchedStruct]),
+  ?DEV_DEBUG_MATCH("~p triggered empty pattern ~p ~n",[{?MODULE,?LINE}, MatchedStruct]),
   {false ,Dict};
   
 %%if search is not empty 
 match_process_list(_,  Val, [], Dict, _MatchedStruct)->%%%it assumes that there is something in Search 
-  ?DEV_DEBUG("~p triggered unexpected pattern ~p ~n",[{?MODULE,?LINE}, Val]),
+  ?DEV_DEBUG_MATCH("~p triggered unexpected pattern ~p ~n",[{?MODULE,?LINE}, Val]),
   {false ,Dict};
 
   
 %%common process elements
 match_process_list(_, [Pattern| TailPattern], [SearchVal| Tail ], Dict, MatchedStruct  )->
-	  ?DEV_DEBUG("~p main function  of list match  ~p ~n",[{?MODULE,?LINE}, {Pattern, SearchVal} ]),
+	  ?DEV_DEBUG_MATCH("~p main function  of list match  ~p ~n",[{?MODULE,?LINE}, {Pattern, SearchVal} ]),
 	  
 	  case is_var(Pattern) of
 	       true ->
@@ -460,7 +460,7 @@ match_process_list(_, [Pattern| TailPattern], [SearchVal| Tail ], Dict, MatchedS
 ;
 %%finish there
 match_process_list(_, Pattern, Search, Dict, MatchedStruct  )->
-	  ?DEV_DEBUG("~p final function  of list match  ~p ~n",[{?MODULE,?LINE}, {Pattern, Search} ]),
+	  ?DEV_DEBUG_MATCH("~p final function  of list match  ~p ~n",[{?MODULE,?LINE}, {Pattern, Search} ]),
 
       	  case is_var(Pattern) of
 	       true ->
@@ -476,7 +476,7 @@ match_process_list(_, Pattern, Search, Dict, MatchedStruct  )->
  			      true -> process_var(Pattern, Search, Dict);
  			      _Pat  ->
 % 			      
- 				    ?DEV_DEBUG("~p triggered unexpected else ~p ~n",[{?MODULE,?LINE}, SomeThingElse]),
+ 				    ?DEV_DEBUG_MATCH("~p triggered unexpected else ~p ~n",[{?MODULE,?LINE}, SomeThingElse]),
  				    {false, Dict}
  			end
 	  end

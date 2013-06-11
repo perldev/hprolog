@@ -76,22 +76,7 @@ server_loop(P0, TraceOn) ->
 
 	    server_loop(P0, ?DEBUG_OFF)
 	;
-	{ok, Goa1l} when is_atom(Goa1l)->
-	      io:fwrite("Goal complex: ~p~n", [Goa1l]),
-	      Goal = {Goa1l, true},
-%%TODO  process body if we use  complain request
-%% solution make temp aim with updated variables
-	      ets:new(tree_processes,[ public, set, named_table ] ), 
-	      prolog_trace:trace_on(TraceOn, tree_processes ),
-	      ets:insert(tree_processes, {?PREFIX, P0 } ),
-      	      ?DEV_DEBUG("trace config : ~p~n", [ {ets:tab2list(tree_processes) } ]),   
-	      ?DEBUG("TempAim : ~p~n", [ Goal  ]),
-              StartTime = erlang:now(), 
-	      BackPid = spawn_link(prolog, conv3, [{true}, Goal,  dict:new(),
-			      erlang:self(), now(), tree_processes]),
-	      process_prove(Goal, Goal, BackPid, StartTime ),	       
-	      ets:delete(tree_processes),%%%this
-	      server_loop(P0, TraceOn);
+	
 	{ok,Files} when is_list(Files) ->
 % 	    {{ok,Db0},P1} = P0(get_db),
 	    lists:foreach(fun(File)->
@@ -109,70 +94,23 @@ server_loop(P0, TraceOn) ->
 	 {ok, Goal = {':-',_,_ } } ->
 		io:fwrite("syntax error may be you want use assert ~p ~n",[Goal]),
 		server_loop(P0, TraceOn);
-	{ok,Goal = {';', _Rule, _Body} } ->
-	      io:fwrite("Goal complex: ~p~n", [Goal]),
-%%TODO  process body if we use  complain request
-%% solution make temp aim with updated variables
-	      {TempAim, Dict} =  make_temp_complex_aim(Goal, dict:new()), 
-	      ets:new(tree_processes,[ public, set, named_table ] ),
-	      ets:insert(tree_processes, {?PREFIX, P0 } ),
-	      prolog_trace:trace_on(TraceOn, tree_processes ),
-      	      ?DEV_DEBUG("trace config : ~p~n", [ {ets:tab2list(tree_processes) } ]),
-	      ListVars  = dict:to_list(Dict),
-	      TempAim1 = list_to_tuple([ ?TEMP_SHELL_AIM  |lists:map(fun({ Normal, Temp})->  Temp  end, ListVars ) ]),
-     	      NewGoal = list_to_tuple([ ?TEMP_SHELL_AIM  |lists:map(fun({ Normal, Temp})->  Normal  end, ListVars ) ]),
-     	      ProtoType = list_to_tuple( lists:map(fun({ Normal, Temp})->  Normal  end, ListVars )  ), 
-              TempProto   =  lists:map(fun({ Normal, Temp})->  Temp  end, ListVars ),          	      
-     	      ets:insert(?RULES,{?TEMP_SHELL_AIM, ProtoType, Goal }  ),
-	      ?DEBUG("TempAim : ~p~n", [{TempAim1, NewGoal, Goal } ]),
-              StartTime = erlang:now(), 
-	      BackPid = spawn_link(prolog, conv3, [list_to_tuple(TempProto), TempAim1,  dict:new(),
-			      erlang:self(), now(), tree_processes]),
-	      process_prove(TempAim1, NewGoal, BackPid, StartTime ),	       
-	      ets:delete(tree_processes),%%%this
-	      ets:delete(?RULES, ?TEMP_SHELL_AIM ),
-	      server_loop(P0, TraceOn);
-	{ok,Goal = {',', _Rule, _Body} } ->
-	      io:fwrite("Goal complex: ~p~n", [Goal]),
-%%TODO  process body if we use  complain request
-%% solution make temp aim with updated variables
-	      {TempAim, Dict} =  make_temp_complex_aim(Goal, dict:new()), 
-	      ets:new(tree_processes,[ public, set, named_table ] ), 
-	      ets:insert(tree_processes, {?PREFIX, P0 } ),
-	      prolog_trace:trace_on(TraceOn, tree_processes ),
-      	      ?DEV_DEBUG("trace config : ~p~n", [ {ets:tab2list(tree_processes) } ]),
 
-	      ListVars  = dict:to_list(Dict),
-	      TempAim1 = list_to_tuple([ ?TEMP_SHELL_AIM  |lists:map(fun({ Normal, Temp})->  Temp  end, ListVars ) ]),
-     	      NewGoal = list_to_tuple([ ?TEMP_SHELL_AIM  |lists:map(fun({ Normal, Temp})->  Normal  end, ListVars ) ]),
-     	      ProtoType = list_to_tuple( lists:map(fun({ Normal, Temp})->  Normal  end, ListVars )  ), 
-              TempProto   =  lists:map(fun({ Normal, Temp})->  Temp  end, ListVars ),          	      
-     	      ets:insert(?RULES,{?TEMP_SHELL_AIM, ProtoType, Goal }  ),
-	      ?DEBUG("TempAim : ~p~n", [{TempAim1, NewGoal, Goal } ]),
-              StartTime = erlang:now(), 
-              
-	      BackPid = spawn_link(prolog, conv3, [list_to_tuple(TempProto), TempAim1,  dict:new(),
-			      erlang:self(), now(), tree_processes]),
-	      process_prove(TempAim1, NewGoal, BackPid, StartTime ),	       
-	      ets:delete(tree_processes),%%%this
-	      ets:delete(?RULES,?TEMP_SHELL_AIM ),
-	      server_loop(P0, TraceOn);
-% 	    shell_prove_result(P0({prove,Goal}));	
 	{ok,Goal} ->
 	      io:fwrite("Goal : ~p~n", [Goal]),
 %%TODO  process body if we use  complain request
 %% solution make temp aim with updated variables
 	      {TempAim, _ShellContext }=  make_temp_aim(Goal), 
 	      ?DEBUG("TempAim : ~p~n", [TempAim]),
-	      ets:new(tree_processes,[ public, set, named_table ] ), 
-	      ets:insert(tree_processes, {?PREFIX, P0 } ),%%tell   prefix of rules to  the system 
-	      prolog_trace:trace_on(TraceOn,tree_processes ),
+	      ets:new(tree_processes,[ public, set,named_table,{ keypos, 2 } ] ), 
+	      prolog_trace:trace_on(TraceOn, tree_processes ),
+              ets:insert(tree_processes, {system_record,?PREFIX, P0}),
+
 	      ?DEBUG("~p make temp aim ~p ~n",[ {?MODULE,?LINE}, {TempAim,ets:tab2list(tree_processes)}]),
-	      [_UName|Proto] = tuple_to_list(TempAim),
 	      StartTime = erlang:now(),
-	      BackPid = spawn_link(prolog, conv3, [list_to_tuple(Proto), TempAim,  dict:new(), 
-				    erlang:self(), now() , tree_processes]),
-	      process_prove(TempAim, Goal, BackPid, StartTime ),
+	      Res = (catch prolog:aim( finish, ?ROOT, Goal,  dict:new(), 
+                                                1, tree_processes, ?ROOT) ),
+                                                
+	      process_prove(TempAim, Goal, Res, StartTime ),
 	      ets:delete(tree_processes),%%%this is very bad design or solution
 	      server_loop(P0, TraceOn);
 % 	    shell_prove_result(P0({prove,Goal}));
@@ -182,53 +120,44 @@ server_loop(P0, TraceOn) ->
     end.
 
 
-process_prove(  TempAim , Goal, BackPid, StartTime)->
-      ProtoType = common:my_delete_element(1, Goal),
-      receive 
-	    {'EXIT',FromPid,Reason}->
+process_prove(  TempAim , Goal, Res, StartTime)->
+      case Res of 
+	    {'EXIT', FromPid, Reason}->
 		  ?DEBUG("~p exit aim ~p~n",[{?MODULE,?LINE}, {FromPid,Reason} ]),
-		  io:fwrite("No~n"),
+		  io:fwrite("Error~n ~p",[{Reason,FromPid}]),
 		  FinishTime = erlang:now(),
 		  io:fwrite(" elapsed time ~p ~n", [ timer:now_diff(FinishTime, StartTime)*0.000001 ] );
-	    finish ->
-		   io:fwrite("No~n"),FinishTime = erlang:now(),
-    		   io:fwrite(" elapsed time ~p ~n", [ timer:now_diff(FinishTime, StartTime)*0.000001 ] );
+		  
+            
+            {true, SomeContext, Prev} ->
+                  ?DEBUG("~p got from prolog shell aim ~p~n",[?LINE ,{TempAim, Goal, dict:to_list(SomeContext)} ]),
+                  FinishTime = erlang:now(),
+                  New = prolog_matching:bound_body( 
+                                        Goal, 
+                                        SomeContext
+                                         ),
+                   ?DEBUG("~p temp  shell context ~p previouse key ~p ~n",[?LINE , New, Prev ]),
 
-	    {result, {false, _ } }->
-		   io:fwrite("No~n"),FinishTime = erlang:now(),
-     		   io:fwrite(" elapsed time ~p ~n", [ timer:now_diff(FinishTime, StartTime)*0.000001 ] );
+                  {true, NewLocalContext} = prolog_matching:var_match(Goal, New, dict:new()),                
+                                        
+                  lists:foreach(fun shell_var_match/1, dict:to_list(NewLocalContext) ),
+                  ?SYSTEM_STAT(tree_processes),
+                  io:fwrite(" elapsed time ~p next solution ~p ~n", [ timer:now_diff(FinishTime, StartTime)*0.000001,Prev ] ),
+                  Line = io:get_line(': '),
+                  
+                   case string:chr(Line, $;) of
+                       0 ->
+                         io:fwrite("Yes~n");
+                       _ ->
+                         ?DEBUG("~p send next to pid ~p",[{?MODULE,?LINE}, Res]),
+                         process_prove( TempAim , Goal, (catch prolog:next_aim(Prev, tree_processes )), erlang:now() )              
+                   end;        
+	    Res ->
+	           
+		   io:fwrite("No ~p~n",[Res]),FinishTime = erlang:now(),
+    		   io:fwrite(" elapsed time ~p ~n", [ timer:now_diff(FinishTime, StartTime)*0.000001 ] )
 
-	    {result, {empty, _ } }->
-		   io:fwrite("No~n"),FinishTime = erlang:now(),
-    		   io:fwrite(" elapsed time ~p ~n", [ timer:now_diff(FinishTime, StartTime)*0.000001 ] );
-
-	    {result, {Result, SomeContext} }->
-   		   ?DEBUG("~p got from prolog shell aim ~p~n",[?LINE ,{Result,  ProtoType, dict:to_list(SomeContext)} ]),
-		  FinishTime = erlang:now(),
-		  NewLocalContext = prolog:fill_context( 
-					Result, 
-					ProtoType,
-					dict:new() ), 
-					
-		  ?DEBUG("~p got from prolog shell aim ~p~n",[?LINE, {Result,  ProtoType, NewLocalContext} ]),
-		  lists:foreach(fun shell_var_match/1, dict:to_list(NewLocalContext) ),
-		  ?SYSTEM_STAT(tree_processes),
-  		  io:fwrite(" elapsed time ~p ~n", [ timer:now_diff(FinishTime, StartTime)*0.000001 ] ),
- 		  Line = io:get_line(': '),
-		  case string:chr(Line, $;) of
-		      0 ->
-			io:fwrite("Yes~n"),
-			BackPid ! finish,
-			receive 
-			    {'EXIT',BackPid,Reason}->
-				io:fwrite("aim process calculation has finished ~p ~n",[BackPid])
-			end,
-			finish;
-		      _ ->
-			?DEBUG("~p send next to pid ~p",[{?MODULE,?LINE}, BackPid]),
-		        BackPid ! next,
-			process_prove( TempAim , Goal, BackPid, erlang:now() )		    
-		  end    		  
+	 	  
       end     
 .
 
@@ -253,6 +182,9 @@ make_temp_aim(Goal = {assertz, _})->
    {Goal, dict:new()}
 ;
 make_temp_aim(Goal = {retract, _})->
+   {Goal, dict:new()}
+;
+make_temp_aim(Goal) when is_atom(Goal)->
    {Goal, dict:new()}
 ;
 make_temp_aim(Goal)->

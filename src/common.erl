@@ -4,7 +4,7 @@
 
 
 regis_io_server(TreeEts, Io)->
-    ets:insert(TreeEts, {?IO_SERVER, Io} )
+    ets:insert(TreeEts, {system_record, ?IO_SERVER, Io} )
 .
 parse_as_term(S)->
       {ok, Terms , _L1} = erlog_scan:string( S ),
@@ -27,7 +27,7 @@ console_nl(_)->
 %TODO adding parsing predicates
 
 web_console_read(TreeEts)->
-	[{_, Parent}] = ets:lookup(TreeEts, ?IO_SERVER ),
+	[{system_record, _, Parent}] = ets:lookup(TreeEts, ?IO_SERVER ),
 
 	Parent ! {result, read, erlang:self() },
 	receive 
@@ -39,7 +39,7 @@ web_console_read(TreeEts)->
       
        
 web_console_get_char(TreeEts)->
-	[{_, Parent}] = ets:lookup(TreeEts, ?IO_SERVER ),
+	[{system_record, _, Parent}] = ets:lookup(TreeEts, ?IO_SERVER ),
         Parent ! {result, get_char, erlang:self() },
 	receive
 	      {char, Char } ->
@@ -50,16 +50,16 @@ web_console_get_char(TreeEts)->
 %TODO add parsing term into string, now we use erlang term
 web_console_write(TreeEts, X)->
       Str  = io_lib:format("~ts",[to_web_string(X)]),
-      [{_, Parent}] = ets:lookup(TreeEts, ?IO_SERVER ),
+      [{system_record, _, Parent}] = ets:lookup(TreeEts, ?IO_SERVER ),
       Parent ! {result, write, Str}.
       
 web_console_writenl(TreeEts, X)->    
       Str =  io_lib:format("~ts<br/>",[ X ]),
-      [{_, Parent}] = ets:lookup(TreeEts, ?IO_SERVER ),
+      [{system_record, _, Parent}] = ets:lookup(TreeEts, ?IO_SERVER ),
       Parent ! {result, write, Str}.
       
 web_console_nl(TreeEts)->
-      [{_, Parent}] = ets:lookup(TreeEts, ?IO_SERVER ),
+      [{system_record, _, Parent}] = ets:lookup(TreeEts, ?IO_SERVER ),
       Parent ! {result, write,"<br/>"}. 
     
     
@@ -148,12 +148,12 @@ get_logical_name(Prefix, Name) when is_list(Prefix)->
     list_to_atom( Prefix ++ erlang:atom_to_list(Name) )
 ;
 get_logical_name(Prefix, Name) when is_atom(Prefix)->
-    [{_, RealPrefix}] =  ets:lookup(Prefix, ?PREFIX),
+    [{system_record, _, RealPrefix}] =  ets:lookup(Prefix, ?PREFIX),
     get_logical_name(RealPrefix, Name)
 
 ;
 get_logical_name(Prefix, Name) when is_integer(Prefix)->
-    [{_, RealPrefix}] = ets:lookup(Prefix, ?PREFIX),
+    [{system_record, _, RealPrefix}] = ets:lookup(Prefix, ?PREFIX),
     get_logical_name(RealPrefix, Name)
 .
 

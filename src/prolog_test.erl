@@ -102,7 +102,19 @@
 		    },
 		    {test14,
 		      { true }		    
-		    }   
+		    },
+		    {test15,
+                      some              
+                    },
+                    {test16,
+                      some              
+                    },
+                    {test17,
+                      some              
+                    },
+                    {test18,
+                      some              
+                    }   
 		    
 	
 		    
@@ -118,8 +130,8 @@ start()->
       crypto:start(),
       application:start(log4erl),
       log4erl:conf(?LOG_CONF),
-      prolog:create_inner_structs(),
-      prolog:compile("test.pl").
+      prolog:create_inner_structs(""),
+      prolog:compile("","test.pl").
       
 test_all()->
     process_flag(trap_exit, true),
@@ -247,8 +259,35 @@ test14()->
     test14(got_wait(test14)).
 test14(Wait)->
     Aim = test1,
-    sent_aim("stest14 -imple aim without arguments ", Aim, Wait )
+    sent_aim("stest14 -simple aim without arguments ", Aim, Wait )
 .    
+test15()->
+    test15(got_wait(test15)).
+test15(Wait)->
+    Aim = { female, {'X'} },
+    sent_aim("test15 - facts unifieng ", Aim, Wait )
+.    
+test16()->
+    test16(got_wait(test16)).
+test16(Wait)->
+    Aim = { fact, {'X'},{'Y'},{'Z'} },
+    sent_aim("test16 - combine rules ", Aim, Wait )
+.    
+test17()->
+    test17(got_wait(test17)).
+test17(Wait)->
+    Aim = { parent, pam,jim },
+    sent_aim("test17 - fail fact search ", Aim, Wait )
+.  
+
+test18()->
+    test18(got_wait(test18)).
+test18(Wait)->
+    Aim = { fact_fork, {'X'},{'Y'},{'Z'} },
+    sent_aim("test17 - fail fact search ", Aim, Wait )
+.  
+
+
 
 %%for auto testing
 sent_aim(TestName, Goal1, Wait) when is_atom(Goal1)->
@@ -256,7 +295,8 @@ sent_aim(TestName, Goal1, Wait) when is_atom(Goal1)->
 	      ?UNIT_TEST_LOG("start test : ~p~n", [TestName]),
 	      TempAim = Goal,
 	      ?UNIT_TEST_LOG(" TempAim : ~p~n", [TempAim]),
-	      ets:new(tree_processes,[ public, set, named_table ] ), 
+	      ets:new(tree_processes,[ public, set, named_table,{ keypos, 2 } ] ), 
+              ets:insert(tree_processes, {system_record,?PREFIX, ""}),
 	      prolog_trace:trace_on(?TRACE_OFF,tree_processes ),
 	      ?UNIT_TEST_LOG("~p create buffer for test ~p ~n",
 				[ {?MODULE,?LINE}, ets:tab2list(tree_processes)]),
@@ -270,71 +310,27 @@ sent_aim(TestName, Goal1, Wait) when is_atom(Goal1)->
 sent_aim(TestName, Goal, Wait)->
 	      ?UNIT_TEST_LOG("start test : ~p~n", [TestName]),
 % 	      {TempAim, _ShellContext } =  prolog_shell:make_temp_aim(Goal), 
-	      TempAim = Goal,
+ 	      TempAim = Goal,
 	      ?UNIT_TEST_LOG(" TempAim : ~p~n", [TempAim]),
-	      ets:new(tree_processes,[ public, set, named_table ] ), 
+	      ets:new(tree_processes,[ public, set, named_table, { keypos, 2 } ] ), 
+	      ets:insert(tree_processes, {system_record,?PREFIX, ""}),
 	      prolog_trace:trace_on(?TRACE_OFF,tree_processes ),
 	      ?UNIT_TEST_LOG("~p create buffer for test ~p ~n",
 				[ {?MODULE,?LINE}, ets:tab2list(tree_processes)]),
 	      [_UName|Proto] = tuple_to_list(TempAim),
 	      StartTime = erlang:now(),
+% 	      aim(PrevIndex, ProtoType, Context, Index, TreeEts )
 
-	      BackPid = spawn_link(prolog, conv3, [list_to_tuple(Proto), TempAim,  dict:new(), 
-				    erlang:self(), now() , tree_processes]),
-	      Result = check_test(TempAim, Goal, BackPid, StartTime, Wait, TestName ),
+	      Res = erlang:apply(prolog, aim, [finish, some ,TempAim,  dict:new(), 
+				                      now(), tree_processes ]),
+	      Result = check_test(TempAim, Goal, Res, StartTime, Wait, TestName ),
 	      ets:delete(tree_processes),
 	      Result
 .
 
 
-check_test(  TempAim , Goal, BackPid, StartTime, Wait, TestName)->
-
-      receive 
-	    {'EXIT', FromPid, Wait}->
-		  ?UNIT_TEST_LOG("~p exit aim ~p~n",[{?MODULE,?LINE}, {FromPid, Wait} ]),
-		  FinishTime = erlang:now(),
-		  ?UNIT_TEST_LOG(" elapsed time ~p ~n", [ timer:now_diff(FinishTime, StartTime)*0.000001 ] ),
-		  ?UNIT_TEST_LOG("test ~p --- Yes ~n",[TestName] ),
-		   {TestName, "yes" };
-	    {'EXIT', FromPid, Reason}->
-		  ?UNIT_TEST_LOG("~p exit aim ~p~n",[{?MODULE,?LINE}, {FromPid, Reason} ]),
-		  FinishTime = erlang:now(),
-		  ?UNIT_TEST_LOG(" elapsed time ~p ~n", [ timer:now_diff(FinishTime, StartTime)*0.000001 ] ),
-		  ?UNIT_TEST_LOG("test ~p --- NO ~n",[TestName] ),
-		   {TestName, "no" };
-	    finish ->
-		 
-		   FinishTime = erlang:now(),
-    		   ?UNIT_TEST_LOG(" elapsed time ~p ~n", [ timer:now_diff(FinishTime, StartTime)*0.000001 ] ),
-    		     case Wait of
-		      finish -> 
-			    ?UNIT_TEST_LOG("test ~p --- YES ~n",[TestName] ),
-			    {TestName, "yes" }
-			  ;
-		      Wait ->
-			   ?UNIT_TEST_LOG("test ~p --- NO ~n got finish wait ~p ~n~n~n",[TestName, Wait] ),
-			   {TestName, "no" }
-		   end;
-	    {result, {Wait, _ } }->
-   		   FinishTime = erlang:now(),
-		   ?UNIT_TEST_LOG("elapsed time ~p ~n", [ timer:now_diff(FinishTime, StartTime)*0.000001 ] ),		   
-		   ?UNIT_TEST_LOG("test ~p --- YES wait ~p and got ~n~n~n",[TestName, Wait] ),
-		    finish_backpid(BackPid),
-		   {TestName, "yes" };
-		   
-	    {result, {Another, _ } }->
-		   FinishTime = erlang:now(),
-    		   ?UNIT_TEST_LOG(" elapsed time ~p ~n", [ timer:now_diff(FinishTime, StartTime)*0.000001 ] ),
-    		   ?UNIT_TEST_LOG("test ~p --- NO ~n got ~p wait ~p ~n~n~n",[TestName, Another,  Wait] ),
-    		   finish_backpid(BackPid),
-    		   {TestName, "no" };
-	    Some->
-		   FinishTime = erlang:now(),
-    		   ?UNIT_TEST_LOG(" elapsed time ~p ~n", [ timer:now_diff(FinishTime, StartTime)*0.000001 ] ),
-    		   ?UNIT_TEST_LOG("test ~p --- NO ~n got ~p wait ~p ~n~n~n",[TestName, Some,  Wait] ),
-    		   finish_backpid(BackPid),
-    		   {TestName, "no" }
-      end    
+check_test(  TempAim , Goal, Res, StartTime, Wait, TestName)->
+        ?UNIT_TEST_LOG("~p exit aim ~p~n",[{?MODULE,?LINE}, {Res, Wait} ])
 .
 finish_backpid(BackPid)->
 		   unlink(BackPid),
