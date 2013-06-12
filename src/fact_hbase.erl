@@ -397,77 +397,28 @@ fill_rule_tree( Rule, _Table )->
 
 
 
-start_fact_process( Aim, Key, TreeEts, ParentPid)->
-     spawn_link( ?MODULE, fact_start_link, [ Aim, Key, TreeEts, ParentPid] )
+start_fact_process( Aim, TreeEts, ParentPid)->
+   spawn_link( ?MODULE, fact_start_link, [ Aim, TreeEts, ParentPid] )
 .
 %%TODO add rest call to find all facts and rules 
-%%% better solution for finding rules and facts
-fact_start_link( Aim, Key, TreeEts, ParentPid ) when is_atom(Aim)->
-    fact_start_link( {Aim, true}, Key, TreeEts, ParentPid )     
-;
-fact_start_link( Aim, Key, TreeEts, ParentPid )->
-      ?DEBUG("~p check find in facts ~p ~n",[{?MODULE,?LINE},  Aim ]),
+fact_start_link( Aim,  TreeEts, ParentPid )->
+      ?DEBUG("~p begin find in facts ~p ~n",[{?MODULE,?LINE},  Aim ]),
       Name = element(1,Aim),%%from the syntax tree get name of fact
-      ?WAIT("~p regis wait in fact ~p ~n",[{?MODULE,?LINE},{Name, Aim, Key} ]),
-      FactTable = common:get_logical_name( TreeEts, ?INNER),
+      ?WAIT("~p regis wait in fact ~p ~n",[{?MODULE,?LINE},{ Name, Aim } ]),
       RealName = common:get_logical_name( TreeEts, Name),
       converter_monitor:stat('search',  RealName , Aim, true ),
-
-      receive 
-	  start ->
-	      case ets:lookup(FactTable , Name ) of
-		[]-> 
-		    ?WAIT("~p got wait in fact ~p ~n",[{?MODULE,?LINE},{Aim, Key} ]),
-		    ?DEBUG("~p wether it is a rule ~p ~n",[{?MODULE,?LINE}, { Name } ]),
-		    case ets:lookup(FactTable, Name) of
-			[]->
-			      case check_exist_facts( Name, TreeEts ) of %%and try to find in hbase
-				true-> 
-				      fact_start_link_hbase(Aim, Key, TreeEts, ParentPid);
-				false -> 
-				      ?DEBUG("~p delete on start ~p ~n",[{?MODULE,?LINE},  Name  ]),
-				      delete_about_me(Key, TreeEts),
-				      ParentPid ! finish,
-				      exit(normal)
-			      end;
-			R ->  
-			      ?DEBUG("~p delete on start ~p ~n",[{?MODULE,?LINE},  Name  ]),
-			      delete_about_me(Key, TreeEts),
-			      ParentPid ! finish,
-			      exit(normal)
-		    end;
-		_ ->
-		    ?DEBUG("~p   start inner cache ~p ~n",[{?MODULE,?LINE},  Name ]),
-		    fact_start_link_inner(Aim, Key, TreeEts, ParentPid)
-	      end
-    end
+      case check_exist_facts( Name, TreeEts) of %%and try to find in hbase
+                    true-> 
+                        fact_start_link_hbase(Aim,  TreeEts, ParentPid);
+                    false -> 
+			 ?DEBUG("~p delete on start ~p ~n",[{?MODULE,?LINE},  Name  ]),
+			 ParentPid ! non_exist_exception,
+			 exit(normal)
+      end
+     
 .
 
-
-
-fact_start_link_inner( Aim, Key, TreeEts, ParentPid )->
-      Name = element(1,Aim),%%from the syntax tree get name of fact
-      Search =  common:my_delete_element(1, Aim),%%get prototype
-      ?DEBUG("~p   begin work ~p ~n",[{?MODULE,?LINE},  Aim  ]),
-      FactTable = common:get_logical_name( TreeEts, ?INNER),
-      
-      FactList = ets:lookup(FactTable, Name),
-      
-      SearchList = lists:map(fun(E)-> common:my_delete_element(1, E) end, FactList ),%% 
-      
-      PreRes = prolog:recr(SearchList, Search ),
-      ?DEBUG("~p  started with ~p ~n",[{?MODULE,?LINE},  PreRes  ]),
-      
-      case PreRes of
-	 [] -> 
-	      ParentPid ! finish;
-	 _ -> 
-	      ParentPid ! ok
-      end,
-      process_loop(Key, PreRes, TreeEts)
-.
-      
-fact_start_link_hbase( Aim, Key, TreeEts,  ParentPid )->
+fact_start_link_hbase( Aim,  TreeEts, ParentPid )->
       Name = element(1,Aim), %%from the syntax tree get name of fact
       Search =  common:my_delete_element(1, Aim),%%get prototype
       ProtoType = tuple_to_list(Search ),
@@ -475,38 +426,33 @@ fact_start_link_hbase( Aim, Key, TreeEts,  ParentPid )->
       ?DEBUG("~p generate scanner ~p ~n",[{?MODULE,?LINE}, {Name,ProtoType } ]),
       process_flag(trap_exit, true),%%for deleting scanners
       NameTable =  common:get_logical_name(TreeEts, Name ),  
-      
+
       case check_params_facts(Name, TreeEts) of
 	  {CountParams, HashFunction} ->
 		 case  check_index(ProtoType, Name, TreeEts) of
 		      []->
 			    HbaseTable =  common:get_logical_name(TreeEts, Name ),  
+			    %%TODO throw exception if prototype contain something except constants or variables
+			    %%TODO process exception  timeouts etc
 			    {Scanner, List } = start_recr( atom_to_list(HbaseTable), ProtoType  ),
-			     case List of
-				[] -> 
-				      ParentPid ! finish; %%TODO may be die there
-				_ -> 
-				      ParentPid ! ok
-			      end,
-			      process_loop_hbase(Key, Scanner, List, ProtoType, TreeEts);
+
+			      process_loop_hbase( Scanner, List, ProtoType, TreeEts);
 		       {Name,  PartKey }->
     			      ?DEBUG("~p find whole_key ~p ~n",[{?MODULE,?LINE}, { Name, PartKey } ]),
-			       ParentPid ! ok,
-			       process_indexed_hbase(atom_to_list(NameTable), ProtoType, Key, [PartKey],  TreeEts);
+			       process_indexed_hbase(atom_to_list(NameTable),
+                                                    ProtoType,
+                                                    [PartKey],
+                                                    TreeEts);
 		       {IndexTable , PartKey } ->
-			      ?DEBUG("~p got index ~p ~n",[{?MODULE,?LINE}, {{IndexTable, Name} , PartKey } ]),
-		              PreRes = get_indexed_records(PartKey, atom_to_list(IndexTable)),
-		              case PreRes of
-				[] -> 
-				      ParentPid ! finish; %%TODO may be die there
-				_ -> 
-				      ParentPid ! ok
-			      end,
-			      process_indexed_hbase(atom_to_list(NameTable), ProtoType, Key, PreRes,  TreeEts)
+			      ?DEBUG("~p got index ~p ~n",[{?MODULE,?LINE}, { {IndexTable, Name} , PartKey } ]),
+		              PreRes = get_indexed_records(PartKey, atom_to_list(IndexTable) ),
+		              %%TODO process exception timeouts etc
+
+			      process_indexed_hbase(atom_to_list(NameTable), ProtoType,  PreRes,  TreeEts)
 		end;
-	  Res->
+	  Res ->
 	      ?DEBUG("~p count  params not matched ~p ~n",[{?MODULE,?LINE}, {Res, CountParams } ]),
-	      ParentPid ! finish	
+	      ParentPid ! arity_exception	
       end
 .
 
@@ -565,23 +511,23 @@ process_key_data(Meta)->
 
 
 
-process_indexed_hbase(Table, ProtoType, Key, PreRes, TreeEts)->
-    	?WAIT("~p regis  wait  hbase   indexed fact  ~p ~n",[{?MODULE,?LINE},{Key, PreRes} ]),
+process_indexed_hbase(Table, ProtoType,  PreRes, TreeEts)->
+    	?WAIT("~p regis  wait  hbase   indexed fact  ~p ~n",[{?MODULE,?LINE}, PreRes ]),
         receive 
-	    {PidReciverResult ,get_pack_of_facts} ->
-		  ?WAIT("~p GOT  wait in hbase indexed ~p ~n",[{?MODULE,?LINE},{Key, PreRes} ]),
-		   ?DEBUG("~p got new request ~p ~n",[{?MODULE,?LINE}, {Key, PreRes} ]),
+	    {PidReciverResult, get_pack_of_facts} ->
+		  ?WAIT("~p GOT  wait in hbase indexed ~p ~n",[{?MODULE,?LINE},PreRes]),
+		   ?DEBUG("~p got new request ~p ~n",[{?MODULE,?LINE}, PreRes ]),
 		   case catch lists:split(?GET_FACT_PACK, PreRes) of
 			{'EXIT',R} ->
 			    ?DEBUG("~p  indexed fact return  ~p  ~n",[{?MODULE,?LINE}, PreRes ]),
 			    PidReciverResult ! [],
-			    process_indexed_hbase(Table, ProtoType, Key, [], TreeEts);
+			    process_indexed_hbase(Table, ProtoType,  [], TreeEts);
    			{NewKey, NewPreRes} ->
 			    ?DEBUG("~p indexed fact return  ~p  ~n",[{?MODULE,?LINE}, {NewKey, NewPreRes} ]),
 			    Row =  hbase_get_key(ProtoType, Table, ?FAMILY, NewKey),
   			    ?DEBUG("~p got row  ~p  ~n",[{?MODULE,?LINE}, Row ]),
 			    PidReciverResult ! Row,
-			    process_indexed_hbase(Table, ProtoType, Key, NewPreRes, TreeEts)
+			    process_indexed_hbase(Table, ProtoType,  NewPreRes, TreeEts)
 		   end;
 	      finish->
 		  exit(normal);
@@ -637,8 +583,8 @@ hbase_get_key(ProtoType, Table, Family, Key)->
 
 
 check_index(ProtoType, Name, TreeEts)->
-	
-	{_, FindKey, OutVals, WholeKeyReverse} = lists:foldl(fun(E, {Index,In, Vals, WholeKey})->
+
+        {_, FindKey, OutVals, WholeKeyReverse} = lists:foldl(fun(E, {Index,In, Vals, WholeKey})->
 						case prolog_matching:is_var(E) of
 						      true->
 							  {Index+1,In, Vals,[ integer_to_list(Index) | WholeKey] };
@@ -666,48 +612,44 @@ check_index(ProtoType, Name, TreeEts)->
 				    Key = generate_key( BoundedKey ),
 				    ?DEBUG("~p find  ~p ~n",[{?MODULE,?LINE}, {IndexTable,Key }]),
 				    {IndexTable , Key }
-				  
 			    end       
 	      end
-      end
+        end
 .
 
-
-
-
-
-process_loop_hbase(Key, Scanner, [], ProtoType, TreeEts)->
+process_loop_hbase( Scanner, finish, ProtoType, TreeEts)->
+    delete_scanner(Scanner),
+    exit(normal)
+;
+process_loop_hbase( Scanner, [], ProtoType, TreeEts)->
     receive 
 	    {PidReciverResult ,get_pack_of_facts} ->
 		   PidReciverResult ! [],
-		   process_loop_hbase(Key, Scanner, [], ProtoType, TreeEts);
-	    finish ->
-		  exit(normal);
+		   process_loop_hbase( Scanner, finish, ProtoType, TreeEts);
 	    {'EXIT', From, Reason} ->
-     	  	  ?WAIT("~p GOT  exit in fact hbase ~p ~n",[{?MODULE,?LINE},{Key, ProtoType} ]),
-		  ?LOG("~p got exit signal  ~p ~n",[{?MODULE,?LINE}, {From, Reason} ])
+     	  	  ?WAIT("~p GOT  exit in fact hbase ~p ~n",[{?MODULE,?LINE}, ProtoType ]),
+		  ?LOG("~p got exit signal  ~p ~n",[{?MODULE,?LINE}, {From, Reason} ]),
+		   delete_scanner(Scanner)
     end
 ;
 
-process_loop_hbase(Key, Scanner, Res, ProtoType, TreeEts)->
-	  ?WAIT("~p regis  wait in fact hbase ~p ~n",[{?MODULE,?LINE},{Key, ProtoType} ]),
+process_loop_hbase( Scanner, Res, ProtoType, TreeEts)->
+	 ?WAIT("~p regis  wait in fact hbase ~p ~n",[{?MODULE,?LINE}, ProtoType ]),
 
         receive 
 	    {PidReciverResult ,get_pack_of_facts} ->
-	  	    ?WAIT("~p GOT  wait in fact hbase ~p ~n",[{?MODULE,?LINE},{Key, ProtoType} ]),
-		    ?DEBUG("~p got new request ~p ~n",[{?MODULE,?LINE}, {Key, Res} ]),
+	  	    ?WAIT("~p GOT  wait in fact hbase ~p ~n",[{?MODULE,?LINE}, ProtoType ]),
+		    ?DEBUG("~p got new request ~p ~n",[{?MODULE,?LINE},  Res ]),
 		    PidReciverResult ! Res,
 		    NewList = get_data( Scanner, ProtoType),
-		    process_loop_hbase(Key, Scanner, NewList, ProtoType, TreeEts);
-	    finish ->
-		  ?WAIT("~p GOT  finish in fact hbase ~p ~n",[{?MODULE,?LINE},{Key, ProtoType} ]),
-		  delete_scanner(Scanner);    
+		    process_loop_hbase( Scanner, NewList, ProtoType, TreeEts);
+  
 	    {'EXIT', From, Reason} ->
-     	  	  ?WAIT("~p GOT  exit in fact hbase ~p ~n",[{?MODULE,?LINE},{Key, ProtoType} ]),
+     	  	  ?WAIT("~p GOT  exit in fact hbase ~p ~n",[{?MODULE,?LINE}, ProtoType ]),
 		  ?LOG("~p got exit signal  ~p ~n",[{?MODULE,?LINE}, {From, Reason} ]),
 		  delete_scanner(Scanner);
 	    Some ->
-    	  	  ?WAIT("~p GOT  wait in fact hbase ~p ~n",[{?MODULE,?LINE},{Key, ProtoType} ]),
+    	  	  ?WAIT("~p GOT  wait in fact hbase ~p ~n",[{?MODULE,?LINE}, ProtoType ]),
 		  ?LOG("~p got unexpected ~p ~n",[{?MODULE,?LINE}, Some ]),
 		  delete_scanner(Scanner)
 
@@ -716,50 +658,18 @@ process_loop_hbase(Key, Scanner, Res, ProtoType, TreeEts)->
 
 
 
-process_loop(Key, [], TreeEts)->
-  delete_about_me(Key, TreeEts);
-process_loop(Key, PreRes, TreeEts)->
-    	 ?WAIT("~p regis  wait in fact inner ~p ~n",[{?MODULE,?LINE},{Key, PreRes} ]),
 
-        receive 
-	    finish -> 
-		exit(normal);
-	    {PidReciverResult ,get_pack_of_facts} ->
-		  ?WAIT("~p GOT  wait in fact inner ~p ~n",[{?MODULE,?LINE},{Key, PreRes} ]),
-		   ?DEBUG("~p got new request ~p ~n",[{?MODULE,?LINE}, {Key, PreRes} ]),
-		   case catch lists:split(?GET_FACT_PACK, PreRes) of
-			{'EXIT',R} ->
-			    ?DEBUG("~p return  ~p  ~n",[{?MODULE,?LINE}, PreRes ]),
-			    PidReciverResult ! PreRes,
-			    process_loop(Key, [], TreeEts);
-   			{Res ,NewPreRes} ->
-			  ?DEBUG("~p return  ~p  ~n",[{?MODULE,?LINE}, {Res, NewPreRes} ]),
-			   PidReciverResult ! Res,
-			   process_loop(Key, NewPreRes, TreeEts)
-		   end
 
-	end
-.
-
-get_facts( Key, TreeEts )-> %%in this will not work method of cutting logic results
-      case ets:lookup(TreeEts, Key) of
-	   [{_, {Pid, fact}}]->  
-		    call(Pid, get_pack_of_facts);
-	   _ -> [ ] 
-	   
-      end
-.
-
-delete_about_me(Key, TreeEts)->
-     ets:insert(TreeEts, {Key, { {}, rule} }) %%after process fact we will try find rules 
+get_facts( Pid )-> %%in this will not work method of cutting logic results
+        call(Pid, get_pack_of_facts)
 
 .
+
 
 call(Pid,  Atom )->
     ?DEBUG("~p call to hbase reducer  ~n",[{?MODULE,?LINE} ]),
-    Pid! { erlang:self(), Atom },
+    Pid !   {self(), Atom } ,
     ?WAIT("~p regis  wait in  inner fact call  ~p ~n",[{?MODULE,?LINE},{Atom, Pid} ]),
-
     receive 
 	 Result ->
 	    ?WAIT("~p GOT  wait in  inner fact call  ~p ~n",[{?MODULE,?LINE},{Atom, Pid} ]),
@@ -768,8 +678,7 @@ call(Pid,  Atom )->
 	after ?FATAL_WAIT_TIME ->
               ?WAIT("~p GOT  TIMEOUT in  inner fact call  ~p ~n",[{?MODULE,?LINE},{Atom, Pid} ]),
 	      ?DEBUG("~p  reducer didn't return result   ~n",[{?MODULE,?LINE}]),
-	      %%TODO delete info from tree_processes ???
-	      []
+	      throw({'EXIT',timeout_hbase, ?FATAL_WAIT_TIME  } )
     end     
 .
 

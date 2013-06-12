@@ -746,23 +746,95 @@ process_builtin_pred({false, _Context}, _NextBody, PrevIndex, _NewIndex2, TreeEt
 %%TODO about NewIndex we are able to get old NewIndex2, if have no such predicate like retract
 %%TODO Index must be rewrited to auto increment
 process_builtin_pred({true, Context}, NextBody, PrevIndex, NewIndex2, TreeEts, Parent )->               
-%       ets:insert(TreeEts, #aim_record{id = NewIndex2, solutions = [], next = one}),
         case  conv3( NextBody, Context, PrevIndex, NewIndex2, TreeEts, Parent ) of
             ProcessRes = {true, _Context, _Prev} -> 
                             ProcessRes;
                         false ->
-                            ?DEV_DEBUG("~p work to previouse  ~p ~n",[{?MODULE,?LINE},  PrevIndex ]),
+                            ?DEV_DEBUG("~p work to previous  ~p ~n",[{?MODULE,?LINE},  PrevIndex ]),
                             next_aim(Parent, PrevIndex, TreeEts );
                          Unexpected ->
                             throw({'EXIT',unexpected_return_value_builtin_pred, {Unexpected,  TreeEts} } )
         end
 .
 
-user_defined_aim(NextBody, PrevIndex, ProtoType, Context, Index, TreeEts, Parent ) when is_atom(ProtoType)->
+%%WITH HBASE we do not work with facts without prototype
+%%Do not allow to make rule and facts
+-ifdef(USE_HBASE).
+
+
+user_defined_aim(NextBody, PrevIndex, ProtoType, Context, Index, TreeEts, Parent) when is_atom(ProtoType)->
+         
+         %% at first we will looking in inner database
          RulesTable = common:get_logical_name(TreeEts, ?RULES), 
          RuleList = ets:lookup(RulesTable, ProtoType),        
- 
-        %%pattern matching like one aim
+         %% pattern matching like one aim
+         ets:insert(TreeEts,
+         #aim_record{ id = Index,
+                      prototype = ProtoType,
+                      temp_prototype = ProtoType, 
+                      solutions = RuleList,
+                      next = one,
+                      prev_id = PrevIndex,
+                      context = Context,
+                      next_leap = NextBody,
+                      parent = Parent 
+                      }),                      
+         next_aim(Parent, Index, TreeEts )
+;
+user_defined_aim(NextBody, PrevIndex, ProtoType, Context, Index, TreeEts, Parent) ->
+        Name = element(1, ProtoType),%%from the syntax tree get name of fact
+        RulesTable = common:get_logical_name(TreeEts, ?RULES),         
+        RuleList = ets:lookup(RulesTable, Name),
+        hbase_user_defined_aim(RuleList, NextBody, PrevIndex, ProtoType, Context, Index, TreeEts, Parent)
+.
+hbase_user_defined_aim([], NextBody, PrevIndex, ProtoType, Context, Index, TreeEts, Parent)->
+        %%search fact in hbase
+        
+         HbasePid = fact_hbase:start_fact_process( ProtoType, TreeEts, self() ),
+          ets:insert(TreeEts,
+         #aim_record{ id = Index,
+                      prototype = ProtoType,
+                      temp_prototype = ProtoType, 
+                      solutions = HbasePid,
+                      next = hbase,
+                      prev_id = PrevIndex,
+                      context = Context,
+                      next_leap = NextBody,
+                      parent = Parent 
+                      }),             
+         next_aim(Parent, Index, TreeEts )
+
+;
+hbase_user_defined_aim(RuleList, NextBody, PrevIndex, ProtoType, Context, Index, TreeEts, Parent)->
+         BoundProtoType = bound_aim(ProtoType, Context),
+         {TempSearch, _NewContext} = prolog_shell:make_temp_aim(BoundProtoType),%% think about it
+         %%pattern matching like one aim
+         ?DEBUG("~p user defined aim ~p ~n",[{?MODULE,?LINE}, { BoundProtoType, TempSearch,  NextBody } ]),
+         ets:insert(TreeEts,
+         #aim_record{ id = Index,
+                      prototype = ProtoType,
+                      temp_prototype = TempSearch, 
+                      solutions = RuleList,
+                      next = one,
+                      prev_id = PrevIndex,
+                      context = Context,
+                      next_leap = NextBody,
+                      parent = Parent 
+                      }),                      
+         next_aim(Parent, Index, TreeEts )
+.
+
+
+
+
+-else.
+
+user_defined_aim(NextBody, PrevIndex, ProtoType, Context, Index, TreeEts, Parent) when is_atom(ProtoType)->
+         
+         %% at first we will looking in inner database
+         RulesTable = common:get_logical_name(TreeEts, ?RULES), 
+         RuleList = ets:lookup(RulesTable, ProtoType),        
+         %% pattern matching like one aim
          ets:insert(TreeEts,
          #aim_record{ id = Index,
                       prototype = ProtoType,
@@ -777,8 +849,7 @@ user_defined_aim(NextBody, PrevIndex, ProtoType, Context, Index, TreeEts, Parent
          next_aim(Parent, Index, TreeEts )
 ;
 user_defined_aim(NextBody, PrevIndex, ProtoType, Context, Index, TreeEts, Parent )->
-         Name = element(1,ProtoType),%%from the syntax tree get name of fact
-         Search =  common:my_delete_element(1, ProtoType),%%get prototype
+         Name = element(1, ProtoType),%%from the syntax tree get name of fact
          RulesTable = common:get_logical_name(TreeEts, ?RULES), 
          RuleList = ets:lookup(RulesTable, Name),        
          BoundProtoType = bound_aim(ProtoType, Context),
@@ -800,6 +871,9 @@ user_defined_aim(NextBody, PrevIndex, ProtoType, Context, Index, TreeEts, Parent
          next_aim(Parent, Index, TreeEts )
 .
 
+
+
+-endif.
 
 aim_match({ {false, _}, _ }, [], ProtoType, _ )->
     false
@@ -852,6 +926,18 @@ next_aim( Parent, Index, TreeEts )->
                 ets:delete(TreeEts, T#aim_record.id),%% it doesn't need us now
                 next_aim(Parent, T#aim_record.prev_id, TreeEts); %go to the prev aim
         %%TODO think a lot about overhead 
+         [ T = #aim_record{next = hbase, solutions = Pid} ]-> %%one  it's pattern matching 
+                Pattern = fact_hbase:get_facts(Pid),
+                ?DEV_DEBUG("~p work pattern  ~p ~n",[{?MODULE,?LINE},  Pattern ]),
+                case process_next_hbase(Pattern, T, TreeEts, T#aim_record.parent) of
+                        ProcessRes = {true, _Context, _Prev} -> 
+                            ProcessRes;
+                        false ->
+                            ?DEV_DEBUG("~p work to previouse  ~p ~n",[{?MODULE,?LINE},  Index ]),
+                            next_aim(Parent, Index, TreeEts );
+                         Unexpected ->
+                            throw({'EXIT',unexpected_return_value, {Unexpected, T, TreeEts} } )
+                end;
         [ T = #aim_record{next = one} ]-> %%one  it's pattern matching 
                 Pattern =  aim_match(next_pattern, T#aim_record.solutions,  T#aim_record.temp_prototype, T#aim_record.context ),
                 ?DEV_DEBUG("~p work pattern  ~p ~n",[{?MODULE,?LINE},  Pattern ]),
@@ -877,7 +963,7 @@ next_aim( Parent, Index, TreeEts )->
                            false ->
                                   ?DEBUG("~p return false from ~p ~n",[{?MODULE,?LINE}, T ]),
 
-                                  ets:insert( TreeEts, T#aim_record{ next = one }),  
+                                  ets:insert( TreeEts, T#aim_record{ next = one }),%%FINISH bu try another patterns  
                                   next_aim( Parent, Index, TreeEts ); %% it will be  turn to previous index cause one
                             Unexpected ->
                                   throw({'EXIT',unexpected_return_value, {Unexpected, T, TreeEts} } )
@@ -897,8 +983,33 @@ bound_temp_and_original(Context, T)->
       { NewContext, BoundProtoType}  
 .
 
+process_next_hbase([], T, TreeEts, Parent)->
+        ets:insert(TreeEts, T#aim_record{solutions = [], next = one } ), %%tell finish everything
+        false;
+process_next_hbase( [Res], T, TreeEts, Parent)->
+        %    Res = [{}]
+        %%TODO remove this to fact_hbase module
+        NewIndex =  get_index(T#aim_record.id), % now(), %T#aim_record.id + 1,
+        Name =  erlang:element(1, T#aim_record.prototype ),
+        BoundProtoType = list_to_tuple( [Name|tuple_to_list( Res )] ),
+        %%MUST BE TRUE
+        { true, NewLocalContext } = prolog_matching:var_match(BoundProtoType, T#aim_record.temp_prototype, T#aim_record.context),
+        %%TODO remove all logs with dict:to_list functions
+        ?DEBUG("~p process FACT ~p ~n",[{?MODULE,?LINE},  {
+                                                            T#aim_record.prototype,
+                                                            T#aim_record.temp_prototype,
+                                                            T#aim_record.next_leap} ]),
+        %%TODO change all conv3 to aim procedure
+        %% this case is needed for saving original context of current tree leap
+        ?TRACE(T#aim_record.id, TreeEts, T#aim_record.temp_prototype, NewLocalContext),
+        ?TRACE2(T#aim_record.id, TreeEts, BoundProtoType, NewLocalContext),
+        
+        conv3( T#aim_record.next_leap , NewLocalContext, T#aim_record.id, NewIndex, TreeEts, Parent );
+process_next_hbase( Unexpected, _T, TreeEts, _Parent)->
+        throw({'EXIT',unexpected_tree_leap, {Unexpected, TreeEts} } ).
 
-
+        
+        
 process_next(false, T, TreeEts, Parent)->        
         ets:insert(TreeEts, T#aim_record{solutions = [] } ),
         false;
