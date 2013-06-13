@@ -141,7 +141,7 @@ process_prove(  TempAim , Goal, Res, StartTime)->
                   {true, NewLocalContext} = prolog_matching:var_match(Goal, New, dict:new()),                
                                         
                   lists:foreach(fun shell_var_match/1, dict:to_list(NewLocalContext) ),
-                  ?SYSTEM_STAT(tree_processes),
+                  ?SYSTEM_STAT(tree_processes, {0,0,0}),
                   io:fwrite(" elapsed time ~p next solution ~p ~n", [ timer:now_diff(FinishTime, StartTime)*0.000001,Prev ] ),
                   Line = io:get_line(': '),
                   

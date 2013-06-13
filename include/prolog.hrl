@@ -4,13 +4,13 @@
 -define(FATAL_WAIT_TIME, infinity).
 -define(META_INFO_BATCH, 3). %%for using as batch param for scanner meta info
 
-%-define(USE_HBASE,1).
+-define(USE_HBASE,1).
 -define(UPDATE_STAT_INTERVAL,20000).%%interval of updating meta stat of prolog statements
 
--define(SIMPLE_HBASE_ASSERT,1).
+-define(SIMPLE_HBASE_ASSERT,0).
 
 %-define(ENABLE_LOG,1).
-%-define(COMPILE_TRACE, 1).
+-define(COMPILE_TRACE, 1).
 
 -define('DEV_DEBUG_MATCH'(Str, Pars ), true ).
 -define(ROOT, console_root).
@@ -33,7 +33,9 @@
 
 -define(FACT_STAT(Ets), io:format("Facts  ~p ~n",[ ets:tab2list(Ets)  ]) ).
 
--define(SYSTEM_STAT(Ets), io:format("System ~p prolog ~p ~n",[ length(processes()), ets:info(Ets,size) ]) ).
+-define(SYSTEM_STAT(Ets, Pointers), io:format("System ~p prolog ~p  pointers is ~p ~n",[ length(processes()), 
+                                                                                         ets:info(Ets,size), 
+                                                                                         Pointers ]) ).
 
 
 

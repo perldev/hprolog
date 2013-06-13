@@ -41,7 +41,7 @@ trace(Index, Tree,  Body, Context)->
 	  [ ]->   true;
 	  [ {system_record, _, false} ]-> true;
 	  [ {system_record, _, true, ?TRACE_ON }]->
-                 ?SYSTEM_STAT(Tree),
+                 ?SYSTEM_STAT(Tree, Index),
 		 call_tracer(Index, Body);
 	  [ {system_record, _, true, ?DEBUG_ON, DebugPidLogger }]->
 		  DebugPidLogger ! {debug_msg,Index, prolog_matching:bound_body(Body,Context) },
@@ -56,7 +56,7 @@ trace2(Index, Tree,   Body, _Context) ->
 	  [ ]->   true;
 	  [ {system_record, _, false} ]-> true;
 	  [ {system_record, _, true, ?TRACE_ON }]->
-                  ?SYSTEM_STAT(Tree),
+                  ?SYSTEM_STAT(Tree, Index),
 		  got_tracer(Index, Body);
 	  [ {system_record, _, true, ?DEBUG_ON, DebugPidLogger } ] ->
 		  DebugPidLogger ! {res_msg, Index, Body },
@@ -65,7 +65,7 @@ trace2(Index, Tree,   Body, _Context) ->
 .
 
 call_tracer(Index, Body)->
-    io:fwrite("~p aim  call  ~p ? ~n yes or no~n  ", [Index, Body ] ),
+    io:fwrite("~p aim  call  ~ts ? ~n yes or no~n  ", [Index, lists:flatten(erlog_io:write1( Body ) ) ] ),
     
     Line = io:get_line(""),
     case Line of
@@ -80,7 +80,7 @@ call_tracer(Index, Body)->
     end.
                   
 got_tracer(Index, Body)->
-                  io:fwrite("~p aim  got  ~p ? ~n yes or no~n  ", [Index, Body ] ),
+                  io:fwrite("~p aim  got  ~ts ? ~n yes or no~n  ", [Index, lists:flatten(erlog_io:write1(Body)) ] ),
                   Line = io:get_line(""),
                   case Line of
                       [$y,$e,$s| _ ] ->
