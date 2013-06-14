@@ -38,6 +38,7 @@ clean_tree(TreeEts)->
                 case Elem of 
                       {system_record, _, _}-> Acum;
                       T = #aim_record{next = hbase}->
+                          unlink(T#aim_record.solutions),
                           exit(T#aim_record.solutions, finish ),
                           ets:delete(TreeEts, T), Acum;
                       T = #aim_record{} ->
@@ -73,12 +74,20 @@ compile(Prefix, File)->
 inner_change_namespace(false, _Name, _TreeEts)->
     false;
 inner_change_namespace(true, Name, TreeEts)->
-    delete_inner_structs(TreeEts),
+    delete_structs(TreeEts),
     create_inner_structs(Name),
     ?INCLUDE_HBASE( Name ),
     ets:insert(TreeEts,{system_record, ?PREFIX, Name})
 .
 
+delete_structs(Prefix)->
+
+      ets:delete(common:get_logical_name(Prefix, ?RULES) ),
+      ets:delete(common:get_logical_name(Prefix, ?DYNAMIC_STRUCTS)),
+      ets:delete(common:get_logical_name(Prefix, ?META) ),
+      ets:delete(common:get_logical_name(Prefix, ?META_LINKS) ),
+      ets:delete(common:get_logical_name(Prefix, ?HBASE_INDEX))
+.
 delete_inner_structs(Prefix)->
 
       ets:delete_all_objects(common:get_logical_name(Prefix, ?RULES) ),
@@ -721,12 +730,13 @@ inner_defined_aim(NextBody, PrevIndex , {'=\\=', First, Second }, Context, _Inde
     Res = { not_compare(One ,Two), Context },
     Res.
 
-aim(NextBody, PrevIndex , {retract, Body }, Context, Index, TreeEts, Parent)->
+aim(NextBody, PrevIndex , {'retract', Body }, Context, Index, TreeEts, Parent)->
        %%we make just to temp aims with two patterns 
+         BodyBounded = prolog_matching:bound_body(Body, Context),
          ets:insert(TreeEts,
          #aim_record{ id = Index,
-                      prototype = { retract,  Body },
-                      temp_prototype = { retract, Body  }, 
+                      prototype = { retract,  BodyBounded },
+                      temp_prototype = { retract, BodyBounded  }, 
                       solutions = [ { retract, { {'_X_RETRACTING'} } , {',',{call,{'_X_RETRACTING'} }, {'inner_retract___', {'_X_RETRACTING'}  }   } } ],
                       next = one,
                       prev_id = PrevIndex,
@@ -1151,16 +1161,20 @@ next_in_current_leap(T, TreeEts, ThatLocalContext, Prev, Tail, Parent )->
 
 
 %%working with linked facts this is the first step for implementation expert dynamic  system
-worker_linked_rules(Body, Prefix)->
-      TreeEts = ets:new(some_name ,[set, private]),
-      ets:insert(TreeEts, {system_record, ?PREFIX, Prefix }),
+worker_linked_rules(Body, OutTree)->
+      ?WAIT("~p out table  ~p ~n",[{?MODULE,?LINE},  ets:tab2list(OutTree) ]),
+      TreeEts = ets:new(some_name ,[set, public, { keypos, 2 } ]),
+      [Prefix] = ets:lookup(OutTree, ?PREFIX),
+      ets:insert(TreeEts, Prefix),
+      ets:insert(TreeEts, {system_record, ?DEBUG_STATUS, false}), %%turn off debugging      
+      ?WAIT("~p temp table add  ~p ~n",[{?MODULE,?LINE},   ets:tab2list(TreeEts) ]),
+
       FactName = erlang:element(1,Body ),
       
       ProtoType = tuple_to_list( common:my_delete_element(1, Body) ),
       
-      ets:insert(TreeEts, {system_record, ?DEBUG_STATUS, false}), %%turn off debugging      
       
-      List = ets:lookup( common:get_logical_name(Prefix,?META_LINKS) , FactName),
+      List = ets:lookup( common:get_logical_name(TreeEts, ?META_LINKS) , FactName),
       Res = foldl_linked_rules(FactName, List, TreeEts, ProtoType),
       ets:delete(TreeEts),
       Res
@@ -1179,6 +1193,8 @@ foldl_linked_rules(FactName, [Head| Tail], TreeEts, ProtoType)->
     ?WAIT("~p start next rule ~p ~p ~n",[{?MODULE,?LINE}, Rule, FactName]),
     
     Res = repeat(3, ?MODULE, aim, [finish, ?ROOT, RuleCall, dict:new(), 1, TreeEts, ?ROOT ]),
+    clean_tree(TreeEts),
+    
     ?COUNT("~p finish rule ~p result ~p ~n",[FactName, Rule, Res]),
     ?WAIT("~p finish rule ~p ~p ~n",[{?MODULE,?LINE}, Rule, {FactName,Res}]),
     foldl_linked_rules(FactName, Tail, TreeEts, ProtoType)
@@ -1197,7 +1213,7 @@ repeat(0, infinity, Module ,Func, Params )->
 
     ?LOG("~p try do infinity function ~p ~n",[{?MODULE,?LINE}, {Module,Func,Params }]), 
     case erlang:apply(Module, Func, Params) of
-	true-> 
+	{true, _ ,_}-> 
 	      true;
 	false-> repeat(0, infinity, Module ,Func, Params )
     end
@@ -1207,8 +1223,9 @@ repeat(Count, Count, Module ,Func, Params )->
 ;
 repeat(Index, Count, Module ,Func, Params )->
     ?LOG("~p try do infinity function ~p count ~p ~n",[{?MODULE,?LINE}, {Module,Func,Params },Index]), 
+    
     case erlang:apply(Module, Func, Params) of
-	{true, _ } -> true ;
+	{true, _ ,_} -> true ;
 	false ->
 		timer:sleep(1500),%TODO move it to settings
 		repeat(Index+1, Count, Module ,Func, Params )
@@ -1613,34 +1630,6 @@ is_deep_rule(Name, TreeEts)->
     end
 .
 
-retract_fold({true,NewContext}, Match, [],_Context, NewList, Table)->
-    ReverS = lists:reverse(NewList),
-    Name = erlang:element(1, Match),
-    ets:delete(Table, Name),
-    ets:insert(Table, ReverS),
-    {true, NewContext};
-    
-retract_fold(false ,_Match, [],Context, List, _Table)->
-   {false, Context};    
-retract_fold(Res = {true, _}, Match, [Head|Tail], Context, List, Table)->
-       retract_fold(Res, Match, Tail, Context, [Head|List], Table) 
-;    
-retract_fold(Res, Match, [Head|Tail], Context, List, Table)->
-	  
-    case  prolog_matching:var_match(Match, Head, Context)  of
-	  {true, NewContext}->
-	    
-	    retract_fold(
-		      {true,NewContext}, Match, Tail, Context, List, Table
-		
-		);
-	 { false, _}->
-		 retract_fold(Res, Match, Tail, Context, [Head|List], Table) 
-	 
-    end    
-.
-
-
 delete_fact(TreeEts, Body, Context ,0)->
         NewBody = prolog_matching:bound_body(Body, Context),   
         Name = erlang:element(1, NewBody),
@@ -1679,7 +1668,8 @@ add_fact(Context, Body, last, TreeEts,  1)->
 %                   link_fact( BodyBounded, TreeEts ),
                     fact_hbase:add_new_fact( BodyBounded, last, TreeEts)
       end,
-      ?DEBUG(" add ~p  yes ~n",[Body ]),
+      ?DEBUG(" add ~p  yes ~n",[BodyBounded ]),
+      
       Res = worker_linked_rules(BodyBounded, TreeEts),
       ?WAIT(" add ~p  result is ~p ~n",[Body, Res ]),
       {true,Context}
@@ -1697,9 +1687,9 @@ add_fact(Context, Body, first,TreeEts, 1)->
             {false, _}->
                     fact_hbase:add_new_fact(BodyBounded, first, TreeEts)
       end,
-      ?LOG(" add ~p  yes ~n",[Body ]),
+      ?LOG(" add ~p  yes ~n",[BodyBounded ]),
       Res = worker_linked_rules(BodyBounded, TreeEts),
-      ?WAIT(" add ~p  result is ~p ~n",[Body, Res ]),
+      ?WAIT(" add ~p  result is ~p ~n",[BodyBounded, Res ]),
       {true, Context}
 ;      
 add_fact(Context, Body, last, TreeEts, 0)->

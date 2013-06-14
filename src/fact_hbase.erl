@@ -51,9 +51,9 @@ create_new_namespace(Prefix)->
     end
 .
 
-
+%TODO add checking of result for this operation( loading code from hbase)
+%%wheather code was  loaded successfully
 load_rules2ets(Prefix)->
-%       prolog:compile("pro.pl"),
       
       Scanner  = generate_scanner(1024,<<>>),
       Family = create_hbase_family_filter("description"),
@@ -260,7 +260,6 @@ get_and_load_rules([], Table )->
 ;
 get_and_load_rules(Scanner, Table)->
 	 ?DEBUG("~p send to ~p ~n",[ {?MODULE,?LINE}, {Scanner } ] ),
-%  	 httpc:set_options( [ {verbose, debug} ]),
 	Host = get_host(Scanner),
         case catch  httpc:request( get, { Scanner,[ {"Accept","application/json"}, {"Host", Host}]},
 				    [ {connect_timeout,?DEFAULT_TIMEOUT },
@@ -398,7 +397,7 @@ fill_rule_tree( Rule, _Table )->
 
 
 start_fact_process( Aim, TreeEts, ParentPid)->
-   spawn_link( ?MODULE, fact_start_link, [ Aim, TreeEts, ParentPid] )
+   spawn( ?MODULE, fact_start_link, [ Aim, TreeEts, ParentPid] )
 .
 %%TODO add rest call to find all facts and rules 
 fact_start_link( Aim,  TreeEts, ParentPid )->
@@ -426,7 +425,6 @@ fact_start_link_hbase( Aim,  TreeEts, ParentPid )->
       ?DEBUG("~p generate scanner ~p ~n",[{?MODULE,?LINE}, {Name,ProtoType } ]),
       process_flag(trap_exit, true),%%for deleting scanners
       NameTable =  common:get_logical_name(TreeEts, Name ),  
-
       case check_params_facts(Name, TreeEts) of
 	  {CountParams, HashFunction} ->
 		 case  check_index(ProtoType, Name, TreeEts) of
@@ -532,7 +530,8 @@ process_indexed_hbase(Table, ProtoType,  PreRes, TreeEts)->
 	      finish->
 		  exit(normal);
 	     {'EXIT', From, Reason} ->
-		  ?WAIT("~p GOT  exit for hbase indexed ~p ~n",[{?MODULE,?LINE}, {From, Reason} ])
+		  ?WAIT("~p GOT  exit for hbase indexed ~p ~n",[{?MODULE,?LINE}, {From, Reason} ]),
+		  exit(normal)
 	end
 .
 hbase_get_key(Table,  Key)->
@@ -618,7 +617,6 @@ check_index(ProtoType, Name, TreeEts)->
 .
 
 process_loop_hbase( Scanner, finish, ProtoType, TreeEts)->
-    delete_scanner(Scanner),
     exit(normal)
 ;
 process_loop_hbase( Scanner, [], ProtoType, TreeEts)->
@@ -629,7 +627,8 @@ process_loop_hbase( Scanner, [], ProtoType, TreeEts)->
 	    {'EXIT', From, Reason} ->
      	  	  ?WAIT("~p GOT  exit in fact hbase ~p ~n",[{?MODULE,?LINE}, ProtoType ]),
 		  ?LOG("~p got exit signal  ~p ~n",[{?MODULE,?LINE}, {From, Reason} ]),
-		   delete_scanner(Scanner)
+		  delete_scanner(Scanner),
+		  exit(normal)
     end
 ;
 
@@ -647,11 +646,13 @@ process_loop_hbase( Scanner, Res, ProtoType, TreeEts)->
 	    {'EXIT', From, Reason} ->
      	  	  ?WAIT("~p GOT  exit in fact hbase ~p ~n",[{?MODULE,?LINE}, ProtoType ]),
 		  ?LOG("~p got exit signal  ~p ~n",[{?MODULE,?LINE}, {From, Reason} ]),
-		  delete_scanner(Scanner);
+		  delete_scanner(Scanner),
+		  exit(normal);
 	    Some ->
     	  	  ?WAIT("~p GOT  wait in fact hbase ~p ~n",[{?MODULE,?LINE}, ProtoType ]),
 		  ?LOG("~p got unexpected ~p ~n",[{?MODULE,?LINE}, Some ]),
-		  delete_scanner(Scanner)
+		  delete_scanner(Scanner),
+		  exit(normal)
 
 	end
 .
@@ -668,7 +669,7 @@ get_facts( Pid )-> %%in this will not work method of cutting logic results
 
 call(Pid,  Atom )->
     ?DEBUG("~p call to hbase reducer  ~n",[{?MODULE,?LINE} ]),
-    Pid !   {self(), Atom } ,
+    Pid !   { self(), Atom } ,
     ?WAIT("~p regis  wait in  inner fact call  ~p ~n",[{?MODULE,?LINE},{Atom, Pid} ]),
     receive 
 	 Result ->
@@ -704,6 +705,7 @@ start_recr(Facts, ProtoType)->
 					  end
 				      end, {<<>>,InIndex}, ProtoType ),
 	  Size = length(ProtoType),
+         ?DEBUG("~p scanner filters ~p ~n",[{?MODULE,?LINE}, Filters ]),
 	  Main = generate_scanner( ?LIMIT*Size , Filters),
 	  ?DEBUG("~p Generate scanner for hbase ~p ~n",[{?MODULE,?LINE},Main ]),
 	  Scanner = get_scanner(Facts, Main),
@@ -721,12 +723,13 @@ generate_scanner(Limit, Some) when is_list(Limit)->
 generate_scanner(Limit, <<>>)->
     <<"<Scanner batch=\"",Limit/binary, "\" />">>
 ;
-generate_scanner(Limit, <<  Filter/binary >>)->
-    <<"<Scanner batch=\"",Limit/binary, "\" ><filter>", Filter/binary ,"</filter></Scanner>" >>
-;
-generate_scanner(Limit, << ",", Filters/binary >>)->
+
+generate_scanner(Limit, << ",",Filters/binary >>)->
     Filter = <<"{  \"type\":\"FilterList\",\"op\":\"MUST_PASS_ALL\",\"filters\":[",
 		    Filters/binary, "] }" >>,
+    <<"<Scanner batch=\"",Limit/binary, "\" ><filter>", Filter/binary ,"</filter></Scanner>" >>
+;
+generate_scanner(Limit, <<  Filter/binary >>)->
     <<"<Scanner batch=\"",Limit/binary, "\" ><filter>", Filter/binary ,"</filter></Scanner>" >>
 .
 %%TODO ADD SUPERVISOUR FOR all scanners
