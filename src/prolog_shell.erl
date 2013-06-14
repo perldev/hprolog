@@ -29,71 +29,71 @@ start(Prefix)->
     prolog:create_inner_structs(Prefix),
     ?INCLUDE_HBASE( Prefix ),
     server(Prefix) 
-
 .
 
 
 server(Prefix) ->
     io:fwrite("Prolog Shell V~s (abort with ^G)\n",
 	      [erlang:system_info(version)]),
-    server_loop(Prefix, ?TRACE_OFF).
+    TreeEts = ets:new(tree_processes,[ public, set,named_table,{ keypos, 2 } ] ),   
+    ets:insert(TreeEts, {system_record,?PREFIX, Prefix}),    
+    server_loop(TreeEts, ?TRACE_OFF).
 
 %% A simple Prolog shell similar to a "normal" Prolog shell. It allows
 %% user to enter goals, see resulting bindings and request next
 %% solution.
 
-server_loop(P0, TraceOn) ->
+server_loop(TreeEts, TraceOn) ->
     process_flag(trap_exit, true),
     case erlog_io:read('| ?- ') of
 	{ok,halt} -> ok;
 	{ok, trace_on}->
 	      io:fwrite("trace on Yes~n"),  
-	      server_loop(P0, ?TRACE_ON)
+	      server_loop(TreeEts, ?TRACE_ON)
 	;
 	{ok, nl}->
 	       io:fwrite("~n"),  
-	       server_loop(P0, TraceOn);
+	       server_loop(TreeEts, TraceOn);
 	{ok, stat}->
 	       io:fwrite("todo this is ~n"),  
-	       server_loop(P0, TraceOn);
+	       server_loop(TreeEts, TraceOn);
 	{ok, listing}->
 	      io:fwrite("listing is ~n"),  
-	      Code = get_code_memory(P0),
+	      Code = get_code_memory(TreeEts),
 	      io:fwrite("~p ~n", [Code]),   
-	      server_loop(P0, TraceOn)
+	      server_loop(TreeEts, TraceOn)
 	;
 	{ok, trace_off}->
 	    io:fwrite("trace off Yes~n"),    
-	    server_loop(P0, ?TRACE_OFF)
+	    server_loop(TreeEts, ?TRACE_OFF)
 	;
 	
 	{ok, debug_on}->
 	    io:fwrite("debug on Yes~n"),  
-	    server_loop(P0, ?DEBUG_ON)
+	    server_loop(TreeEts, ?DEBUG_ON)
 	;
 	{ok, debug_off}->
 	    io:fwrite("debug off Yes~n"),  
 
-	    server_loop(P0, ?DEBUG_OFF)
+	    server_loop(TreeEts, ?DEBUG_OFF)
 	;
 	
 	{ok,Files} when is_list(Files) ->
-% 	    {{ok,Db0},P1} = P0(get_db),
 	    lists:foreach(fun(File)->
-			      case catch(prolog:compile(P0, File)) of
+			      case catch(prolog:compile(TreeEts, File)) of
 				  ok ->
 				      io:fwrite("Yes~n"),    
-				      server_loop(P0, TraceOn);
+				      server_loop(TreeEts, TraceOn);
 				  Error ->
 				      io:fwrite("Error: ~p~n", [Error]),
-				      server_loop(P0, TraceOn)
+				      server_loop(TreeEts, TraceOn)
 			      end
 			    end, Files)
 	    
 	    ;
 	 {ok, Goal = {':-',_,_ } } ->
 		io:fwrite("syntax error may be you want use assert ~p ~n",[Goal]),
-		server_loop(P0, TraceOn);
+		server_loop(TreeEts, TraceOn);
 
 	{ok,Goal} ->
 	      io:fwrite("Goal : ~p~n", [Goal]),
@@ -101,28 +101,24 @@ server_loop(P0, TraceOn) ->
 %% solution make temp aim with updated variables
 	      {TempAim, _ShellContext }=  make_temp_aim(Goal), 
 	      ?DEBUG("TempAim : ~p~n", [TempAim]),
-	      ets:new(tree_processes,[ public, set,named_table,{ keypos, 2 } ] ), 
-	      prolog_trace:trace_on(TraceOn, tree_processes ),
-              ets:insert(tree_processes, {system_record,?PREFIX, P0}),
+	      prolog_trace:trace_on(TraceOn, TreeEts ),              
 
-	      ?DEBUG("~p make temp aim ~p ~n",[ {?MODULE,?LINE}, {TempAim,ets:tab2list(tree_processes)}]),
+	      ?DEBUG("~p make temp aim ~p ~n",[ {?MODULE,?LINE}, TempAim]),
 	      StartTime = erlang:now(),
 	      Res = (catch prolog:aim( finish, ?ROOT, Goal,  dict:new(), 
-                                                1, tree_processes, ?ROOT) ),
-                                                
-	      process_prove(TempAim, Goal, Res, StartTime ),
-	      ets:delete(tree_processes),%%%this is very bad design or solution
-	      server_loop(P0, TraceOn);
-% 	    shell_prove_result(P0({prove,Goal}));
+                                                1, TreeEts, ?ROOT) ),
+               process_prove(TempAim, Goal, Res, StartTime ),
+% 	       clean(tree_processes),%%%this is very bad design or solution
+	       prolog:clean_tree(TreeEts),
+	       server_loop(TreeEts, TraceOn);
 	{error,P = {_, Em, E }} ->
 	    io:fwrite("Error: ~p~n", [P]),
-	    server_loop(P0, TraceOn)
+	    server_loop(TreeEts, TraceOn)
     end.
-
 
 process_prove(  TempAim , Goal, Res, StartTime)->
       case Res of 
-	    {'EXIT', FromPid, Reason}->
+	     {'EXIT', FromPid, Reason}->
 		  ?DEBUG("~p exit aim ~p~n",[{?MODULE,?LINE}, {FromPid,Reason} ]),
 		  io:fwrite("Error~n ~p",[{Reason,FromPid}]),
 		  FinishTime = erlang:now(),
@@ -136,7 +132,7 @@ process_prove(  TempAim , Goal, Res, StartTime)->
                                         Goal, 
                                         SomeContext
                                          ),
-                   ?DEBUG("~p temp  shell context ~p previouse key ~p ~n",[?LINE , New, Prev ]),
+                  ?DEBUG("~p temp  shell context ~p previouse key ~p ~n",[?LINE , New, Prev ]),
 
                   {true, NewLocalContext} = prolog_matching:var_match(Goal, New, dict:new()),                
                                         
@@ -144,8 +140,7 @@ process_prove(  TempAim , Goal, Res, StartTime)->
                   ?SYSTEM_STAT(tree_processes, {0,0,0}),
                   io:fwrite(" elapsed time ~p next solution ~p ~n", [ timer:now_diff(FinishTime, StartTime)*0.000001,Prev ] ),
                   Line = io:get_line(': '),
-                  
-                   case string:chr(Line, $;) of
+                  case string:chr(Line, $;) of
                        0 ->
                          io:fwrite("Yes~n");
                        _ ->
@@ -156,10 +151,8 @@ process_prove(  TempAim , Goal, Res, StartTime)->
 	           
 		   io:fwrite("No ~p~n",[Res]),FinishTime = erlang:now(),
     		   io:fwrite(" elapsed time ~p ~n", [ timer:now_diff(FinishTime, StartTime)*0.000001 ] )
-
-	 	  
-      end     
-.
+     end.
+     
 
 
 
@@ -218,18 +211,12 @@ make_temp_complex_aim( Goal,  Context )->
 .
 % -record(tree, {operator, prototype, body } ).
 get_code_memory(Prefix)->
-	   LocalFacts = ets:tab2list( common:get_logical_name(Prefix,?INNER ) ),
 	   Rules = ets:tab2list(common:get_logical_name(Prefix, ?RULES) ),
 	   Meta = ets:tab2list( common:get_logical_name(Prefix, ?META) ),
 % 	   add_new_rule(Tree = { ':-' ,ProtoType, BodyRule}, Pos )->
 % 	   ?DEBUG("~p new rule to hbase  ~p ~n",[ {?MODULE,?LINE}, Tree ] ),
 %          [ Name | _ProtoType ] = tuple_to_list(ProtoType),
-	     FactsCode = lists:foldl(fun( Tree, In  )->
-				PrologCode =  erlog_io:write1(Tree),
-				?DEBUG("  fact  ~p\n", [ PrologCode ]),
-				V2 = list_to_binary( lists:flatten(PrologCode)++".\n" ),
-				<<In/binary, V2/binary>>
-			end, <<>>, LocalFacts  ),
+
 	     MetaCode = lists:foldl(fun( {Name,Count,_Hash}, In  )->
 				?DEBUG(" meta fact  ~p\n", [{Name,Count}]),
 
@@ -252,20 +239,14 @@ get_code_memory(Prefix)->
 			end, <<>> , Rules  ),
 	   FormatedCode1 = binary:replace(RulesCode,[<<" , ">>],<<"   ,        \n">>, [ global ] ),
 	   FormatedCode = binary:replace(FormatedCode1,[<<":-">>],<<" :-\n">>, [ global ] ),
-	   ResBin = << "\n", MetaCode/binary, FactsCode/binary,FormatedCode/binary >>,
+	   ResBin = << "\n", MetaCode/binary,FormatedCode/binary >>,
 	   binary_to_list(ResBin).
 	   
 get_code_memory_html()->
-	  LocalFacts = ets:tab2list(?INNER),
 	  Rules = ets:tab2list(?RULES),
 	  Meta = ets:tab2list(?META),
 
-          FactsCode = lists:foldl(fun( Tree, In  )->
-				PrologCode =  erlog_io:write1(Tree),
-				?DEBUG("  fact  ~p~n", [ PrologCode ]),
-				V2 = list_to_binary( lists:flatten(PrologCode)++".<br/>" ),
-				<<In/binary, V2/binary>>
-			end, <<>>, LocalFacts  ),
+        
 	   MetaCode = lists:foldl(fun( {Name,Count,_Hash}, In  )->
 				?DEBUG(" meta fact  ~p~n", [{Name,Count}]),
 
@@ -288,7 +269,7 @@ get_code_memory_html()->
 			end, <<>> , Rules  ),
 	   FormatedCode1 = binary:replace(RulesCode,[<<" , ">>],<<"&nbsp;&nbsp;&nbsp;&nbsp;<strong>,</strong><br/>">>, [ global ] ),
 	   FormatedCode = binary:replace(FormatedCode1,[<<":-">>],<<"</strong>:-<br/>">>, [ global ] ),
-	   ResBin = << "<br/>", MetaCode/binary, FactsCode/binary,FormatedCode/binary >>,
+	   ResBin = << "<br/>", MetaCode/binary, FormatedCode/binary >>,
 	   ResBin.
 	   
 

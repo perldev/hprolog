@@ -31,7 +31,38 @@ inner_meta_predicates(Name)->
 get_index(_Index)->
     now().
     
+-ifdef(USE_HBASE).
+    
+clean_tree(TreeEts)->
+    ets:foldl(fun(Elem, Acum)->
+                case Elem of 
+                      {system_record, _, _}-> Acum;
+                      T = #aim_record{next = hbase}->
+                          exit(T#aim_record.solutions, finish ),
+                          ets:delete(TreeEts, T), Acum;
+                      T = #aim_record{} ->
+                        ets:delete(TreeEts, T), Acum
+                end
+              end, true, TreeEts)
+.     
 
+-else.
+
+clean_tree(TreeEts)->
+         ets:foldl(fun(Elem, Acum)->
+                        case Elem of->
+                            {system_record, _, _}-> Acum;
+                            T = #aim_record{} ->
+                                ets:delete(TreeEts, T), Acum
+                        end
+              end, true, TreeEts).
+              
+
+-endif.
+        
+
+    
+    
 %%compile inner memory
 compile(Prefix, File)->
     {ok, Terms } = erlog_io:read_file(File),
@@ -39,12 +70,19 @@ compile(Prefix, File)->
     lists:foldl(fun process_term/2, Prefix,  Terms ),
     ok
 .
+inner_change_namespace(false, _Name, _TreeEts)->
+    false;
+inner_change_namespace(true, Name, TreeEts)->
+    delete_inner_structs(TreeEts),
+    create_inner_structs(Name),
+    ?INCLUDE_HBASE( Name ),
+    ets:insert(TreeEts,{system_record, ?PREFIX, Name})
+.
 
 delete_inner_structs(Prefix)->
 
       ets:delete_all_objects(common:get_logical_name(Prefix, ?RULES) ),
       ets:delete_all_objects(common:get_logical_name(Prefix, ?DYNAMIC_STRUCTS)),
-      ets:delete_all_objects(common:get_logical_name(Prefix, ?INNER) ) ,
       ets:delete_all_objects(common:get_logical_name(Prefix, ?META) ),
       ets:delete_all_objects(common:get_logical_name(Prefix, ?META_LINKS) ),
       ets:delete_all_objects(common:get_logical_name(Prefix, ?HBASE_INDEX))
@@ -57,7 +95,6 @@ create_inner_structs(Prefix)->
     put(?DYNAMIC_STRUCTS, common:get_logical_name(Prefix, ?DYNAMIC_STRUCTS) ),
     
     ets:new(common:get_logical_name(Prefix, ?META),[named_table, set, public]),
-    ets:new(common:get_logical_name(Prefix, ?INNER),[named_table, bag, public]),
     ets:new(common:get_logical_name(Prefix, ?RULES),[named_table, bag, public]),
     ets:new(common:get_logical_name(Prefix, ?META_LINKS),[named_table, bag, public]),
     %the hbase database is for everything
@@ -164,18 +201,17 @@ dynamic_del_link(Fact1, Fact2, TreeEts) ->
 
 .
 dynamic_del_fact(B, TreeEts)->
-      ?WAIT("~p regis  wait del    ~p ~n",[{?MODULE,?LINE},{B} ]),
+      ?WAIT("~p regis  wait del    ~p ~n",[{?MODULE,?LINE},B ]),
        fact_hbase:del_fact(B, TreeEts)
 .
 
 dynamic_del_rule(Search, TreeEts)->
 
-      %%TODO process case when after delete we have empty list of rules
-      %%we must delete table and meta  from hbase 
-       ?WAIT("~p regis  wait del rule    ~p ~n",[{?MODULE,?LINE},Search ]),
-      RulesTable = common:get_logical_name(TreeEts, ?RULES),
-      receive  
-	 start->
+              %%TODO process case when after delete we have empty list of rules
+              %%we must delete table and meta  from hbase 
+              ?WAIT("~p regis  wait del rule    ~p ~n",[{?MODULE,?LINE},Search ]),
+              RulesTable = common:get_logical_name(TreeEts, ?RULES),
+
 	      ?WAIT("~p GOT  wait del rule    ~p ~n",[{?MODULE,?LINE},Search ]),
 
 	      Name  = element(1, Search),
@@ -185,30 +221,28 @@ dynamic_del_rule(Search, TreeEts)->
 	      ?DEBUG("~p got rules by ~p~n",[{?MODULE,?LINE}, {Name, RuleList, ProtoType} ]), %%find matching rules
 	      {NewRuleList, _StatusOut}  = 
 				lists:foldr(fun( SrcE, { In, Status } )->  
-					Pat = erlang:element(2, SrcE  ) ,
-					?DEBUG("~p pattern compare ~p ~n",[{?MODULE,?LINE}, {Pat,ProtoType}]),
-
-					case prolog_matching:match( tuple_to_list(Pat), tuple_to_list(ProtoType),[]) of
-					    []-> { [SrcE| In], Status};
-					    [ Var ]-> 
-						  case Status of
-						    ok-> { In, deleted };
-						    _ -> { [SrcE| In], Status }
-						  end  
-					end
-			      end, {[], ok }, RuleList),
-	    ets:delete(RulesTable, Name),
-	    ?DEBUG("~p new rule list ~p~n",[{?MODULE,?LINE}, NewRuleList ]), %%find matching rules
-	    fact_hbase:del_rule(Name, TreeEts),
-	    ets:insert(RulesTable, NewRuleList),
-	    lists:foreach(fun( { NameRule, Args, Body } )->
+                                                    Pat = erlang:element(2, SrcE  ) ,
+                                                    ?DEBUG("~p pattern compare ~p ~n",[{?MODULE,?LINE}, {Pat,ProtoType}]),
+                                                    case prolog_matching:match( tuple_to_list(Pat), tuple_to_list(ProtoType),[]) of
+                                                        []-> { [SrcE| In], Status};
+                                                        [ Var ]-> 
+                                                            case Status of
+                                                                ok-> { In, deleted };
+                                                                _ -> { [SrcE| In], Status }
+                                                            end  
+                                                    end
+                                            end, {[], ok }, RuleList),
+	      ets:delete(RulesTable, Name),
+	      ?DEBUG("~p new rule list ~p~n",[{?MODULE,?LINE}, NewRuleList ]), %%find matching rules
+	      fact_hbase:del_rule(Name, TreeEts),
+	      ets:insert(RulesTable, NewRuleList),
+	      lists:foreach(fun( { NameRule, Args, Body } )->
 				  
 				  ResProtoType = list_to_tuple( [ NameRule | tuple_to_list(Args) ] ) ,
 				  Tree = {':-',ResProtoType, Body },
 				  fact_hbase:add_new_rule(Tree, first, TreeEts )
 				  
 			    end, NewRuleList )
-      end
 .
 %%used by prolog operator assert
 %%TODO adding rules like this test:-write() - without arguments
@@ -226,7 +260,6 @@ dynamic_new_rule(Tree = {':-',ProtoType, Body} , first, TreeEts )->
 	       ets:insert(RulesName,  [ New  | List]  )
 	      
       end
-      
 ;
 dynamic_new_rule(Tree = {':-',ProtoType, Body} , last, TreeEts )->
      Name  = element(1, ProtoType),
@@ -315,17 +348,24 @@ inner_defined_aim(NextBody, PrevIndex ,{ 'asserta', Body = {':-', _ProtoType, _B
      {true,Context}
     
 ;
+
+
 inner_defined_aim(NextBody, PrevIndex ,{ 'assertz', Body   }, Context, Index, TreeEts  ) when is_tuple(Body)->
-    inner_defined_aim(NextBody, PrevIndex , { 'assert', Body   }, Context, Index, TreeEts   )
+      inner_defined_aim(NextBody, PrevIndex , { 'assert', Body   }, Context, Index, TreeEts   )
 ;
-
-
 inner_defined_aim(NextBody, PrevIndex ,{ 'assert', Body   }, Context, _Index, TreeEts  ) when is_tuple(Body)->     
       add_fact(Context, Body, last, TreeEts, ?SIMPLE_HBASE_ASSERT)     
 ;
 inner_defined_aim(NextBody, PrevIndex ,{ 'asserta', Body   }, Context, _Index, TreeEts  ) when is_tuple(Body)->
-     add_fact(Context, Body, first, TreeEts, ?SIMPLE_HBASE_ASSERT);
-
+      add_fact(Context, Body, first, TreeEts, ?SIMPLE_HBASE_ASSERT)
+;
+inner_defined_aim(NextBody, PrevIndex, {'inner_retract___', Body }, Context, _index, TreeEts)->
+%%only facts
+%%TODO rules
+     delete_fact(TreeEts, Body, Context,?SIMPLE_HBASE_ASSERT),
+     %%it's alway true cause this system predicat  must be used before call(X)
+     {true, Context}
+; 
 inner_defined_aim(NextBody, PrevIndex, Body = { 'meta', _FactName, _ParamName, Val }, Context, _Index, TreeEts  )->
     NewBody = prolog_matching:bound_body(Body, Context),
     Res = fact_hbase:meta_info(NewBody,  TreeEts),     
@@ -386,9 +426,17 @@ inner_defined_aim(NextBody, PrevIndex ,{ atom, Body  }, Context, _Index, _  ) ->
     {Res, Context} 
 ;
 %%TODO 
-inner_defined_aim(NextBody, PrevIndex ,{ use_namespace, Name  }, Context, _Index, _  ) ->
+inner_defined_aim(NextBody, PrevIndex ,{ use_namespace, Name  }, Context, _Index, TreeEts  ) ->
 %     Res = fact_hbase:create_new_namespace(Name),
-     {true, Context}   
+     Body = prolog_matching:bound_body( Name, Context),
+     Res  = case is_list(Body) of
+                true ->   
+                    TableName = Name++?META_FACTS,
+                    inner_change_namespace( fact_hbase:check_exist_table(TableName), Name, TreeEts ),
+                    true;
+                false -> false
+            end,
+     {Res, Context}   
 ;
 
 inner_defined_aim(NextBody, PrevIndex ,{ create_namespace, Name  }, Context, _Index, _  ) ->
@@ -523,8 +571,7 @@ inner_defined_aim(NextBody, PrevIndex ,{ 'assert', SourceFact,  ForeignFact, Rul
 		  {SourceFact, ForeignFact, RuleName  }),
       {true, Context}
 ;
-
-
+%%del only link
 inner_defined_aim(NextBody, PrevIndex ,{ 'retract', FirstFact, SecondFact } , Context, _Index, TreeEts  ) when is_atom(FirstFact)->
 	Pid = spawn(?MODULE, dynamic_del_link, [ FirstFact, SecondFact, TreeEts ] ),
 	unlink(Pid),
@@ -610,7 +657,14 @@ inner_defined_aim(NextBody, PrevIndex , {'is',  NewVarName = { _Accum }, Expr },
 	 prolog_matching:var_match(NewVarName, CalcRes, Context)
 
 ;
+% L =.. [ F | Args ],
 
+inner_defined_aim(NextBody, PrevIndex ,{ '=..', First, Second }, Context, _Index, _TreeEts  )->
+    Second = prolog_matching:bound_body(Second, Context),
+    ToTerm = list_to_tuple(Second),
+    prolog_matching:var_match(First, ToTerm, Context)
+   
+;
 inner_defined_aim(NextBody, PrevIndex ,{ '=:=', First, Second }, Context, _Index, _TreeEts  )->
     One = arithmetic_process(First, Context),
     Two = arithmetic_process(Second, Context),
@@ -667,6 +721,21 @@ inner_defined_aim(NextBody, PrevIndex , {'=\\=', First, Second }, Context, _Inde
     Res = { not_compare(One ,Two), Context },
     Res.
 
+aim(NextBody, PrevIndex , {retract, Body }, Context, Index, TreeEts, Parent)->
+       %%we make just to temp aims with two patterns 
+         ets:insert(TreeEts,
+         #aim_record{ id = Index,
+                      prototype = { retract,  Body },
+                      temp_prototype = { retract, Body  }, 
+                      solutions = [ { retract, { {'_X_RETRACTING'} } , {',',{call,{'_X_RETRACTING'} }, {'inner_retract___', {'_X_RETRACTING'}  }   } } ],
+                      next = one,
+                      prev_id = PrevIndex,
+                      context = Context,
+                      next_leap = NextBody,
+                      parent = Parent 
+                      }),                      
+         next_aim(Parent, Index, TreeEts ) 
+;
 aim(_NextBody, _PrevIndex ,'fail', Context, _Index, TreeEts, Parent  ) ->
         false
 ;
@@ -789,12 +858,13 @@ user_defined_aim(NextBody, PrevIndex, ProtoType, Context, Index, TreeEts, Parent
 .
 hbase_user_defined_aim([], NextBody, PrevIndex, ProtoType, Context, Index, TreeEts, Parent)->
         %%search fact in hbase
-        
-         HbasePid = fact_hbase:start_fact_process( ProtoType, TreeEts, self() ),
+         BoundProtoType = bound_aim(ProtoType, Context),
+         {TempSearch, _NewContext} = prolog_shell:make_temp_aim(BoundProtoType),%% think about it
+         HbasePid = fact_hbase:start_fact_process( BoundProtoType, TreeEts, self() ),
           ets:insert(TreeEts,
          #aim_record{ id = Index,
-                      prototype = ProtoType,
-                      temp_prototype = ProtoType, 
+                      prototype = BoundProtoType,
+                      temp_prototype = TempSearch, 
                       solutions = HbasePid,
                       next = hbase,
                       prev_id = PrevIndex,
@@ -993,7 +1063,11 @@ process_next_hbase( [Res], T, TreeEts, Parent)->
         Name =  erlang:element(1, T#aim_record.prototype ),
         BoundProtoType = list_to_tuple( [Name|tuple_to_list( Res )] ),
         %%MUST BE TRUE
-        { true, NewLocalContext } = prolog_matching:var_match(BoundProtoType, T#aim_record.temp_prototype, T#aim_record.context),
+        ?DEBUG("~p bound temp aim  ~p ~n",[{?MODULE,?LINE},
+                                           {T#aim_record.prototype, T#aim_record.temp_prototype, BoundProtoType }]),
+                                  
+                                           
+        { true, NewLocalContext } = prolog_matching:var_match(BoundProtoType, T#aim_record.prototype, T#aim_record.context),
         %%TODO remove all logs with dict:to_list functions
         ?DEBUG("~p process FACT ~p ~n",[{?MODULE,?LINE},  {
                                                             T#aim_record.prototype,
@@ -1078,21 +1152,38 @@ next_in_current_leap(T, TreeEts, ThatLocalContext, Prev, Tail, Parent )->
 
 %%working with linked facts this is the first step for implementation expert dynamic  system
 worker_linked_rules(Body, Prefix)->
-      TreeEts = ets:new(some_name ,[set,public]),
-      
+      TreeEts = ets:new(some_name ,[set, private]),
       ets:insert(TreeEts, {system_record, ?PREFIX, Prefix }),
-      
       FactName = erlang:element(1,Body ),
       
       ProtoType = tuple_to_list( common:my_delete_element(1, Body) ),
       
-      ets:insert(TreeEts, {system_record, ?DEBUG_STATUS, false}), %%turn off debugging
+      ets:insert(TreeEts, {system_record, ?DEBUG_STATUS, false}), %%turn off debugging      
       
       List = ets:lookup( common:get_logical_name(Prefix,?META_LINKS) , FactName),
-%       foldl4(FactName, List, TreeEts, ProtoType),
-      ets:delete(TreeEts)
-
+      Res = foldl_linked_rules(FactName, List, TreeEts, ProtoType),
+      ets:delete(TreeEts),
+      Res
 .
+
+%  Res = (catch prolog:aim( finish, ?ROOT, Goal,  dict:new(), 
+%                                                 1, tree_processes, ?ROOT) ),
+foldl_linked_rules(FactName, [], _TreeEts, _ProtoType)->
+    ?WAIT("~p finish add  ~p ~p ~n",[{?MODULE,?LINE},  FactName, true]),
+    true
+;
+foldl_linked_rules(FactName, [Head| Tail], TreeEts, ProtoType)->
+    {_, _NameFact, Rule   } = Head,
+    ?LOG("~p try do rule ~p for ~p ~n",[{?MODULE,?LINE}, Rule, FactName]),
+    RuleCall = list_to_tuple([Rule| ProtoType]),
+    ?WAIT("~p start next rule ~p ~p ~n",[{?MODULE,?LINE}, Rule, FactName]),
+    
+    Res = repeat(3, ?MODULE, aim, [finish, ?ROOT, RuleCall, dict:new(), 1, TreeEts, ?ROOT ]),
+    ?COUNT("~p finish rule ~p result ~p ~n",[FactName, Rule, Res]),
+    ?WAIT("~p finish rule ~p ~p ~n",[{?MODULE,?LINE}, Rule, {FactName,Res}]),
+    foldl_linked_rules(FactName, Tail, TreeEts, ProtoType)
+.
+
 
 
 
@@ -1117,9 +1208,9 @@ repeat(Count, Count, Module ,Func, Params )->
 repeat(Index, Count, Module ,Func, Params )->
     ?LOG("~p try do infinity function ~p count ~p ~n",[{?MODULE,?LINE}, {Module,Func,Params },Index]), 
     case erlang:apply(Module, Func, Params) of
-	true-> true;
-	false->
-		timer:sleep(1500),%TODO make it setting
+	{true, _ } -> true ;
+	false ->
+		timer:sleep(1500),%TODO move it to settings
 		repeat(Index+1, Count, Module ,Func, Params )
     end
 .
@@ -1128,36 +1219,7 @@ repeat(Index, Count, Module ,Func, Params )->
 
 delete_about_me(Index,TreeEts)->
     ets:delete(TreeEts, Index).
-    
-%%function process the last aim in the tree
 
-aim_loop([{false, _ }],  _, Index, _, _, Context)->
-      {false, Context,Index }
-;
-aim_loop({false, _ },  _, Index, _, _, Context)->
-      {false, Context ,Index}
-;
-aim_loop([{?EMPTY, _Some }], _, Index, _, _, Context)->
-	{?EMPTY, Context, Index}
-;
-aim_loop({?EMPTY, _Some }, _, Index, _, _, Context)->
-	{?EMPTY, Context, Index}
-;
-aim_loop({Result, _SomeContext},  ParentPid,  Index, _TreeEts, true, LocalContext)->
-	?DEBUG("~p true process result on one leap ~p ~n",[{?MODULE,?LINE}, Result ]),
-        {true, LocalContext, Index}
-;
-aim_loop({Result, NewLocalContext},  ParentPid,  Index, _TreeEts, Body, LocalContext)->
-	{true, NewLocalContext, Index}	  
-	
-;
-
-%%%TODO may be change it to record ??!!!
-aim_loop(Result,  ParentPid,  
-	Index, TreeEts, Body, LocalContext)->
-	?DEBUG("~p process result on one leap ~p ~n",[{?MODULE,?LINE}, {Result, Body} ]),
-        Result
-.      	
 
 
 % {':-',
@@ -1358,7 +1420,7 @@ is_rule([])->
 is_rule([Head|Tail])->
       %TODO
       case prolog_matching:is_var(Head) of
-	    true-> true;
+	    true -> true;
 	    _ -> 
 		  is_rule(Tail)
       end
@@ -1509,14 +1571,6 @@ not_compare(_One, _Two) ->
 .
 
 
-%%for using by super visor
-assert(Body)->
-	  %%TODO add buffer 
-	  Pid = spawn_link(?MODULE, worker_linked_rules_conv, [Body] ),
-	  {ok, Pid }
-.
-
-
 
 bound_aim(ProtoType, Context)->
 	BoundedSearch = prolog_matching:bound_body(ProtoType, Context ),
@@ -1549,84 +1603,8 @@ operators( Op )->
 .
 -endif.
 
-%%%HACK rewrite to tail recursion
-start_retract_process([], _BodyBounded, Context, _Index, _TreeEts, ParentPid)->
-    ?DEBUG("~p wait for delete ~p ",[{?MODULE,?LINE}, have_no_other ]),
-    receive 
-	next ->
-	      ParentPid ! {result, {false, Context} }
-    end;
-    
-     
-%TODO rewrite this !!
-start_retract_process(FactList, BodyBounded, Context, Index, TreeEts, ParentPid) when is_list(BodyBounded)->
-      [Head| _Tail] = BodyBounded,
-      Name = erlang:element(1, Head),
-      ?DEBUG("~p wait for delete ~p ",[{?MODULE,?LINE}, BodyBounded ]),
-      FactTable = common:get_logical_name(TreeEts,?INNER ),
-      receive 
-	  next ->
-		Res = retract_fold(false, BodyBounded, FactList, Context, [], FactTable ),
-		
-		case Res of
-		    {false, _ }->  ParentPid ! {result, Res };
-		    {true, _} ->
-			ParentPid ! {result, Res},
-			NewFactList = ets:lookup(FactTable, Name),
-			start_retract_process(NewFactList, BodyBounded,  Context, Index, TreeEts, ParentPid)
-		end
-      end
-.
-%TODO rewrite this !!
-start_retract_process(BodyBounded, Context, Index, TreeEts, ParentPid) when is_tuple(BodyBounded)->
-    Name = erlang:element(1, BodyBounded),
-    ?DEBUG("~p wait for delete ~p ",[{?MODULE,?LINE}, Name ]),
-    FactTable = common:get_logical_name(TreeEts,?INNER ),
-    OutFacts = common:get_logical_name(TreeEts, ?META),
-    receive 
-	next ->
-		?DEBUG("~p retract got next  ~n",[{?MODULE,?LINE}]),
-
-		case is_deep_rule( Name, TreeEts ) of
-		     true ->
-			%%TODO BOUNDING of CONSTANS
-			Pid = spawn(?MODULE, dynamic_del_rule, [BodyBounded, TreeEts]),
- 		    	unlink(Pid),
-		        Pid ! start,
-		        ParentPid !  {result, {true, Context} },
-		        start_retract_process(BodyBounded, Context, Index, TreeEts, ParentPid);
-		      
-		     false->
-			DelRes =
-			    case ets:lookup(OutFacts, Name ) of 
-			      [_] ->
-				  Res = dynamic_del_fact(BodyBounded, TreeEts),
-				  ?DEBUG("~p delete fact ~p ",[{?MODULE,?LINE}, {Name, Res} ]),
-				  {Res, Context };
-			      [] ->    
-				      case ets:lookup(FactTable, Name)  of
-				      [] ->
-					    ParentPid ! {result, {false, Context} };
-				      FactList ->
-					  ?DEV_DEBUG("~p got list ~p ",[{?MODULE,?LINE},FactList ]),
-					  Res = retract_fold(false, BodyBounded, FactList, Context, [], FactTable ),
-					  ?DEV_DEBUG("~p delete  res ~p ",[{?MODULE,?LINE},Res ]),
-					  Res
-					
-				      end
-			    end,
-			    case DelRes of
-					      {false, _ }->  ParentPid ! {result, DelRes };
-					      {true, _} ->
-						  ParentPid ! {result, DelRes},
-						  start_retract_process( BodyBounded, Context, Index, TreeEts, ParentPid)
-			    end
-		end
-    end
- 
-.
 %TODO avoid this by saving facts and rules in one table
-
+%%comments we are not able avoid with using HBASE
 is_deep_rule(Name, TreeEts)->
     FactTable = common:get_logical_name(TreeEts,?RULES ),
     case ets:lookup(FactTable, Name) of
@@ -1662,37 +1640,78 @@ retract_fold(Res, Match, [Head|Tail], Context, List, Table)->
     end    
 .
 
+
+delete_fact(TreeEts, Body, Context ,0)->
+        NewBody = prolog_matching:bound_body(Body, Context),   
+        Name = erlang:element(1, NewBody),
+        ProtoType = common:my_delete_element(1, NewBody),
+        ?DEV_DEBUG("~p retracting fact ~p",[{?MODULE,?LINE},  NewBody]),
+        %%TODO deleting matching rules !!! now we delete only facts
+        ets:delete_object(common:get_logical_name(TreeEts, ?RULES), {Name, ProtoType, true } );
+delete_fact(TreeEts, Body, Context ,1)->
+        BodyBounded = prolog_matching:bound_body(Body, Context),   
+        Name = erlang:element(1, BodyBounded),
+        case  is_deep_rule(Name, TreeEts) of
+                     true ->
+                        %%TODO BOUNDING of CONSTANS
+                        ?DEV_DEBUG("~p delete rule ~p ~n", [{?MODULE,?LINE},BodyBounded]),
+                        erlang:apply(?MODULE, dynamic_del_rule, [BodyBounded, TreeEts]);
+%                         unlink(Pid);
+                        
+                     false ->
+                        ?DEV_DEBUG("~p delete fact ", [{?MODULE,?LINE}]),
+                         dynamic_del_fact(BodyBounded, TreeEts)
+        end.
+
+
+%%%TODO test various variants wheather worker_linked_rules is failed or dynamic_new_rule/add_new_fact was failed
 add_fact(Context, Body, last, TreeEts,  1)->
       BodyBounded = bound_aim(Body, Context),
-      case is_rule(BodyBounded) of 
-            true -> 
+      Name = erlang:element(1, Body),
+      CheckResult = {is_deep_rule(Name, TreeEts), is_rule( BodyBounded )},
+      ?DEV_DEBUG("~p add fact ~p", [{?MODULE,?LINE}, {CheckResult,BodyBounded}]),
+      case CheckResult of 
+            {true,_} -> 
                     dynamic_new_rule(  {':-', Body, true }, last, TreeEts );
-            false ->
+            {false, true} -> 
+                    dynamic_new_rule(  {':-', Body, true }, last, TreeEts );       
+            {false, false  }->
 %                   link_fact( BodyBounded, TreeEts ),
                     fact_hbase:add_new_fact( BodyBounded, last, TreeEts)
       end,
       ?DEBUG(" add ~p  yes ~n",[Body ]),
-      {true,Context};
+      Res = worker_linked_rules(BodyBounded, TreeEts),
+      ?WAIT(" add ~p  result is ~p ~n",[Body, Res ]),
+      {true,Context}
+;
 add_fact(Context, Body, first,TreeEts, 1)->
       BodyBounded = bound_aim(Body, Context),
-      case is_rule( BodyBounded ) of 
-            true -> 
+      Name = erlang:element(1, Body), 
+      CheckResult = {is_deep_rule(Name, TreeEts), is_rule( BodyBounded )},
+      ?DEV_DEBUG("~p add fact ~p", [{?MODULE,?LINE}, {CheckResult,BodyBounded}]),
+      case CheckResult of 
+            {true,_} -> 
                     dynamic_new_rule(  {':-', BodyBounded, true }, first, TreeEts);
-            false ->
-%                   link_fact( BodyBounded, TreeEts ),
+            {false, true } ->
+                    dynamic_new_rule(  {':-', BodyBounded, true }, first, TreeEts);
+            {false, _}->
                     fact_hbase:add_new_fact(BodyBounded, first, TreeEts)
       end,
       ?LOG(" add ~p  yes ~n",[Body ]),
-      {true, Context};
-      
+      Res = worker_linked_rules(BodyBounded, TreeEts),
+      ?WAIT(" add ~p  result is ~p ~n",[Body, Res ]),
+      {true, Context}
+;      
 add_fact(Context, Body, last, TreeEts, 0)->
       BodyBounded = bound_aim(Body, Context),
       dynamic_new_rule(  {':-', BodyBounded, true }, last, TreeEts ),
-      {true, Context};
+      {true, Context}
+;
 add_fact(Context, Body, first, TreeEts, 0)->
       BodyBounded = bound_aim(Body, Context),
       dynamic_new_rule(  {':-', BodyBounded, true }, first, TreeEts ),
-      {true, Context}. 
+      {true, Context}
+. 
  
       
 
