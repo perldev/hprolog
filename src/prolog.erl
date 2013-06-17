@@ -81,7 +81,7 @@ inner_change_namespace(true, Name, TreeEts)->
 .
 
 delete_structs(Prefix)->
-
+      ets:delete(common:get_logical_name(Prefix, ?META_WEIGHTS) ),
       ets:delete(common:get_logical_name(Prefix, ?RULES) ),
       ets:delete(common:get_logical_name(Prefix, ?DYNAMIC_STRUCTS)),
       ets:delete(common:get_logical_name(Prefix, ?META) ),
@@ -89,7 +89,7 @@ delete_structs(Prefix)->
       ets:delete(common:get_logical_name(Prefix, ?HBASE_INDEX))
 .
 delete_inner_structs(Prefix)->
-
+      ets:delete_all_objects(common:get_logical_name(Prefix, ?META_WEIGHTS) ),
       ets:delete_all_objects(common:get_logical_name(Prefix, ?RULES) ),
       ets:delete_all_objects(common:get_logical_name(Prefix, ?DYNAMIC_STRUCTS)),
       ets:delete_all_objects(common:get_logical_name(Prefix, ?META) ),
@@ -102,7 +102,7 @@ create_inner_structs(Prefix)->
     ets:new(common:get_logical_name(Prefix, ?DYNAMIC_STRUCTS),[named_table, set, public]),
     %TODO remove this
     put(?DYNAMIC_STRUCTS, common:get_logical_name(Prefix, ?DYNAMIC_STRUCTS) ),
-    
+    ets:new(common:get_logical_name(Prefix, ?META_WEIGHTS),[named_table, set, public] ),
     ets:new(common:get_logical_name(Prefix, ?META),[named_table, set, public]),
     ets:new(common:get_logical_name(Prefix, ?RULES),[named_table, bag, public]),
     ets:new(common:get_logical_name(Prefix, ?META_LINKS),[named_table, bag, public]),
@@ -164,7 +164,8 @@ bound_list( [Head|Tail], Context, PreRes) -> %we know that it's not a list
 hack_match_results_aim(Body, Result, Context)->
  	Name = element(1,Body ),
 	NewResult = list_to_tuple( [Name |  tuple_to_list(Result) ] ),
-        prolog_matching:var_match(  Body, NewResult,  Context).	
+        prolog_matching:var_match(  Body, NewResult,  Context)
+.	
 	
 
 bound_vars(Search, Context) ->
@@ -193,9 +194,7 @@ var_generator_name(Name)->
 dynamic_del_link(Fact1, Fact2, TreeEts) ->
     ?WAIT("~p regis  wait del link   ~p ~n",[{?MODULE,?LINE},{Fact1, Fact2} ]),
     TableName = common:get_logical_name( TreeEts, ?META_LINKS),
-    receive 
-	  start ->
-	       ?WAIT("~p GOT  wait del link   ~p ~n",[{?MODULE,?LINE},{Fact1, Fact2} ]),
+    ?WAIT("~p GOT  wait del link   ~p ~n",[{?MODULE,?LINE},{Fact1, Fact2} ]),
 		List = ets:lookup(TableName, Fact1 ),
 		ets:delete(TableName, Fact1 ), %delete links in memory
 		lists:foreach(fun(  Val = { _Fact, Elem, _Val1 } )->
@@ -204,10 +203,7 @@ dynamic_del_link(Fact1, Fact2, TreeEts) ->
 				      _ ->  ets:insert(TableName, Val)    
 				  end
 			      end,  List  ),	  
-		fact_hbase:del_link_fact(Fact1, Fact2, TableName),
-		exit(normal)
-      end
-
+		fact_hbase:del_link_fact(Fact1, Fact2, TreeEts)
 .
 dynamic_del_fact(B, TreeEts)->
       ?WAIT("~p regis  wait del    ~p ~n",[{?MODULE,?LINE},B ]),
@@ -215,14 +211,11 @@ dynamic_del_fact(B, TreeEts)->
 .
 
 dynamic_del_rule(Search, TreeEts)->
-
               %%TODO process case when after delete we have empty list of rules
               %%we must delete table and meta  from hbase 
               ?WAIT("~p regis  wait del rule    ~p ~n",[{?MODULE,?LINE},Search ]),
               RulesTable = common:get_logical_name(TreeEts, ?RULES),
-
 	      ?WAIT("~p GOT  wait del rule    ~p ~n",[{?MODULE,?LINE},Search ]),
-
 	      Name  = element(1, Search),
 	      ProtoType  = common:my_delete_element(1, Search),
 	      RuleList = ets:lookup(RulesTable, Name),
@@ -250,7 +243,6 @@ dynamic_del_rule(Search, TreeEts)->
 				  ResProtoType = list_to_tuple( [ NameRule | tuple_to_list(Args) ] ) ,
 				  Tree = {':-',ResProtoType, Body },
 				  fact_hbase:add_new_rule(Tree, first, TreeEts )
-				  
 			    end, NewRuleList )
 .
 %%used by prolog operator assert
@@ -582,9 +574,7 @@ inner_defined_aim(NextBody, PrevIndex ,{ 'assert', SourceFact,  ForeignFact, Rul
 ;
 %%del only link
 inner_defined_aim(NextBody, PrevIndex ,{ 'retract', FirstFact, SecondFact } , Context, _Index, TreeEts  ) when is_atom(FirstFact)->
-	Pid = spawn(?MODULE, dynamic_del_link, [ FirstFact, SecondFact, TreeEts ] ),
-	unlink(Pid),
-	Pid ! start,
+	erlang:apply(?MODULE, dynamic_del_link, [ FirstFact, SecondFact, TreeEts ] ),
         ?LOG("~p del ~p  yes ~n",[ {?MODULE,?LINE}, {  FirstFact, SecondFact } ] ), 
         %%all this Previndex just for retract and !
         {true, Context}
@@ -1138,7 +1128,6 @@ next_in_current_leap(T = #aim_record{prototype = ?LAMBDA}, TreeEts, ThatLocalCon
 %%we must check again cause ! inside in rule can cut another leaps
      [NewT] = ets:lookup(TreeEts, T#aim_record.id), %%Think a lot how avoid this
      ets:insert(TreeEts, NewT#aim_record{ next = Prev}),
-     
      NewIndex2 = get_index( Prev  ), 
      conv3( T#aim_record.next_leap , ThatLocalContext, T#aim_record.id, NewIndex2, TreeEts, Parent )  
 ;
@@ -1167,14 +1156,14 @@ worker_linked_rules(Body, OutTree)->
       [Prefix] = ets:lookup(OutTree, ?PREFIX),
       ets:insert(TreeEts, Prefix),
       ets:insert(TreeEts, {system_record, ?DEBUG_STATUS, false}), %%turn off debugging      
-      ?WAIT("~p temp table add  ~p ~n",[{?MODULE,?LINE},   ets:tab2list(TreeEts) ]),
+      
 
       FactName = erlang:element(1,Body ),
       
       ProtoType = tuple_to_list( common:my_delete_element(1, Body) ),
-      
-      
       List = ets:lookup( common:get_logical_name(TreeEts, ?META_LINKS) , FactName),
+      ?WAIT("~p temp table add  ~p ~n",[{?MODULE,?LINE},   List ]),
+      
       Res = foldl_linked_rules(FactName, List, TreeEts, ProtoType),
       ets:delete(TreeEts),
       Res
@@ -1189,11 +1178,12 @@ foldl_linked_rules(FactName, [], _TreeEts, _ProtoType)->
 foldl_linked_rules(FactName, [Head| Tail], TreeEts, ProtoType)->
     {_, _NameFact, Rule   } = Head,
     ?LOG("~p try do rule ~p for ~p ~n",[{?MODULE,?LINE}, Rule, FactName]),
+    clean_tree(TreeEts),
     RuleCall = list_to_tuple([Rule| ProtoType]),
     ?WAIT("~p start next rule ~p ~p ~n",[{?MODULE,?LINE}, Rule, FactName]),
     
     Res = repeat(3, ?MODULE, aim, [finish, ?ROOT, RuleCall, dict:new(), 1, TreeEts, ?ROOT ]),
-    clean_tree(TreeEts),
+    
     
     ?COUNT("~p finish rule ~p result ~p ~n",[FactName, Rule, Res]),
     ?WAIT("~p finish rule ~p ~p ~n",[{?MODULE,?LINE}, Rule, {FactName,Res}]),

@@ -40,6 +40,37 @@
 % 10> erlog_parse:term(Terms3).
 % {ok,{':-',{fact,{'X'}},
 %           {',',{fact1,{'X'}},{',',{fact2,{'X1'}},{fact,{'X1'}}}}}}
+weight_prolog_sort(Prefix)->
+        Weights = common:get_logical_name(Prefix, ?META_WEIGHTS),
+        Links = common:get_logical_name(Prefix, ?META_LINKS),
+        FirstKey = ets:first(Links),
+        NewList = process_ets_key(FirstKey, Links, Weights, []),
+        ets:delete_all_objects(Links),
+        lists:foreach(fun(L)-> ets:insert(Links,L ) end, NewList)
+.
+
+
+process_ets_key('$end_of_table', _Links, _Weights, Acum)->
+    Acum;
+process_ets_key(Key, Links, Weights, Acum)->
+    List = ets:lookup(Links, Key),
+    List1 = lists:sort( fun(A, B)->
+                                {_FactName, NameFact, _RuleNameA   } = A,
+                                {_FactName1, NameFact1, _RuleNameB   } = B,
+                                [ WeightsB ] = ets:lookup(Weights, NameFact),
+                                [ WeightsA ] = ets:lookup(Weights, NameFact1),
+                                ?DEBUG("~p compare weights ~p ~n",[{?MODULE,?LINE}, {WeightsB, WeightsA }]),
+
+                                erlang:element(3,WeightsB) > erlang:element(3,WeightsA)                  
+                        end, List),
+    NewKey = ets:next(Links, Key),
+    process_ets_key(NewKey, Links, Weights, [List1|Acum] )
+.
+% {Name, common:inner_to_int(Count),
+%                                common:inner_to_int(Weight),  
+%                                common:inner_to_int(Popularity) } = A,
+
+
 
 create_new_namespace(Prefix)->
     case  check_exist_table(Prefix ++ ?META_FACTS) of
@@ -57,20 +88,31 @@ load_rules2ets(Prefix)->
       
       Scanner  = generate_scanner(1024,<<>>),
       Family = create_hbase_family_filter("description"),
+
+      MetaInfo = create_hbase_family_filter(?STAT_FAMILY),
+
       FamilyLinks = create_hbase_family_filter(?LINKS_FAMILY),
       CacheLinks = create_hbase_family_filter(?CACHE_FAMILY),
       ScannerCache  = generate_scanner(1024,  CacheLinks),
       ScannerMeta  = generate_scanner(?META_INFO_BATCH,  Family),      
       ScannerAiMeta  = generate_scanner(1024,  FamilyLinks),
+      
+      ScannerMetaInfo = generate_scanner(?META_INFO_BATCH,  MetaInfo),      
+      ScannerUrlMetaInfo  = get_scanner(common:get_logical_name(Prefix, ?META_FACTS), ScannerMetaInfo),
       ScannerUrlCacheMeta  = get_scanner(common:get_logical_name(Prefix, ?META_FACTS), ScannerCache),
       ScannerUrlAiMeta  = get_scanner(common:get_logical_name(Prefix, ?META_FACTS), ScannerAiMeta),
       ScannerUrlMeta  = get_scanner(common:get_logical_name(Prefix, ?META_FACTS), ScannerMeta),
       ScannerUrl  = get_scanner(common:get_logical_name(Prefix, ?RULES_TABLE), Scanner),
       ?DEBUG("~p get scanner url ~p ~n",[{?MODULE,?LINE}, ScannerUrl]),
-      get_cache_meta_info(ScannerUrlCacheMeta, common:get_logical_name(Prefix, ?HBASE_INDEX) ), %%cach is inner struct 
+
+      
+      get_and_load_meta_weights(ScannerUrlMetaInfo, common:get_logical_name(Prefix,?META_WEIGHTS) ),
+      get_cache_meta_info(ScannerUrlCacheMeta, common:get_logical_name(Prefix, ?HBASE_INDEX) ), %%cach is inner struct       
       get_link_meta_info(ScannerUrlAiMeta, common:get_logical_name(Prefix, ?META_LINKS)  ),
       get_meta_facts(ScannerUrlMeta, common:get_logical_name(Prefix, ?META) ),
-      get_and_load_rules(ScannerUrl, common:get_logical_name(Prefix,?RULES) )
+      get_and_load_rules(ScannerUrl, common:get_logical_name(Prefix,?RULES) ),
+      weight_prolog_sort(Prefix)
+     
 .
 
 get_cache_meta_info([], Table)->
@@ -230,6 +272,72 @@ process_meta_link(Meta, Table)->
 					
 		      end, Links )
 .
+
+process_meta_weights(<<"">>, _Table )->
+     []
+; 
+process_meta_weights([], _Table )->
+     []
+; 
+process_meta_weights(Meta, Table ) when is_list(Meta)->
+      process_meta_weights(  list_to_binary(Meta), Table )
+;   
+process_meta_weights(Meta, Table )->
+      Json = jsx:decode( Meta ),
+      ?DEBUG("~p got meta ~p ~n",[ {?MODULE,?LINE}, Json ] ),
+      [{_Row, Facts }] = Json,
+      lists:foldl(fun process_hbase_meta_weight_fact/2, Table, Facts )
+.
+process_hbase_meta_weight_fact(Fact, Table)->
+%       [{<<"key">>,<<"aXA=">>},
+%                               {<<"Cell">>,
+%                                [[{<<"column">>,<<"ZGVzY3JpcHRpb246Y291bnQ=">>},
+%                                  {<<"timestamp">>,1362407186680},
+%                                  {<<"$">>,<<"Mg==">>}],
+%                                 [{<<"column">>,
+%                                   <<"ZGVzY3JpcHRpb246aGFzaF9mdW5jdGlvbg==">>},
+%                                  {<<"timestamp">>,1362407176514},
+%                                  {<<"$">>,<<"bWQ1">>}]]}]
+      [ { <<"key">>,Name64 }, {<<"Cell">>, Columns } ]= Fact,
+      Name = list_to_atom( binary_to_list( base64:decode(Name64) ) ),
+      Popularity = get_column(Columns, <<"stat:facts_reqs">>),
+      Weight = get_column(Columns, <<"stat:facts_w">>),
+      Count = get_column(Columns, <<"stat:facts_count">>),
+
+      Func = get_column(Columns,<<"description:hash_function">>),
+      ?DEBUG("~p got meta info of fact ~p ~n",[{?MODULE,?LINE}, {Name, Count, Weight, Popularity } ]),
+      ets:insert(Table, {Name, common:inner_to_int(Count),
+                               common:inner_to_int(Weight),  
+                               common:inner_to_int(Popularity) }),
+      Table
+.
+
+
+
+get_and_load_meta_weights([], Table)->
+    ?LOG("~p empty scanner~n",[{?MODULE,?LINE}])
+;
+get_and_load_meta_weights(Scanner, Table)->
+         ?DEBUG("~p send to ~p ~n",[ {?MODULE,?LINE}, {Scanner } ] ),
+%        httpc:set_options( [ {verbose, debug} ]),
+        Host = get_host(Scanner),
+        case catch  httpc:request( get, { Scanner,[ {"Accept","application/json"}, {"Host", Host}]},
+                                    [ {connect_timeout,?DEFAULT_TIMEOUT },
+                                      {timeout, ?DEFAULT_TIMEOUT }
+                                      ],
+                                    [ {sync, true},{ body_format, binary } ] ) of
+                    { ok, { {_NewVersion, 200, _NewReasonPhrase}, _NewHeaders, Text1 } } ->
+                            process_meta_weights( Text1, Table ),
+                            get_and_load_meta_weights(Scanner, Table);%% TODO another solution
+                           
+                    Res ->
+                            ?DEBUG("~p got ~p ~n",[ {?MODULE,?LINE}, Res ] ),  
+                             unlink ( spawn(?MODULE,delete_scanner,[Scanner]) ),
+                            []         
+        end
+.
+
+
 
 get_meta_facts([], Table)->
     ?LOG("~p empty scanner~n",[{?MODULE,?LINE}])
@@ -631,10 +739,8 @@ process_loop_hbase( Scanner, [], ProtoType, TreeEts)->
 		  exit(normal)
     end
 ;
-
 process_loop_hbase( Scanner, Res, ProtoType, TreeEts)->
-	 ?WAIT("~p regis  wait in fact hbase ~p ~n",[{?MODULE,?LINE}, ProtoType ]),
-
+	?WAIT("~p regis  wait in fact hbase ~p ~n",[{?MODULE,?LINE}, ProtoType ]),
         receive 
 	    {PidReciverResult ,get_pack_of_facts} ->
 	  	    ?WAIT("~p GOT  wait in fact hbase ~p ~n",[{?MODULE,?LINE}, ProtoType ]),
@@ -1081,6 +1187,7 @@ del_link_fact(Fact1, Fact2, TreeEts) when is_atom(Fact2) ->
 
 del_link_fact(Fact1, Fact2, TreeEts )->
       TableName = common:get_logical_name(TreeEts, ?META_FACTS),
+      ?DEBUG("~p del link ~p",[{?MODULE,?LINE}, {Fact1, TableName, ?LINKS_FAMILY, Fact2}]),
       del_key(Fact1, TableName, ?LINKS_FAMILY, Fact2 )
 .
 
@@ -1323,8 +1430,7 @@ create_new_fact_table( LTableName )->
 				true;
                       Res ->
                             ?WAIT("~p got from hbase ~p ",[?LINE,Res]),
-                            []
-
+                             throw({'EXIT',hbase, Res } )
 		  end
 .
 
@@ -1338,14 +1444,14 @@ store_new_fact(LTableName, LProtoType)->
 %   my $key  = md5_hex( join(",",@arr) );
 % %       POST /<table>/schema
 % http://avias-db-2.ceb.loc:60050/table/key_name/family
-
+            ?DEBUG("~p add fact to hbase ~p",[{?MODULE,?LINE}, {LTableName, LProtoType}]),
 	    Key = generate_key( LProtoType ),
 	    MakeCellSet = make_cell_set( LProtoType ),
 	    BKey= base64:encode(Key),
 	    Body = <<"<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\" ?><CellSet><Row key=\"", 
 		    BKey/binary, "\">", MakeCellSet/binary, "</Row></CellSet>" >>,    
-	    ?DEBUG("~p new fact body with ~n ~p ~n~n~n",[{?MODULE,?LINE}, Body ] ),
 	    {Hbase_Res, Host } = get_rand_host(),
+            ?DEBUG("~p new fact body with ~n ~p ~n~n~n",[{?MODULE,?LINE}, {Hbase_Res,LTableName, Key, ?FAMILY } ] ),
             case catch  httpc:request( post, { Hbase_Res++LTableName++"/"++Key++"/"++?FAMILY,
  				[ {"Content-Length", integer_to_list( erlang:byte_size(Body) )},
 				  {"Content-Type","text/xml"},

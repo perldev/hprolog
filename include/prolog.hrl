@@ -4,12 +4,14 @@
 -define(FATAL_WAIT_TIME, infinity).
 -define(META_INFO_BATCH, 3). %%for using as batch param for scanner meta info
 
--define(USE_HBASE,1).
--define(UPDATE_STAT_INTERVAL,20000).%%interval of updating meta stat of prolog statements
 
--define(SIMPLE_HBASE_ASSERT,0).
 
-%-define(ENABLE_LOG,1).
+%-define(USE_HBASE,1).
+-define(UPDATE_STAT_INTERVAL,320000).%%interval of updating meta stat of prolog statements
+
+%-define(SIMPLE_HBASE_ASSERT,1).
+
+-define(ENABLE_LOG,1).
 -define(COMPILE_TRACE, 1).
 
 -define('DEV_DEBUG_MATCH'(Str, Pars ), true ).
@@ -87,10 +89,12 @@
 
 
 -ifdef(SYNC_DEBUG).
--define('WAIT'(Str, Pars ), log4erl:warn(Str, Pars) ).
+-define('WAIT'(Str, Pars ), log4erl:debug(Str, Pars) ).
 -else.
 -define('WAIT'(Str, Pars ), true ).
 -endif.
+
+
 
 
 
@@ -106,7 +110,7 @@
 
 -ifdef(LOGGING).
 
--define('LOG'(Str, Pars ), log4erl:info(Str, Pars) ).
+-define('LOG'(Str, Pars ), log4erl:debug(Str, Pars) ).
 -else.
 -define('LOG'(Str, Pars ), true ).
 -endif.
@@ -114,7 +118,7 @@
 
 
 -ifdef(DEV_TEST).
--define('DEV_DEBUG'(Str, Pars ), log4erl:info(Str, Pars) ).
+-define('DEV_DEBUG'(Str, Pars ), log4erl:debug(Str, Pars) ).
 -else.
 -define('DEV_DEBUG'(Str, Pars ), true ).
 -endif.
@@ -143,6 +147,7 @@
 -define(LINKS_FAMILY, "links").
 -define(CACHE_FAMILY, "cache").
 
+-define(STAT_FAMILY, "stat").
 -define(FAMILY,"params").
 -define(CODE_COLUMN,"code").
 -define(RULES_TABLE,"rules").
@@ -167,6 +172,9 @@
 -define(INNER, inner).
 -define(RULES, rules_inner).
 -define(META_LINKS, meta_facts_links).
+
+-define(META_WEIGHTS, meta_weights).
+
 -define(AI_RULES, ai_rules_inner).
 -define(META, meta_facts).
 -define(APPLICATION, application).
@@ -207,6 +215,7 @@
 
 -define(BUILTIN_PREDICATES,
 [
+'inner_retract___',
 'meta',
 'functor',
 'arg',
@@ -245,7 +254,8 @@
 '=<',
 '>',
 '<',
-'=\\='
+'=\\=',
+'=..'
 ]
 
 ).
