@@ -51,7 +51,7 @@ clean_tree(TreeEts)->
 
 clean_tree(TreeEts)->
          ets:foldl(fun(Elem, Acum)->
-                        case Elem of->
+ 			 case Elem of
                             {system_record, _, _}-> Acum;
                             T = #aim_record{} ->
                                 ets:delete(TreeEts, T), Acum
