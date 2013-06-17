@@ -60,7 +60,7 @@ server_loop(TreeEts, TraceOn) ->
 	{ok, listing}->
 	      io:fwrite("listing is ~n"),  
 	      Code = get_code_memory(TreeEts),
-	      io:fwrite("~p ~n", [Code]),   
+	      io:fwrite("~s ~n", [Code]),   
 	      server_loop(TreeEts, TraceOn)
 	;
 	{ok, trace_off}->
@@ -89,8 +89,7 @@ server_loop(TreeEts, TraceOn) ->
 				      server_loop(TreeEts, TraceOn)
 			      end
 			    end, Files)
-	    
-	    ;
+	 ;
 	 {ok, Goal = {':-',_,_ } } ->
 		io:fwrite("syntax error may be you want use assert ~p ~n",[Goal]),
 		server_loop(TreeEts, TraceOn);
