@@ -11,7 +11,7 @@
 
 %-define(SIMPLE_HBASE_ASSERT,1).
 
--define(ENABLE_LOG,1).
+%-define(ENABLE_LOG,1).
 -define(COMPILE_TRACE, 1).
 
 -define('DEV_DEBUG_MATCH'(Str, Pars ), true ).
