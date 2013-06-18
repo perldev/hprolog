@@ -9,7 +9,7 @@
 %-define(USE_HBASE,1).
 -define(UPDATE_STAT_INTERVAL,320000).%%interval of updating meta stat of prolog statements
 
-%-define(SIMPLE_HBASE_ASSERT,1).
+-define(SIMPLE_HBASE_ASSERT,0).
 
 %-define(ENABLE_LOG,1).
 -define(COMPILE_TRACE, 1).
