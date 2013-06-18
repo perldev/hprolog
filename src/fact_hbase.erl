@@ -44,9 +44,13 @@ weight_prolog_sort(Prefix)->
         Weights = common:get_logical_name(Prefix, ?META_WEIGHTS),
         Links = common:get_logical_name(Prefix, ?META_LINKS),
         FirstKey = ets:first(Links),
-        NewList = process_ets_key(FirstKey, Links, Weights, []),
-        ets:delete_all_objects(Links),
-        lists:foreach(fun(L)-> ets:insert(Links,L ) end, NewList)
+        case catch  process_ets_key(FirstKey, Links, Weights, []) of
+            {'EXIT', Reason}->
+                nothing;
+            NewList ->
+                ets:delete_all_objects(Links),
+                lists:foreach(fun(L)-> ets:insert(Links,L ) end, NewList)
+        end        
 .
 
 
