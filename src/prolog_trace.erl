@@ -77,7 +77,7 @@ call_tracer(Index, Body, TracePid)->
             true;
         finish -> 
             ?WAIT("~p got ~p ~n",[{?MODULE,?LINE}, finish]), 
-            throw(tracer_finish })
+            throw(tracer_finish )
     end.      
                   
 got_tracer(Index, Body, TracePid)->
