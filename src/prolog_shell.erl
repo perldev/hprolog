@@ -145,7 +145,7 @@ process_prove(  TempAim , Goal, Res, StartTime)->
                        _ ->
                          ?DEBUG("~p send next to pid ~p",[{?MODULE,?LINE}, Res]),
                          process_prove( TempAim , Goal, (catch prolog:next_aim(Prev, tree_processes )), erlang:now() )              
-                   end;        
+                  end;        
 	    Res ->
 	           
 		   io:fwrite("No ~p~n",[Res]),FinishTime = erlang:now(),
@@ -241,11 +241,9 @@ get_code_memory(Prefix)->
 	   ResBin = << "\n", MetaCode/binary,FormatedCode/binary >>,
 	   binary_to_list(ResBin).
 	   
-get_code_memory_html()->
-	  Rules = ets:tab2list(?RULES),
-	  Meta = ets:tab2list(?META),
-
-        
+get_code_memory_html(Prefix)->
+	   Rules = ets:tab2list(common:get_logical_name(Prefix, ?RULES) ),
+           Meta = ets:tab2list( common:get_logical_name(Prefix, ?META) ),        
 	   MetaCode = lists:foldl(fun( {Name,Count,_Hash}, In  )->
 				?DEBUG(" meta fact  ~p~n", [{Name,Count}]),
 
