@@ -513,6 +513,7 @@ start_fact_process( Aim, TreeEts, ParentPid)->
 .
 %%TODO add rest call to find all facts and rules 
 fact_start_link( Aim,  TreeEts, ParentPid )->
+      monitor(process,ParentPid),
       ?DEBUG("~p begin find in facts ~p ~n",[{?MODULE,?LINE},  Aim ]),
       Name = element(1,Aim),%%from the syntax tree get name of fact
       ?WAIT("~p regis wait in fact ~p ~n",[{?MODULE,?LINE},{ Name, Aim } ]),
@@ -631,20 +632,25 @@ process_indexed_hbase(Table, ProtoType,  PreRes, TreeEts)->
 			{'EXIT',R} ->
 			    ?DEBUG("~p  indexed fact return  ~p  ~n",[{?MODULE,?LINE}, PreRes ]),
 			    PidReciverResult ! [],
-			    process_indexed_hbase(Table, ProtoType,  [], TreeEts);
-   			{NewKey, NewPreRes} ->
+                           exit(normal); 
+                        {NewKey, NewPreRes} ->
 			    ?DEBUG("~p indexed fact return  ~p  ~n",[{?MODULE,?LINE}, {NewKey, NewPreRes} ]),
 			    Row =  hbase_get_key(ProtoType, Table, ?FAMILY, NewKey),
   			    ?DEBUG("~p got row  ~p  ~n",[{?MODULE,?LINE}, Row ]),
 			    PidReciverResult ! Row,
 			    process_indexed_hbase(Table, ProtoType,  NewPreRes, TreeEts)
 		   end;
-	      finish->
-		  exit(normal);
-	     {'EXIT', From, Reason} ->
-		  ?WAIT("~p GOT  exit for hbase indexed ~p ~n",[{?MODULE,?LINE}, {From, Reason} ]),
-		  exit(normal)
-	end
+            {'EXIT', From, Reason} ->
+                  ?WAIT("~p GOT  exit in fact hbase ~p ~n",[{?MODULE,?LINE}, ProtoType ]),
+                  ?LOG("~p got exit signal  ~p ~n",[{?MODULE,?LINE}, {From, Reason} ]);
+            {'DOWN', MonitorRef, Type, Object, Info} ->
+                  ?WAIT("~p GOT  exit in fact hbase ~p ~n",[{?MODULE,?LINE}, ProtoType ]),
+                  ?LOG("~p got monitor exit signal   ~p ~n",[{?MODULE,?LINE}, {Object, Info} ]);
+            Some ->%%may be finish
+                  ?WAIT("~p GOT  wait in fact hbase ~p ~n",[{?MODULE,?LINE}, ProtoType ]),
+                  ?LOG("~p got unexpected ~p ~n",[{?MODULE,?LINE}, Some ])
+	end,
+	exit(normal)
 .
 hbase_get_key(Table,  Key)->
       { Hbase_Res, Host } = get_rand_host(),
@@ -738,10 +744,17 @@ process_loop_hbase( Scanner, [], ProtoType, TreeEts)->
 		   process_loop_hbase( Scanner, finish, ProtoType, TreeEts);
 	    {'EXIT', From, Reason} ->
      	  	  ?WAIT("~p GOT  exit in fact hbase ~p ~n",[{?MODULE,?LINE}, ProtoType ]),
-		  ?LOG("~p got exit signal  ~p ~n",[{?MODULE,?LINE}, {From, Reason} ]),
-		  delete_scanner(Scanner),
-		  exit(normal)
-    end
+		  ?LOG("~p got exit signal  ~p ~n",[{?MODULE,?LINE}, {From, Reason} ]);
+            {'DOWN', MonitorRef, Type, Object, Info}->
+                  ?WAIT("~p GOT  exit in fact hbase ~p ~n",[{?MODULE,?LINE}, ProtoType ]),
+                  ?LOG("~p got monitor exit signal   ~p ~n",[{?MODULE,?LINE}, {Object, Info} ]);
+            Some ->%%may be finish
+                  ?WAIT("~p GOT  wait in fact hbase ~p ~n",[{?MODULE,?LINE}, ProtoType ]),
+                  ?LOG("~p got unexpected ~p ~n",[{?MODULE,?LINE}, Some ])
+                 
+    end,
+    delete_scanner(Scanner),
+    exit(normal)
 ;
 process_loop_hbase( Scanner, Res, ProtoType, TreeEts)->
 	?WAIT("~p regis  wait in fact hbase ~p ~n",[{?MODULE,?LINE}, ProtoType ]),
@@ -752,19 +765,18 @@ process_loop_hbase( Scanner, Res, ProtoType, TreeEts)->
 		    PidReciverResult ! Res,
 		    NewList = get_data( Scanner, ProtoType),
 		    process_loop_hbase( Scanner, NewList, ProtoType, TreeEts);
-  
-	    {'EXIT', From, Reason} ->
-     	  	  ?WAIT("~p GOT  exit in fact hbase ~p ~n",[{?MODULE,?LINE}, ProtoType ]),
-		  ?LOG("~p got exit signal  ~p ~n",[{?MODULE,?LINE}, {From, Reason} ]),
-		  delete_scanner(Scanner),
-		  exit(normal);
-	    Some ->
-    	  	  ?WAIT("~p GOT  wait in fact hbase ~p ~n",[{?MODULE,?LINE}, ProtoType ]),
-		  ?LOG("~p got unexpected ~p ~n",[{?MODULE,?LINE}, Some ]),
-		  delete_scanner(Scanner),
-		  exit(normal)
-
-	end
+            {'EXIT', From, Reason} ->
+                  ?WAIT("~p GOT  exit in fact hbase ~p ~n",[{?MODULE,?LINE}, ProtoType ]),
+                  ?LOG("~p got exit signal  ~p ~n",[{?MODULE,?LINE}, {From, Reason} ]);
+            {'DOWN', MonitorRef, Type, Object, Info}->
+                  ?WAIT("~p GOT  exit in fact hbase ~p ~n",[{?MODULE,?LINE}, ProtoType ]),
+                  ?LOG("~p got monitor exit signal   ~p ~n",[{?MODULE,?LINE}, {Object, Info} ]);
+            Some ->%%may be finish
+                  ?WAIT("~p GOT  wait in fact hbase ~p ~n",[{?MODULE,?LINE}, ProtoType ]),
+                  ?LOG("~p got unexpected ~p ~n",[{?MODULE,?LINE}, Some ])
+	end,
+	delete_scanner(Scanner),
+        exit(normal)
 .
 
 
