@@ -33,36 +33,67 @@ trace_on(?DEBUG_ON, TreeEts )->
     ets:insert(TreeEts, {system_record, ?DEBUG_STATUS, true, ?DEBUG_ON})
 
 .
-
 %%TODO change it it must be turn off not only via MACROS
 trace(Index, Tree,  Body, Context)->
 
       case ets:lookup(Tree,?DEBUG_STATUS ) of
-	  [ ]->   true;
-	  [ {system_record, _, false} ]-> true;
-	  [ {system_record, _, true, ?TRACE_ON }]->
+          [ ]->   true;
+          [ {system_record, _, false} ]-> true;
+          [ {system_record, _, true, ?TRACE_ON }]->
                  ?SYSTEM_STAT(Tree, Index),
-		 call_tracer(Index, Body);
-	  [ {system_record, _, true, ?DEBUG_ON, DebugPidLogger }]->
-		  DebugPidLogger ! {debug_msg,Index, prolog_matching:bound_body(Body,Context) },
-		  true
+                 call_tracer(Index, Body);
+          [ {system_record, _, true, ?TRACE_ON, TracePid }]->
+                 call_tracer(Index, prolog_matching:bound_body(Body, Context), TracePid); 
+          [ {system_record, _, true, ?DEBUG_ON, DebugPidLogger }]->
+                  DebugPidLogger ! {debug_msg,Index, prolog_matching:bound_body(Body,Context) },
+                  true
       end
 .
 
-trace2(Index, Tree,   Body, _Context) ->
+trace2(Index, Tree,   Body, Context) ->
 
       ?WAIT("~p tracer got ~p  is ~p  ~n",[{?MODULE,?LINE},Index, Body ]),
       case ets:lookup(Tree,?DEBUG_STATUS ) of
-	  [ ]->   true;
-	  [ {system_record, _, false} ]-> true;
-	  [ {system_record, _, true, ?TRACE_ON }]->
+          [ ]->   true;
+          [ {system_record, _, false} ]-> true;
+          [ {system_record, _, true, ?TRACE_ON }]->
                   ?SYSTEM_STAT(Tree, Index),
-		  got_tracer(Index, Body);
-	  [ {system_record, _, true, ?DEBUG_ON, DebugPidLogger } ] ->
-		  DebugPidLogger ! {res_msg, Index, Body },
-		  true
+                  got_tracer(Index, Body);
+         [ {system_record, _, true, ?TRACE_ON, TracePid}]->
+                  ?SYSTEM_STAT(Tree, Index),
+                  got_tracer(Index, prolog_matching:bound_body(Body,Context), TracePid);
+          [ {system_record, _, true, ?DEBUG_ON, DebugPidLogger } ] ->
+                  DebugPidLogger ! {res_msg, Index, Body },
+                  true
       end
 .
+
+call_tracer(Index, Body, TracePid)->
+    ?WAIT("~p trace  ~p ~n",[{?MODULE,?LINE}, TracePid]),   
+    TracePid ! {debug_msg, self(),Index, Body },
+    receive 
+        next ->
+            ?WAIT("~p got ~p ~n",[{?MODULE,?LINE}, next]), 
+            true;
+        finish -> 
+            ?WAIT("~p got ~p ~n",[{?MODULE,?LINE}, finish]), 
+            throw(tracer_finish })
+    end.      
+                  
+got_tracer(Index, Body, TracePid)->
+    ?WAIT("~p trace  ~p ~n",[{?MODULE,?LINE}, TracePid]),   
+    TracePid ! {debug_msg, self(),Index, Body },
+    receive 
+        next ->
+            ?WAIT("~p got ~p ~n",[{?MODULE,?LINE}, next]), 
+            true;
+        finish -> 
+            ?WAIT("~p got ~p ~n",[{?MODULE,?LINE}, finish]), 
+            throw(tracer_finish)
+    end.          
+
+
+
 
 call_tracer(Index, Body)->
     io:fwrite("~p aim  call  ~ts ? ~n yes or no~n  ", [Index, lists:flatten(erlog_io:write1( Body ) ) ] ),
@@ -92,8 +123,6 @@ got_tracer(Index, Body)->
                          throw({tracer, finished})
                          
                   end.                  
-
-
 
 
 
