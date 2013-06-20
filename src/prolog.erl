@@ -38,8 +38,7 @@ clean_tree(TreeEts)->
                 case Elem of 
                       {system_record, _, _}-> Acum;
                       T = #aim_record{next = hbase}->
-                          unlink(T#aim_record.solutions),
-                          exit(T#aim_record.solutions, finish ),
+                          T#aim_record.solutions ! finish,
                           ets:delete(TreeEts, T), Acum;
                       T = #aim_record{} ->
                         ets:delete(TreeEts, T), Acum
@@ -73,6 +72,7 @@ compile(Prefix, File)->
 .
 inner_change_namespace(false, _Name, _TreeEts)->
     false;
+    
 inner_change_namespace(true, Name, TreeEts)->
     delete_structs(TreeEts),
     create_inner_structs(Name),
@@ -109,7 +109,6 @@ create_inner_structs(Prefix)->
     %the hbase database is for everything
     ets:new(common:get_logical_name(Prefix, ?HBASE_INDEX), [named_table, bag, public])
     %%statistic is common
-   
 .
 
 process_term(Rule  = {':-',Name, Body}, Prefix) when is_atom(Name)->
@@ -335,6 +334,20 @@ check_arg(Some, Count, Value, Context ) ->
       true     
 .
 
+cut_all_solutions(TreeEts, Parent, Parent )->
+    true;
+cut_all_solutions(TreeEts, finish, Parent )->
+    true;
+cut_all_solutions(TreeEts, 1, Parent )->
+    true;
+cut_all_solutions(TreeEts, PrevIndex, Parent )->
+    ?DEBUG("~p delete ~p",[{?MODULE,?LINE},PrevIndex]),
+    [ AimRecord ] = ets:lookup(TreeEts, PrevIndex),
+     ets:insert(TreeEts, AimRecord#aim_record{solutions=[], next=one} ),
+     cut_all_solutions(TreeEts, AimRecord#aim_record.prev_id, Parent ).
+
+
+
 %%%usual assert
 inner_defined_aim(NextBody, PrevIndex ,{ 'assertz', Body = {':-', _ProtoType, _Body1 }  }, Context, Index, TreeEts  ) ->
   inner_defined_aim(NextBody, PrevIndex , { 'assert', Body   }, Context, Index, TreeEts   )
@@ -426,9 +439,7 @@ inner_defined_aim(NextBody, PrevIndex ,{ atom, Body  }, Context, _Index, _  ) ->
 	end,
     {Res, Context} 
 ;
-%%TODO 
 inner_defined_aim(NextBody, PrevIndex ,{ use_namespace, Name  }, Context, _Index, TreeEts  ) ->
-%     Res = fact_hbase:create_new_namespace(Name),
      Body = prolog_matching:bound_body( Name, Context),
      Res  = case is_list(Body) of
                 true ->   
@@ -438,6 +449,34 @@ inner_defined_aim(NextBody, PrevIndex ,{ use_namespace, Name  }, Context, _Index
                 false -> false
             end,
      {Res, Context}   
+;
+%%сonvert to float
+inner_defined_aim(NextBody, PrevIndex ,Body = { to_float, _X1, _X2  }, Context, _Index, TreeEts  ) ->
+     {_, X1B, X2B } = prolog_matching:bound_body( Body, Context),     
+     case common:inner_to_float(X1B) of
+                false -> {false,Context};
+                R ->  
+                    prolog_matching:var_match(X2B, R, Context)
+     end
+;
+%%сonvert to integer
+inner_defined_aim(NextBody, PrevIndex ,Body = { to_integer, _X1,_X2  }, Context, _Index, TreeEts  ) ->
+
+     {_, X1B, X2B } = prolog_matching:bound_body( Body, Context),     
+     case common:inner_to_int(X1B) of
+                false -> {false,Context};
+                R ->  
+                    prolog_matching:var_match(X2B, R, Context)
+     end
+;
+%%сonvert to string
+inner_defined_aim(NextBody, PrevIndex , Body  = { to_list, _X1, _X2  }, Context, _Index, TreeEts  ) ->
+     {_, X1B, X2B } = prolog_matching:bound_body( Body, Context),     
+     case common:inner_to_list(X1B) of
+                false -> {false,Context};
+                R ->  
+                    prolog_matching:var_match(X2B, R, Context)
+     end
 ;
 
 inner_defined_aim(NextBody, PrevIndex ,{ create_namespace, Name  }, Context, _Index, _  ) ->
@@ -602,6 +641,13 @@ inner_defined_aim(NextBody, PrevIndex ,Body = { 'write', X }, Context, _Index,  
     ?WRITE(TreeEts, X1),
     {true, Context}
 ;
+inner_defined_aim(NextBody, PrevIndex ,Body = { 'write_unicode', X }, Context, _Index,  TreeEts  ) ->
+    X1 = prolog_matching:bound_body( X, Context),
+%     ?DEBUG("~p write ~p ~n",[X, dict:to_list(Context)]),
+    ?WRITE_UNICODE(TreeEts, X1), %%only for local console
+    {true, Context}
+;
+
 inner_defined_aim(NextBody, PrevIndex ,Body = { 'writeln', X }, Context, _Index, TreeEts  ) ->
     X1 = prolog_matching:bound_body(X, Context),
 %     ?DEBUG("~p write ~p ~n",[X, dict:to_list(Context)]),
@@ -757,11 +803,12 @@ aim(NextBody, PrevIndex ,fact_statistic, Context, Index, TreeEts, Parent  ) ->
         ?FACT_STAT(?STAT),%%TODO for web
         conv3( NextBody, Context, PrevIndex,  Index, TreeEts, Parent )
 ;    
-aim(NextBody, _PrevIndex,'!', Context, Index , TreeEts, Parent )->
-         
+aim(NextBody, PrevIndex,'!', Context, Index , TreeEts, Parent )->
+         ?DEBUG("~p  parent cut  ~p", [{?MODULE,?LINE}, Parent ]),
          [AimRecord] = ets:lookup(TreeEts, Parent),  
-         ?DEBUG("~p  cut  ~p", [{?MODULE,?LINE}, AimRecord ]),
-         ets:insert(TreeEts, AimRecord#aim_record{next = one, solutions=[]} ), 
+         ?DEBUG("~p  cut  ~p", [{?MODULE,?LINE}, AimRecord ]),         
+         ets:insert(TreeEts, AimRecord#aim_record{next = one, solutions=[] } ), 
+         cut_all_solutions(TreeEts, PrevIndex, Parent ),
          %CUT all solution and current leap tell that there is a finish
          conv3( NextBody, Context, finish,  get_index(Index), TreeEts, Parent )
 ;
