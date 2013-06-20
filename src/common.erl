@@ -6,6 +6,7 @@
 regis_io_server(TreeEts, Io)->
     ets:insert(TreeEts, {system_record, ?IO_SERVER, Io} )
 .
+
 parse_as_term(S)->
       {ok, Terms , _L1} = erlog_scan:string( S ),
       erlog_parse:term(Terms).
@@ -17,6 +18,9 @@ console_get_char(_)->
        io:get_chars("", 1).
 console_write(_, X)->
       io:format("~p",[X]).
+      
+console_write_unicode(_,X)->
+     io:format("~ts",[unicode:characters_to_list(X)]).
       
 console_writenl(_, X)->      
     io:format("~p~n",[X]).
@@ -66,9 +70,9 @@ web_console_nl(TreeEts)->
 to_web_string(X) when is_list(X)->
     lists:flatten( lists:map(fun to_string/1, X) );   
 to_web_string(X) when is_number(X)->
-    io_lib:format("~p",X);
+    io_lib:format("~p",[X]);
 to_web_string(X) when is_atom(X)->
-    io_lib:format("~p",X);    
+    io_lib:format("~p",[X]);    
 to_web_string(X) when is_tuple(X)->
       PrologCode =  erlog_io:write1(X),
       PrologCode.   
@@ -90,7 +94,8 @@ inner_to_list(E) when is_list(E)->
   E;
 inner_to_list(E) when is_atom(E)->
   atom_to_list(E);
-  
+inner_to_list(E) when is_tuple(E)->
+  false;
 inner_to_list(E) when is_integer(E)->
   integer_to_list(E);
 
@@ -100,10 +105,17 @@ inner_to_list(E)  when is_binary(E)->
   unicode:characters_to_list(E);
 inner_to_list(E) ->
   E.  
+
   
+inner_to_int(E) when is_float(E)->
+  erlang:round(E) 
+  
+;
+inner_to_int(E) when is_tuple(E)->
+    false;
 inner_to_int(E) when is_list(E)->
   case catch list_to_integer(E) of
-      {'EXIT', _}-> 0;
+      {'EXIT', _}-> false;
       Number-> Number
   end
 ;
@@ -114,6 +126,25 @@ inner_to_int(E) when is_binary(E)->
     inner_to_int(binary_to_list(E));
 inner_to_int(E) ->
   E.
+
+inner_to_float(E) when is_integer(E)->
+  erlang:float(E) 
+;
+inner_to_float(E) when is_tuple(E)->
+    false;
+inner_to_float(E) when is_list(E)->
+  case string:to_float(E ++ ".0") of
+      {'error', _}-> false;
+      {Number, _Tail}-> Number
+  end
+;
+inner_to_float(E) when is_atom(E)->
+   inner_to_float(atom_to_list(E))
+; 
+inner_to_float(E) when is_binary(E)->
+    inner_to_float(binary_to_list(E));
+inner_to_float(E) ->
+  E.  
   
   
   
