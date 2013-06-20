@@ -119,6 +119,7 @@ load_rules2ets(Prefix)->
      
 .
 
+
 get_cache_meta_info([], Table)->
     ?LOG("~p empty scanner~n",[{?MODULE,?LINE}])
 ;
@@ -135,11 +136,12 @@ get_cache_meta_info(Scanner, Table)->
                     { ok, { {_NewVersion, 200, _NewReasonPhrase}, _NewHeaders, Text1 } } ->
 			    process_cache_link( Text1, Table ),
 			    get_cache_meta_info(Scanner, Table);%% TODO another solution
-			   
+                    { ok, { {_NewVersion, 204, _NewReasonPhrase}, _NewHeaders, Text1 } } ->
+                           [];
                     Res ->
 			    ?DEBUG("~p got ~p ~n",[ {?MODULE,?LINE}, Res ] ),  
 			     unlink ( spawn(?MODULE,delete_scanner,[Scanner]) ),
-                            []         
+                            throw({hbase_exception, Res})      
 	end.
 
 % [{<<"Row">>,
@@ -220,11 +222,12 @@ get_link_meta_info(Scanner, Table)->
                     { ok, { {_NewVersion, 200, _NewReasonPhrase}, _NewHeaders, Text1 } } ->
 			    process_meta_link( Text1, Table ),
 			    get_link_meta_info(Scanner,  Table);%% TODO another solution
-			   
+                     { ok, { {_NewVersion, 204, _NewReasonPhrase}, _NewHeaders, Text1 } } ->
+                            [];
                     Res ->
 			    ?DEBUG("~p got ~p ~n",[ {?MODULE,?LINE}, Res ] ),  
 			     unlink ( spawn(?MODULE,delete_scanner,[Scanner]) ),
-                            []         
+                            throw({hbase_exception, Res})        
 	end
 .
 
@@ -334,10 +337,12 @@ get_and_load_meta_weights(Scanner, Table)->
                             process_meta_weights( Text1, Table ),
                             get_and_load_meta_weights(Scanner, Table);%% TODO another solution
                            
+                    { ok, { {_NewVersion, 204, _NewReasonPhrase}, _NewHeaders, Text1 } } ->
+                           [];
                     Res ->
                             ?DEBUG("~p got ~p ~n",[ {?MODULE,?LINE}, Res ] ),  
                              unlink ( spawn(?MODULE,delete_scanner,[Scanner]) ),
-                            []         
+                            throw({hbase_exception, Res})            
         end
 .
 
@@ -359,10 +364,12 @@ get_meta_facts(Scanner, Table)->
 			    process_meta( Text1, Table ),
 			    get_meta_facts(Scanner, Table);%% TODO another solution
 			   
+                    { ok, { {_NewVersion, 204, _NewReasonPhrase}, _NewHeaders, Text1 } } ->
+                           [];
                     Res ->
-			    ?DEBUG("~p got ~p ~n",[ {?MODULE,?LINE}, Res ] ),  
-			     unlink ( spawn(?MODULE,delete_scanner,[Scanner]) ),
-                            []         
+                            ?DEBUG("~p got ~p ~n",[ {?MODULE,?LINE}, Res ] ),  
+                             unlink ( spawn(?MODULE,delete_scanner,[Scanner]) ),
+                            throw({hbase_exception, Res})           
 	end
 .
 
@@ -381,10 +388,12 @@ get_and_load_rules(Scanner, Table)->
 			    process_code( Text1, Table ),
 			    get_and_load_rules(Scanner, Table);%% TODO another solution
 			   
+                    { ok, { {_NewVersion, 204, _NewReasonPhrase}, _NewHeaders, Text1 } } ->
+                           [];
                     Res ->
-			    ?DEBUG("~p got ~p ~n",[ {?MODULE,?LINE}, Res ] ),  
-			     unlink ( spawn(?MODULE,delete_scanner,[Scanner]) ),
-                            []         
+                            ?DEBUG("~p got ~p ~n",[ {?MODULE,?LINE}, Res ] ),  
+                             unlink ( spawn(?MODULE,delete_scanner,[Scanner]) ),
+                            throw({hbase_exception, Res})         
 	end
 .
 
@@ -513,7 +522,7 @@ start_fact_process( Aim, TreeEts, ParentPid)->
 .
 %%TODO add rest call to find all facts and rules 
 fact_start_link( Aim,  TreeEts, ParentPid )->
-      monitor(process,ParentPid),
+      monitor(process, ParentPid),
       ?DEBUG("~p begin find in facts ~p ~n",[{?MODULE,?LINE},  Aim ]),
       Name = element(1,Aim),%%from the syntax tree get name of fact
       ?WAIT("~p regis wait in fact ~p ~n",[{?MODULE,?LINE},{ Name, Aim } ]),
@@ -545,9 +554,8 @@ fact_start_link_hbase( Aim,  TreeEts, ParentPid )->
 			    HbaseTable =  common:get_logical_name(TreeEts, Name ),  
 			    %%TODO throw exception if prototype contain something except constants or variables
 			    %%TODO process exception  timeouts etc
-			    {Scanner, List } = start_recr( atom_to_list(HbaseTable), ProtoType  ),
-
-			      process_loop_hbase( Scanner, List, ProtoType, TreeEts);
+			      Scanner = ( catch start_recr( atom_to_list(HbaseTable), ProtoType  ) ),
+			      process_loop_hbase( Scanner, ProtoType);
 		       {Name,  PartKey }->
     			      ?DEBUG("~p find whole_key ~p ~n",[{?MODULE,?LINE}, { Name, PartKey } ]),
 			       process_indexed_hbase(atom_to_list(NameTable),
@@ -585,7 +593,7 @@ get_indexed_records(PartKey, IndexTable)->
 				  Res;
 			  Res ->
 				  ?LOG("~p got unexpected ~p ~n",[ {?MODULE,?LINE}, Res ] ),
-				  [] %%TODO add count of fail and fail exception
+				  {hbase_exception, Res} %%TODO add count of fail and fail exception may be no
       end.
 
       
@@ -619,9 +627,15 @@ process_key_data(Meta)->
 .
 
 
-
-
-
+%%TODO gather mistakey of key invalid
+process_indexed_hbase(Table, ProtoType, {hbase,Reason}, TreeEts)->
+    receive
+        {PidReciverResult, get_pack_of_facts}->
+            PidReciverResult !  {hbase,Reason};
+         Some -> 
+            ?LOG("~p got unexpected ~p ~n",[{?MODULE,?LINE}, Some ])
+    end    
+;
 process_indexed_hbase(Table, ProtoType,  PreRes, TreeEts)->
     	?WAIT("~p regis  wait  hbase   indexed fact  ~p ~n",[{?MODULE,?LINE}, PreRes ]),
         receive 
@@ -669,7 +683,7 @@ hbase_get_key(Table,  Key)->
 			    ?DEBUG("~p  got  through key   return ~p ~n  ~p  ~n",
 				    [{?MODULE,?LINE},
 				    { Table,  Key}, Res ]),
-                            []         
+                            {hbase_exception, Res}
 	end
 .
 hbase_get_key(ProtoType, Table, Family, Key)->
@@ -692,7 +706,7 @@ hbase_get_key(ProtoType, Table, Family, Key)->
 			    ?DEBUG("~p  got  key   return ~p ~n  ~p  ~n",
 				    [{?MODULE,?LINE},
 				    {ProtoType, Table, Family, Key}, Res ]),
-                            []         
+                            {hbase_exception, Res}        
 	end
 .
 
@@ -733,15 +747,25 @@ check_index(ProtoType, Name, TreeEts)->
 	      end
         end
 .
+process_loop_hbase( {hbase_exception, Reason}, ProtoType)->
+    receive 
+            {PidReciverResult ,get_pack_of_facts} ->
+                    PidReciverResult ! {hbase_exception, Reason};
+             Some ->%%may be finish
+                  ?WAIT("~p GOT  wait in fact hbase ~p ~n",[{?MODULE,?LINE}, ProtoType ]),
+                  ?LOG("~p got unexpected ~p ~n",[{?MODULE,?LINE}, Some ])
+     end,
+     exit(normal)
+;
 
-process_loop_hbase( Scanner, finish, ProtoType, TreeEts)->
+process_loop_hbase( {Scanner, finish}, ProtoType)->
     exit(normal)
 ;
-process_loop_hbase( Scanner, [], ProtoType, TreeEts)->
+process_loop_hbase( {Scanner, []}, ProtoType)->
     receive 
 	    {PidReciverResult ,get_pack_of_facts} ->
 		   PidReciverResult ! [],
-		   process_loop_hbase( Scanner, finish, ProtoType, TreeEts);
+		   process_loop_hbase( {Scanner, finish}, ProtoType);
 	    {'EXIT', From, Reason} ->
      	  	  ?WAIT("~p GOT  exit in fact hbase ~p ~n",[{?MODULE,?LINE}, ProtoType ]),
 		  ?LOG("~p got exit signal  ~p ~n",[{?MODULE,?LINE}, {From, Reason} ]);
@@ -756,7 +780,7 @@ process_loop_hbase( Scanner, [], ProtoType, TreeEts)->
     delete_scanner(Scanner),
     exit(normal)
 ;
-process_loop_hbase( Scanner, Res, ProtoType, TreeEts)->
+process_loop_hbase( {Scanner, Res}, ProtoType)->
 	?WAIT("~p regis  wait in fact hbase ~p ~n",[{?MODULE,?LINE}, ProtoType ]),
         receive 
 	    {PidReciverResult ,get_pack_of_facts} ->
@@ -764,7 +788,7 @@ process_loop_hbase( Scanner, Res, ProtoType, TreeEts)->
 		    ?DEBUG("~p got new request ~p ~n",[{?MODULE,?LINE},  Res ]),
 		    PidReciverResult ! Res,
 		    NewList = get_data( Scanner, ProtoType),
-		    process_loop_hbase( Scanner, NewList, ProtoType, TreeEts);
+		    process_loop_hbase( {Scanner, NewList}, ProtoType);
             {'EXIT', From, Reason} ->
                   ?WAIT("~p GOT  exit in fact hbase ~p ~n",[{?MODULE,?LINE}, ProtoType ]),
                   ?LOG("~p got exit signal  ~p ~n",[{?MODULE,?LINE}, {From, Reason} ]);
@@ -794,6 +818,8 @@ call(Pid,  Atom )->
     Pid !   { self(), Atom } ,
     ?WAIT("~p regis  wait in  inner fact call  ~p ~n",[{?MODULE,?LINE},{Atom, Pid} ]),
     receive 
+         {hbase_exception, Reason}->
+              throw({'EXIT',hbase_exception, Reason  } );
 	 Result ->
 	    ?WAIT("~p GOT  wait in  inner fact call  ~p ~n",[{?MODULE,?LINE},{Atom, Pid} ]),
 	    ?DEBUG("~p  reducer result ~p  ~n",[{?MODULE,?LINE}, Result ]),
@@ -830,7 +856,7 @@ start_recr(Facts, ProtoType)->
          ?DEBUG("~p scanner filters ~p ~n",[{?MODULE,?LINE}, Filters ]),
 	  Main = generate_scanner( ?LIMIT*Size , Filters),
 	  ?DEBUG("~p Generate scanner for hbase ~p ~n",[{?MODULE,?LINE},Main ]),
-	  Scanner = get_scanner(Facts, Main),
+	  Scanner =  get_scanner(Facts, Main),
 	  List = get_data( Scanner, ProtoType),
 	  {Scanner, List }
 	  
@@ -888,7 +914,7 @@ get_scanner(Facts, Scanner)->
 			    end;
                       Res ->
                             ?LOG("~p got from hbase ~p ",[?LINE,Res]),
-                            get_scanner(Facts, Scanner)
+                            throw({hbase_exception, Res})
 
       end
 .
@@ -975,8 +1001,7 @@ add_link(ASourceFact, AForeignFact, ARuleName, TreeEts )->
 				true;
                         Res ->
                             ?WAIT("~p got from hbase ~p ",[?LINE,Res]),
-                            true
-
+                            throw({hbase_exception, Res })
 	    end
   
   
@@ -1068,7 +1093,7 @@ put_key_body(Name, Key, Body )->
 				true;
                         Res ->
                             ?WAIT("~p got from hbase ~p ~n",[?LINE,{Res,Name,Body }]),
-                            false
+                             throw({hbase_exception, Res })
 
 	    end
 
@@ -1258,7 +1283,7 @@ del_key(Key, TableName, Family, Col )->
 				true;
                         Res ->
                             ?WAIT("~p got from hbase ~p for key ~p  ",[?LINE,Res, {Key, TableName}]),
-                            false
+                             throw({hbase_exception, Res })
 
 	    end
 .
@@ -1282,7 +1307,7 @@ del_key(Key, TableName )->
 				true;
                         Res ->
                             ?WAIT("~p got from hbase ~p for key ~p  ",[?LINE, Res , {Key, TableName}]),
-                            false
+                             throw({hbase_exception, Res })
 
 	    end
 .
@@ -1314,7 +1339,7 @@ store_new_rule(Key, Body, LTableName)->
 				true;
                         Res ->
                             ?WAIT("~p got from hbase ~p ",[?LINE,Res]),
-                            false
+                             throw({hbase_exception, Res })
 
 	    end
 .
@@ -1332,7 +1357,7 @@ get_table_list()->
 				 string:tokens(Text1, "\n");
                         Res ->
                             ?DEBUG("~p got from hbase ~p ",[?LINE,Res]),
-                            []
+                            throw({hbase_exception, Res })
 
 	    end
 
@@ -1354,6 +1379,7 @@ check_exist_rule(TableName, Name) when is_integer(Name)->
 check_exist_rule(TableName, LName)->
    
     {Hbase_Res, Host } = get_rand_host(),
+    ?DEBUG("~p check url ~p~n",[{?MODULE,?LINE},Hbase_Res++TableName++"/"++LName++"/"++?FAMILY++":"++?CODE_COLUMN ]),
     case catch  httpc:request( 'get', { Hbase_Res++TableName++"/"++LName++"/"++?FAMILY++":"++?CODE_COLUMN,
 				    [ {"Accept","application/json"}, {"Host", Host}]},
 				    [ {connect_timeout, ?DEFAULT_TIMEOUT },
@@ -1369,7 +1395,7 @@ check_exist_rule(TableName, LName)->
 % 				{"table":[{"name":"pay"},{"name":"table"}]}
 		     Res ->
 			    ?DEBUG("~p got ~p  nothing found ~n",[ {?MODULE,?LINE}, Res ] ),                           
-                           false
+                          false
     end
 .
 
@@ -1415,9 +1441,12 @@ create_new_meta_table( LTableName )->
 		      { ok, { { _NewVersion, 200, _NewReasonPhrase}, _NewHeaders, Text1 } } -> 
 			       ?DEBUG("~p create new  table  ~p ~n~n~n",[{?MODULE,?LINE}, {TableName} ] ),
 				true;
+                      { ok, { { _NewVersion, 201, _NewReasonPhrase}, _NewHeaders, Text1 } } -> 
+                               ?DEBUG("~p create new  table  ~p ~n~n~n",[{?MODULE,?LINE}, {TableName} ] ),
+                                true;
                       Res ->
                             ?WAIT("~p got from hbase ~p ",[?LINE,Res]),
-                            []
+                             throw({hbase_exception, Res })
 
 		  end
 .
@@ -1444,6 +1473,9 @@ create_new_fact_table( LTableName )->
 		      { ok, { { _NewVersion, 200, _NewReasonPhrase}, _NewHeaders, Text1 } } -> 
 			       ?DEBUG("~p create new  table  ~p ~n~n~n",[{?MODULE,?LINE}, {TableName} ] ),
 				true;
+                      { ok, { { _NewVersion, 201, _NewReasonPhrase}, _NewHeaders, Text1 } } -> 
+                               ?DEBUG("~p create new  table  ~p ~n~n~n",[{?MODULE,?LINE}, {TableName} ] ),
+                                true;
                       Res ->
                             ?WAIT("~p got from hbase ~p ",[?LINE,Res]),
                              throw({'EXIT',hbase, Res } )
@@ -1481,7 +1513,7 @@ store_new_fact(LTableName, LProtoType)->
 				true;
                         Res ->
                             ?WAIT("~p got from hbase ~p ~n",[?LINE,{Res,LTableName, LProtoType }]),
-                            false
+                             throw({hbase_exception, Res })
 
 	    end
 .
@@ -1527,7 +1559,7 @@ store_meta_fact(Name, MetaTable, LProtoType, Type)->
 				true;
                         Res ->
                             ?WAIT("~p got from hbase ~p ",[?LINE,Res]),
-                            true
+                             throw({hbase_exception, Res })
 	    end.
 
 
@@ -1788,7 +1820,7 @@ hbase_low_put_key(Table, Key, Family, Key2, Value)->
 				true;
                         Res ->
                             ?WAIT("~p got from hbase ~p ",[?LINE,Res]),
-                            true %TODO process  mistakes this case
+                             throw({hbase_exception, Res })
 
     end
     
