@@ -79,7 +79,7 @@ inner_change_namespace(true, Name, TreeEts)->
         undefined ->
             delete_structs(TreeEts),
             create_inner_structs(Name),
-            ?INCLUDE_HBASE( Name ),
+            ?INCLUDE_HBASE( Name );
         _ ->
            nothing_do; 
     end,
