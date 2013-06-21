@@ -71,13 +71,19 @@ compile(Prefix, File)->
     ok
 .
 inner_change_namespace(false, _Name, _TreeEts)->
-    false;
-    
+    false
+;    
 inner_change_namespace(true, Name, TreeEts)->
-    delete_structs(TreeEts),
-    create_inner_structs(Name),
-    ?INCLUDE_HBASE( Name ),
-    ets:insert(TreeEts,{system_record, ?PREFIX, Name})
+   %%TODO may be delete after a long time not using
+   case ets:info(common:get_logical_name(Name, ?META) ) of
+        undefined ->
+            delete_structs(TreeEts),
+            create_inner_structs(Name),
+            ?INCLUDE_HBASE( Name ),
+        _ ->
+           nothing_do; 
+    end,
+    ets:insert(TreeEts,{system_record, ?PREFIX, Name}),    
 .
 
 delete_structs(Prefix)->
@@ -88,6 +94,7 @@ delete_structs(Prefix)->
       ets:delete(common:get_logical_name(Prefix, ?META_LINKS) ),
       ets:delete(common:get_logical_name(Prefix, ?HBASE_INDEX))
 .
+
 delete_inner_structs(Prefix)->
       ets:delete_all_objects(common:get_logical_name(Prefix, ?META_WEIGHTS) ),
       ets:delete_all_objects(common:get_logical_name(Prefix, ?RULES) ),
@@ -97,19 +104,25 @@ delete_inner_structs(Prefix)->
       ets:delete_all_objects(common:get_logical_name(Prefix, ?HBASE_INDEX))
 .
 
+%  | {heir,none}
+% Set a process as heir. The heir will inherit the table if the owner terminates. The message {'ETS-TRANSFER',tid(),FromPid,HeirData} will
+
+
 create_inner_structs(Prefix)->
-  
-    ets:new(common:get_logical_name(Prefix, ?DYNAMIC_STRUCTS),[named_table, set, public]),
+    Pid = erlang:whereis(converter_monitor), %%in result all ets tables will be transfered to converter_monitor
+    ets:new(common:get_logical_name(Prefix, ?DYNAMIC_STRUCTS),[named_table, set, public, { heir,Pid, some_data } ]),
     %TODO remove this
     put(?DYNAMIC_STRUCTS, common:get_logical_name(Prefix, ?DYNAMIC_STRUCTS) ),
-    ets:new(common:get_logical_name(Prefix, ?META_WEIGHTS),[named_table, set, public] ),
-    ets:new(common:get_logical_name(Prefix, ?META),[named_table, set, public]),
-    ets:new(common:get_logical_name(Prefix, ?RULES),[named_table, bag, public]),
-    ets:new(common:get_logical_name(Prefix, ?META_LINKS),[named_table, bag, public]),
+    ets:new(common:get_logical_name(Prefix, ?META_WEIGHTS),[named_table, set, public, { heir,Pid, some_data }] ),
+    ets:new(common:get_logical_name(Prefix, ?META),[named_table, set, public, { heir,Pid, some_data }]),
+    ets:new(common:get_logical_name(Prefix, ?RULES),[named_table, bag, public, { heir,Pid, some_data }]),
+    ets:new(common:get_logical_name(Prefix, ?META_LINKS),[named_table, bag, public, { heir,Pid, some_data }]),
     %the hbase database is for everything
-    ets:new(common:get_logical_name(Prefix, ?HBASE_INDEX), [named_table, bag, public])
+    ets:new(common:get_logical_name(Prefix, ?HBASE_INDEX), [named_table, bag, public, { heir,Pid, some_data }])
     %%statistic is common
 .
+
+
 
 process_term(Rule  = {':-',Name, Body}, Prefix) when is_atom(Name)->
      ?DEBUG("~p got rule ~p~n",[{?MODULE,?LINE}, Rule  ]),    
