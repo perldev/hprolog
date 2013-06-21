@@ -5,13 +5,12 @@
 -define(META_INFO_BATCH, 3). %%for using as batch param for scanner meta info
 
 
-
 %-define(USE_HBASE,1).
 -define(UPDATE_STAT_INTERVAL,320000).%%interval of updating meta stat of prolog statements
 
 -define(SIMPLE_HBASE_ASSERT,0).
 
-%-define(ENABLE_LOG,1).
+-define(ENABLE_LOG,1).
 -define(COMPILE_TRACE, 1).
 
 -define('DEV_DEBUG_MATCH'(Str, Pars ), true ).
@@ -47,7 +46,9 @@
 -define(LOCAL, 1).
 -define(LOG_CONF,"log.conf").
 
+%-define(WEB,1).
 
+-define('WRITE_UNICODE'(Parent,X), common:console_write_unicode(Parent, X) ).
 
 -ifdef(WEB).
 
@@ -185,17 +186,18 @@
 -define(SCANNERS_HOSTS_TABLE, hbase_scanners ).
 -define(SCANNERS_HOSTS_LINK, hbase_scanners_hosts ).
 -define(HBASE_HOSTS, 
-	[{"http://hd-test-2.ceb.loc:60050/", "hd-test-2.ceb.loc:60050" },
-	{"http://es-1.ceb.loc:60050/", "es-1.ceb.loc:60050" },
-	 {"http://es-2.ceb.loc:60050/", "es-2.ceb.loc:60050" },
-	 {"http://es-3.ceb.loc:60050/", "es-3.ceb.loc:60050" }
-
-      ]).
-      	% {"http://es-4.ceb.loc:60050/", "es-4.ceb.loc:60050" },
-	% {"http://es-6.ceb.loc:60050/", "es-6.ceb.loc:60050" },
-	% {"http://es-7.ceb.loc:60050/", "es-7.ceb.loc:60050" },
-	% {"http://es-8.ceb.loc:60050/", "es-8.ceb.loc:60050" },
-        % {"http://es-9.ceb.loc:60050/", "es-9.ceb.loc:60050" }
+	[
+	%{"http://hd-test-2.ceb.loc:60050/", "hd-test-2.ceb.loc:60050" },
+	%{"http://es-1.ceb.loc:60050/", "es-1.ceb.loc:60050" },
+	% {"http://es-2.ceb.loc:60050/", "es-2.ceb.loc:60050" },
+	% {"http://es-3.ceb.loc:60050/", "es-3.ceb.loc:60050" }
+        % ]).
+      	 {"http://avias-db-2.ceb.loc:60050/", "avias-db-2.ceb.loc:60050" },
+	 {"http://avias-db-2.ceb.loc:60050/", "avias-db-2.ceb.loc:60050" },
+	 {"http://avias-db-2.ceb.loc:60050/", "avias-db-2.ceb.loc:60050" },
+	 {"http://avias-db-2.ceb.loc:60050/", "avias-db-2.ceb.loc:60050" },
+         {"http://avias-db-2.ceb.loc:60050/", "avias-db-2.ceb.loc:60050" }
+	]).
 -define(HBASE_HOSTS_COUNT,4).
 
 
@@ -215,6 +217,12 @@
 
 -define(BUILTIN_PREDICATES,
 [
+'to_float',
+'to_integer',
+'to_list',
+'write_unicode',
+
+
 'inner_retract___',
 'meta',
 'functor',
