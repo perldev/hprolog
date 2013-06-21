@@ -83,7 +83,8 @@ inner_change_namespace(true, Name, TreeEts)->
         _ ->
            nothing_do
     end,
-    ets:insert(TreeEts,{system_record, ?PREFIX, Name})
+    ets:insert(TreeEts,{system_record, ?PREFIX, Name}),
+    true
 .
 
 delete_structs(Prefix)->
@@ -457,8 +458,7 @@ inner_defined_aim(NextBody, PrevIndex ,{ use_namespace, Name  }, Context, _Index
      Res  = case is_list(Body) of
                 true ->   
                     TableName = Name++?META_FACTS,
-                    inner_change_namespace( fact_hbase:check_exist_table(TableName), Name, TreeEts ),
-                    true;
+                    inner_change_namespace( fact_hbase:check_exist_table(TableName), Name, TreeEts );
                 false -> false
             end,
      {Res, Context}   
@@ -777,7 +777,10 @@ inner_defined_aim(NextBody, PrevIndex , {'=\\=', First, Second }, Context, _Inde
     One = arithmetic_process(First, Context),
     Two = arithmetic_process(Second, Context),
     Res = { not_compare(One ,Two), Context },
-    Res.
+    Res;
+inner_defined_aim(_NextBody, _PrevIndex , Body, _Context, _Index, TreeEts )->
+    throw({'EXIT',non_exist, {Body,  TreeEts} } ).
+
 
 aim(NextBody, PrevIndex , {'retract', Body }, Context, Index, TreeEts, Parent)->
        %%we make just to temp aims with two patterns 
@@ -1036,6 +1039,9 @@ aim_match(next_pattern, [ Aim = { Name, Args, Body} | Tail], ProtoType,Context )
 
 
 % timer:tc(?MODULE, 'next', [ Rule, Context , Index, TreeEts ] ),
+next_aim(?ROOT ,TreeEts)->
+    false
+;
 next_aim(Index ,TreeEts)->
     [ Record ] = ets:lookup(TreeEts, Index),
     next_aim(Record#aim_record.parent, Index, TreeEts )
