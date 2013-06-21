@@ -77,13 +77,13 @@ inner_change_namespace(true, Name, TreeEts)->
    %%TODO may be delete after a long time not using
    case ets:info(common:get_logical_name(Name, ?META) ) of
         undefined ->
-            delete_structs(TreeEts),
+%             delete_structs(TreeEts),
             create_inner_structs(Name),
             ?INCLUDE_HBASE( Name );
         _ ->
-           nothing_do; 
+           nothing_do
     end,
-    ets:insert(TreeEts,{system_record, ?PREFIX, Name}),    
+    ets:insert(TreeEts,{system_record, ?PREFIX, Name})
 .
 
 delete_structs(Prefix)->
