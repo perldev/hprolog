@@ -3,7 +3,7 @@
 
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2, terminate/2, code_change/3]).
 -export([start_link/0, stop/0, status/0,stat/4,statistic/0, regis_timer_restart/1, regis/2 ,regis/1, kill_process_after/1 ]).
--export([stop_converter/0, start_converter/0, start_statistic/0, update_hbase_stat/0]).
+-export([stop_converter/0, start_converter/0, start_statistic/0, update_hbase_stat/0, check_run/0]).
 
 
 
@@ -38,8 +38,14 @@ start_statistic()->
     ets:new(?APPLICATION, [named_table, set, public]),
     lists:foreach(fun(E)-> ets:insert(?SCANNERS_HOSTS_TABLE, {E,0,0} )  end,?HBASE_HOSTS),
     ets:new( ?SCANNERS_HOSTS_LINK, [named_table, set, public] )
-
 .
+
+check_run()->
+      case ets:lookup(?APPLICATION, converter_run) of
+            []-> false;
+            [{_, Res}] -> Res
+      end.
+
     
 handle_call(Info,_From ,State) ->
     ?WAIT("get msg call ~p ~n",
