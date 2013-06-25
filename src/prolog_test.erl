@@ -123,7 +123,14 @@
 		   ]).
 
 
-		   
+bug1()->
+      prolog_test:start(),  
+      TempAim = {some_test,{'X'} },
+      ets:new(tree_processes,[ public, set, named_table,{ keypos, 2 } ] ), 
+      ets:insert(tree_processes,  {system_record,prefix, ""}),
+      debugger:quick(prolog, aim, [finish, root_console ,TempAim,  dict:new(), 
+                                                        now(), tree_processes, root_console ]).
+                                                      
 		   
 start()->
       inets:start(),
@@ -321,7 +328,7 @@ sent_aim(TestName, Goal, Wait)->
 	      StartTime = erlang:now(),
 % 	      aim(PrevIndex, ProtoType, Context, Index, TreeEts )
 
-	      Res = erlang:apply(prolog, aim, [finish, some ,TempAim,  dict:new(), 
+	      Res = erlang:apply(prolog, aim, [finish, root_console ,TempAim,  dict:new(), 
 				                      now(), tree_processes ]),
 	      Result = check_test(TempAim, Goal, Res, StartTime, Wait, TestName ),
 	      ets:delete(tree_processes),

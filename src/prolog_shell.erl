@@ -12,10 +12,13 @@
 
 start() -> start("").
 
+api_start_anon(Prefix)->
+    prolog:create_inner_structs(Prefix)
+.
+
 api_start(Prefix)->
     prolog:create_inner_structs(Prefix),
     ?INCLUDE_HBASE( Prefix )
-    
 .
 
 start(Prefix)-> 
@@ -37,6 +40,8 @@ server(Prefix) ->
 	      [erlang:system_info(version)]),
     TreeEts = ets:new(tree_processes,[ public, set,named_table,{ keypos, 2 } ] ),   
     ets:insert(TreeEts, {system_record,?PREFIX, Prefix}),    
+    ets:insert(TreeEts, {system_record,?AIM_COUNTER, 0}),    
+
     server_loop(TreeEts, ?TRACE_OFF).
 
 %% A simple Prolog shell similar to a "normal" Prolog shell. It allows
@@ -109,6 +114,7 @@ server_loop(TreeEts, TraceOn) ->
                process_prove(TempAim, Goal, Res, StartTime ),
 % 	       clean(tree_processes),%%%this is very bad design or solution
 	       prolog:clean_tree(TreeEts),
+	       ets:insert(TreeEts, {system_record, ?AIM_COUNTER, 0}),
 	       server_loop(TreeEts, TraceOn);
 	{error,P = {_, Em, E }} ->
 	    io:fwrite("Error: ~p~n", [P]),
@@ -137,7 +143,8 @@ process_prove(  TempAim , Goal, Res, StartTime)->
                                         
                   lists:foreach(fun shell_var_match/1, dict:to_list(NewLocalContext) ),
                   ?SYSTEM_STAT(tree_processes, {0,0,0}),
-                  io:fwrite(" elapsed time ~p next solution ~p ~n", [ timer:now_diff(FinishTime, StartTime)*0.000001,Prev ] ),
+                  [{_,_, Count}] = ets:lookup(tree_processes, ?AIM_COUNTER),
+                  io:fwrite(" elapsed time ~p next solution ~p process varients ~p ~n", [ timer:now_diff(FinishTime, StartTime)*0.000001,Prev, Count] ),
                   Line = io:get_line(': '),
                   case string:chr(Line, $;) of
                        0 ->
@@ -224,23 +231,31 @@ get_code_memory(Prefix)->
 				V2 = list_to_binary(""++LName++ " arity  - "++ LCount ++ ". \n") ,
 				<<In/binary, V2/binary>>
 			end, <<>>, Meta  ),
-
-	
-	    RulesCode = lists:foldl(fun( {Name, ProtoType ,Body }, In  )->
- 				RestoreTree1 =  list_to_tuple( 
- 						[Name|tuple_to_list(ProtoType) ] 
- 					      ),
-				RestoreTree = {':-', RestoreTree1, Body },
-				PrologCode =  lists:flatten( erlog_io:write1( RestoreTree ) ),
-				?DEBUG(" restore code  ~p\n", [PrologCode]),
-				V2 = list_to_binary( PrologCode++".\n\n\n\n" ),
-				<<In/binary, V2/binary>>
-			end, <<>> , Rules  ),
+	   RulesCode = lists:foldl(fun process_inner/2, <<>> , Rules  ),
 	   FormatedCode1 = binary:replace(RulesCode,[<<" , ">>],<<"   ,        \n">>, [ global ] ),
 	   FormatedCode = binary:replace(FormatedCode1,[<<":-">>],<<" :-\n">>, [ global ] ),
 	   ResBin = << "\n", MetaCode/binary,FormatedCode/binary >>,
 	   binary_to_list(ResBin).
-	   
+
+process_inner({Name, ProtoType ,Body }, In)->
+
+                                RestoreTree1 =  list_to_tuple( 
+                                                [Name|tuple_to_list(ProtoType) ] 
+                                              ),
+                                RestoreTree = {':-', RestoreTree1, Body },
+                                PrologCode =  lists:flatten( erlog_io:write1( RestoreTree ) ),
+                                ?DEBUG(" restore code  ~p\n", [PrologCode]),
+                                V2 = list_to_binary( PrologCode++".\n\n\n\n" ),
+                                <<In/binary, V2/binary>>
+;
+process_inner({Name, Body }, In)->
+                                RestoreTree = {':-', Name, Body },
+                                PrologCode =  lists:flatten( erlog_io:write1( RestoreTree ) ),
+                                ?DEBUG(" restore code  ~p\n", [PrologCode]),
+                                V2 = list_to_binary( PrologCode++".\n\n\n\n" ),
+                                <<In/binary, V2/binary>>
+.
+	
 get_code_memory_html(Prefix)->
 	   Rules = ets:tab2list(common:get_logical_name(Prefix, ?RULES) ),
            Meta = ets:tab2list( common:get_logical_name(Prefix, ?META) ),        
@@ -254,20 +269,29 @@ get_code_memory_html(Prefix)->
 			end, <<>>, Meta  ),
 
 	
-	    RulesCode = lists:foldl(fun( {Name, ProtoType ,Body }, In  )->
- 				RestoreTree1 =  list_to_tuple( 
- 						[Name|tuple_to_list(ProtoType) ] 
- 					      ),
-				RestoreTree = {':-', RestoreTree1, Body },
-				PrologCode =  lists:flatten( erlog_io:write1( RestoreTree ) ),
-				?DEBUG(" restore code  ~p~n", [PrologCode]),
-				V2 = list_to_binary( PrologCode++".<br/><br/><br/><strong>" ),
-				<<In/binary, V2/binary>>
-			end, <<>> , Rules  ),
+	    RulesCode = lists:foldl(fun process_inner_html/2, <<>> , Rules  ),
 	   FormatedCode1 = binary:replace(RulesCode,[<<" , ">>],<<"&nbsp;&nbsp;&nbsp;&nbsp;<strong>,</strong><br/>">>, [ global ] ),
 	   FormatedCode = binary:replace(FormatedCode1,[<<":-">>],<<"</strong>:-<br/>">>, [ global ] ),
 	   ResBin = << "<br/>", MetaCode/binary, FormatedCode/binary >>,
 	   ResBin.
 	   
-
+	   
+process_inner_html( {Name, ProtoType ,Body }, In  )->
+                RestoreTree1 =  list_to_tuple( 
+                                     [Name|tuple_to_list(ProtoType) ] 
+                                ),
+                                RestoreTree = {':-', RestoreTree1, Body },
+                                PrologCode =  lists:flatten( erlog_io:write1( RestoreTree ) ),
+                                ?DEBUG(" restore code  ~p~n", [PrologCode]),
+                                V2 = list_to_binary( PrologCode++".<br/><br/><br/><strong>" ),
+                                <<In/binary, V2/binary>>;
+              
+process_inner_html( {Name, Body }, In  )->
+            
+                                RestoreTree = {':-', Name, Body },
+                                PrologCode =  lists:flatten( erlog_io:write1( RestoreTree ) ),
+                                ?DEBUG(" restore code  ~p~n", [PrologCode]),
+                                V2 = list_to_binary( PrologCode++".<br/><br/><br/><strong>" ),
+                                <<In/binary, V2/binary>>. 
+	   
  

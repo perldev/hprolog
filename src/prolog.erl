@@ -29,7 +29,7 @@ inner_meta_predicates(Name)->
       lists:member(Name, ?BUILTIN_PREDICATES)
 .
 get_index(_Index)->
-    now().
+    erlang:make_ref().
     
 -ifdef(USE_HBASE).
     
@@ -491,7 +491,13 @@ inner_defined_aim(NextBody, PrevIndex , Body  = { to_list, _X1, _X2  }, Context,
                     prolog_matching:var_match(X2B, R, Context)
      end
 ;
-
+inner_defined_aim(NextBody, PrevIndex ,Body = { 'length', _List, _Size   }, Context, _Index, TreeEts  )->
+     {_, List, Size } = prolog_matching:bound_body( Body, Context),     
+    case catch(length(List)) of
+         {'EXIT', Reason} -> throw({unexpected_return_value, Reason });
+         Result -> prolog_matching:var_match(Size, Result, Context)
+    end   
+;
 inner_defined_aim(NextBody, PrevIndex ,{ create_namespace, Name  }, Context, _Index, _  ) ->
     Res = fact_hbase:create_new_namespace(Name),
     {Res, Context}
@@ -862,10 +868,12 @@ aim(NextBody, PrevIndex, ProtoType, Context, Index, TreeEts, Parent ) when is_at
 ;
 aim(NextBody, PrevIndex, ProtoType, Context, Index, TreeEts, Parent )->
     Name = element(1,ProtoType),
+    
     case inner_meta_predicates(Name) of
           true -> 
             ?TRACE(Index, TreeEts, bound_aim(ProtoType, Context), Context),
              Res = inner_defined_aim(NextBody, PrevIndex, ProtoType, Context, Index, TreeEts),             
+             ets:update_counter(TreeEts, ?AIM_COUNTER, {3,1}),
              process_builtin_pred(Res, NextBody,  PrevIndex, Index, TreeEts, Parent);
           false ->
              user_defined_aim(NextBody, PrevIndex, ProtoType, Context, Index, TreeEts, Parent)
@@ -876,8 +884,9 @@ process_builtin_pred({false, _Context}, _NextBody, PrevIndex, _NewIndex2, TreeEt
           next_aim(Parent, PrevIndex, TreeEts )
 ;
 %%TODO about NewIndex we are able to get old NewIndex2, if have no such predicate like retract
-%%TODO Index must be rewrited to auto increment
+
 process_builtin_pred({true, Context}, NextBody, PrevIndex, NewIndex2, TreeEts, Parent )->               
+         %%just for calculation
         case  conv3( NextBody, Context, PrevIndex, NewIndex2, TreeEts, Parent ) of
             ProcessRes = {true, _Context, _Prev} -> 
                             ProcessRes;
@@ -1056,6 +1065,7 @@ next_aim( Parent, Index, TreeEts )->
       Res = ets:lookup(TreeEts, Index),  
       ?DEV_DEBUG("~p process aim ~p ~n",[{?MODULE,?LINE}, {Res, Parent, Index} ]),
 %       ?PAUSE,
+      ets:update_counter(TreeEts, ?AIM_COUNTER, {3,1}), %%UPDATE counter
       case Res of
         [ T = #aim_record{solutions = [], next = one }] ->%%one  it's pattern matching 
                 ?DEV_DEBUG("~p got to prev aim  ~p ~n",[{?MODULE,?LINE}, T#aim_record.prev_id]),
@@ -1336,6 +1346,14 @@ delete_about_me(Index,TreeEts)->
 
 conv3(  'finish', NewContext, PrevIndex, NewIndex, TreeEts, ParentIndex )->
         {true, NewContext, PrevIndex}
+;
+conv3({ '->', Rule, Body }, Context, PrevIndex, Index, TreeEts, ParentIndex )->
+        %start process of fact and rule calculation
+%       ?DEBUG("~p  process  ~p ~n",[{?MODULE,?LINE}, {Rule, Body, dict:to_list(Context) } ]),
+        {Time , Res} =   timer:tc(?MODULE, 'aim' ,[ Body, PrevIndex , Rule, Context,  Index, TreeEts, ParentIndex] ),
+        ?TC("~p conv3 process in  ~p ~n",[{?MODULE,?LINE}, {Time,Res}  ]),
+        %%%form params for 
+        Res
 ;
 conv3({ ',', Rule, Body }, Context, PrevIndex, Index, TreeEts, ParentIndex )->
 	%start process of fact and rule calculation

@@ -23,9 +23,6 @@ init([]) ->
 	 inets:start(),
 	 crypto:start(),
 	 ?LOG_APPLICATION,
-%TODO move it to each converter
-% 	 prolog:create_inner_structs(""), 
-%          ?INCLUDE_HBASE(""),
          ets:new(?ERWS_LINK, [set, public,named_table ]),
          start_statistic(),
          timer:apply_interval(?UPDATE_STAT_INTERVAL, ?MODULE, update_hbase_stat, [] ),
