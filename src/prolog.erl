@@ -1347,6 +1347,7 @@ delete_about_me(Index,TreeEts)->
 conv3(  'finish', NewContext, PrevIndex, NewIndex, TreeEts, ParentIndex )->
         {true, NewContext, PrevIndex}
 ;
+%%TODO add cut deciesion
 conv3({ '->', Rule, Body }, Context, PrevIndex, Index, TreeEts, ParentIndex )->
         %start process of fact and rule calculation
 %       ?DEBUG("~p  process  ~p ~n",[{?MODULE,?LINE}, {Rule, Body, dict:to_list(Context) } ]),
