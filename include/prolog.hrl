@@ -3,6 +3,7 @@
 -define(IO_SERVER, io).
 -define(FATAL_WAIT_TIME, infinity).
 -define(META_INFO_BATCH, 3). %%for using as batch param for scanner meta info
+-define(AIM_COUNTER, aim_counter).
 
 
 %-define(USE_HBASE,1).
@@ -10,7 +11,7 @@
 
 -define(SIMPLE_HBASE_ASSERT,0).
 
--define(ENABLE_LOG,1).
+%-define(ENABLE_LOG,1).
 -define(COMPILE_TRACE, 1).
 
 -define('DEV_DEBUG_MATCH'(Str, Pars ), true ).
@@ -221,7 +222,7 @@
 'to_integer',
 'to_list',
 'write_unicode',
-
+length,
 
 'inner_retract___',
 'meta',
