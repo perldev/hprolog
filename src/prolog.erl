@@ -49,7 +49,7 @@ clean_tree(TreeEts)->
 -else.
 
 clean_tree(TreeEts)->
-         ets:foldl(fun(Elem, Acum)->
+             ets:foldl(fun(Elem, Acum)->
  			 case Elem of
                             {system_record, _, _}-> Acum;
                             T = #aim_record{} ->
@@ -873,7 +873,7 @@ aim(NextBody, PrevIndex, ProtoType, Context, Index, TreeEts, Parent )->
           true -> 
             ?TRACE(Index, TreeEts, bound_aim(ProtoType, Context), Context),
              Res = inner_defined_aim(NextBody, PrevIndex, ProtoType, Context, Index, TreeEts),             
-             ets:update_counter(TreeEts, ?AIM_COUNTER, {3,1}),
+%              ets:update_counter(TreeEts, ?AIM_COUNTER, {3,1}),
              process_builtin_pred(Res, NextBody,  PrevIndex, Index, TreeEts, Parent);
           false ->
              user_defined_aim(NextBody, PrevIndex, ProtoType, Context, Index, TreeEts, Parent)
@@ -1065,7 +1065,7 @@ next_aim( Parent, Index, TreeEts )->
       Res = ets:lookup(TreeEts, Index),  
       ?DEV_DEBUG("~p process aim ~p ~n",[{?MODULE,?LINE}, {Res, Parent, Index} ]),
 %       ?PAUSE,
-      ets:update_counter(TreeEts, ?AIM_COUNTER, {3,1}), %%UPDATE counter
+%       ets:update_counter(TreeEts, ?AIM_COUNTER, {3,1}), %%UPDATE counter
       case Res of
         [ T = #aim_record{solutions = [], next = one }] ->%%one  it's pattern matching 
                 ?DEV_DEBUG("~p got to prev aim  ~p ~n",[{?MODULE,?LINE}, T#aim_record.prev_id]),
