@@ -952,6 +952,10 @@ hbase_user_defined_aim(RuleList, NextBody, PrevIndex, ProtoType, Context, Index,
          {TempSearch, _NewContext} = prolog_shell:make_temp_aim(BoundProtoType),%% think about it
          %%pattern matching like one aim
          ?DEBUG("~p user defined aim ~p ~n",[{?MODULE,?LINE}, { BoundProtoType, TempSearch,  NextBody } ]),
+         converter_monitor:stat('search',  
+                                 common:get_logical_name(TreeEts, erlang:element(1,ProtoType) ),
+                                 ProtoType, true ),
+         
          ets:insert(TreeEts,
          #aim_record{ id = Index,
                       prototype = ProtoType,

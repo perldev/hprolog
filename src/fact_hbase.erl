@@ -141,7 +141,7 @@ get_cache_meta_info(Scanner, Table)->
                     Res ->
 			    ?DEBUG("~p got ~p ~n",[ {?MODULE,?LINE}, Res ] ),  
 			     unlink ( spawn(?MODULE,delete_scanner,[Scanner]) ),
-                            throw({hbase_exception, Res})      
+                            throw( {'EXIT', {hbase_exception, Res} } )      
 	end.
 
 % [{<<"Row">>,
@@ -227,7 +227,7 @@ get_link_meta_info(Scanner, Table)->
                     Res ->
 			    ?DEBUG("~p got ~p ~n",[ {?MODULE,?LINE}, Res ] ),  
 			     unlink ( spawn(?MODULE,delete_scanner,[Scanner]) ),
-                            throw({hbase_exception, Res})        
+                            throw({'EXIT', {hbase_exception, Res} })        
 	end
 .
 
@@ -342,7 +342,7 @@ get_and_load_meta_weights(Scanner, Table)->
                     Res ->
                             ?DEBUG("~p got ~p ~n",[ {?MODULE,?LINE}, Res ] ),  
                              unlink ( spawn(?MODULE,delete_scanner,[Scanner]) ),
-                            throw({hbase_exception, Res})            
+                            throw({'EXIT', {hbase_exception, Res} })            
         end
 .
 
@@ -369,7 +369,7 @@ get_meta_facts(Scanner, Table)->
                     Res ->
                             ?DEBUG("~p got ~p ~n",[ {?MODULE,?LINE}, Res ] ),  
                              unlink ( spawn(?MODULE,delete_scanner,[Scanner]) ),
-                            throw({hbase_exception, Res})           
+                            throw({'EXIT', {hbase_exception, Res} })           
 	end
 .
 
@@ -393,7 +393,7 @@ get_and_load_rules(Scanner, Table)->
                     Res ->
                             ?DEBUG("~p got ~p ~n",[ {?MODULE,?LINE}, Res ] ),  
                              unlink ( spawn(?MODULE,delete_scanner,[Scanner]) ),
-                            throw({hbase_exception, Res})         
+                            throw({'EXIT', {hbase_exception, Res} })         
 	end
 .
 
@@ -566,7 +566,8 @@ fact_start_link_hbase( Aim,  TreeEts, ParentPid )->
 			      ?DEBUG("~p got index ~p ~n",[{?MODULE,?LINE}, { {IndexTable, Name} , PartKey } ]),
 		              PreRes = get_indexed_records(PartKey, atom_to_list(IndexTable) ),
 		              %%TODO process exception timeouts etc
-
+                                
+		              
 			      process_indexed_hbase(atom_to_list(NameTable), ProtoType,  PreRes,  TreeEts)
 		end;
 	  Res ->
@@ -591,9 +592,11 @@ get_indexed_records(PartKey, IndexTable)->
 				  ?LOG("~p got indexed keys ~p ~n",[ {?MODULE,?LINE}, Text1 ] ),
 				  Res = process_key_data(Text1),
 				  Res;
+		           { ok, { {_NewVersion, 404, _NewReasonPhrase}, _NewHeaders, Text1 } } ->
+                                 [];
 			  Res ->
 				  ?LOG("~p got unexpected ~p ~n",[ {?MODULE,?LINE}, Res ] ),
-				  {hbase_exception, Res} %%TODO add count of fail and fail exception may be no
+				   {hbase_exception, Res}  %%TODO add count of fail and fail exception may be no
       end.
 
       
@@ -629,9 +632,20 @@ process_key_data(Meta)->
 
 %%TODO gather mistakey of key invalid
 process_indexed_hbase(Table, ProtoType, {hbase,Reason}, TreeEts)->
+    
+    converter_monitor:stat('search',  Table , ProtoType, false ),
     receive
         {PidReciverResult, get_pack_of_facts}->
             PidReciverResult !  {hbase,Reason};
+         Some -> 
+            ?LOG("~p got unexpected ~p ~n",[{?MODULE,?LINE}, Some ])
+    end    
+;
+process_indexed_hbase(Table, ProtoType, [], TreeEts)->
+    
+    receive
+        {PidReciverResult, get_pack_of_facts}->
+            PidReciverResult !  [];
          Some -> 
             ?LOG("~p got unexpected ~p ~n",[{?MODULE,?LINE}, Some ])
     end    
@@ -666,6 +680,7 @@ process_indexed_hbase(Table, ProtoType,  PreRes, TreeEts)->
 	end,
 	exit(normal)
 .
+
 hbase_get_key(Table,  Key)->
       { Hbase_Res, Host } = get_rand_host(),
        case catch  httpc:request( get, 
@@ -706,6 +721,7 @@ hbase_get_key(ProtoType, Table, Family, Key)->
 			    ?DEBUG("~p  got  key   return ~p ~n  ~p  ~n",
 				    [{?MODULE,?LINE},
 				    {ProtoType, Table, Family, Key}, Res ]),
+                            converter_monitor:stat('search',  Table , ProtoType, false ),
                             {hbase_exception, Res}        
 	end
 .
@@ -1019,12 +1035,12 @@ add_new_fact([ Name | ProtoType ] , Pos, TreeEts,  1)->
 	  CountParams = length(ProtoType),
 	  RealName = common:get_logical_name(TreeEts, Name),
 	  converter_monitor:stat(try_add,  RealName , ProtoType, true ),
+	  %TODO catch a lot exceptions
 	  case check_params_facts( Name, TreeEts ) of
 	      {CountParams, _HashFunction } ->
 		  Params = prototype_to_list(ProtoType),
 		  index_work_add(Name, Params, TreeEts),%%TODO spawn this
 		  Res = store_new_fact(RealName, Params ),
-		  converter_monitor:stat(add,  RealName , ProtoType, Res ),
 		  Res;  
 	      {CountParams1, _HashFunction } ->
 		  ?DEBUG("~p params have not matched with exists~p",[{?MODULE,?LINE}, {CountParams1,CountParams } ]),
@@ -1049,7 +1065,6 @@ add_new_fact([ Name | ProtoType ] , Pos, TreeEts,  1)->
 					  ],
 					  "stat"  ),
 		  Res = store_new_fact(RealName , prototype_to_list(ProtoType) ),
-		  converter_monitor:stat(add, RealName, ProtoType, Res ),
 		  Res
 	  end
 ;
@@ -1093,7 +1108,8 @@ put_key_body(Name, Key, Body )->
 				true;
                         Res ->
                             ?WAIT("~p got from hbase ~p ~n",[?LINE,{Res,Name,Body }]),
-                             throw({hbase_exception, Res })
+                            converter_monitor:stat(add_index,  Name , Body, false ),      
+                            throw({hbase_exception, Res })
 
 	    end
 
@@ -1114,7 +1130,6 @@ hbase_add_index(IndexTable, Type, Params)->
       MakeCellSet = make_cell_set( [ MD5Key ] ),
       converter_monitor:stat(try_add_index,  IndexTable , { Type,MD5Key, Key }, true ),
       Res = put_key_body(IndexTable, Key, MakeCellSet),
-      converter_monitor:stat(add_index,  IndexTable , { Type,MD5Key, Key }, Res ),      
       Res
 .
 
@@ -1129,9 +1144,17 @@ hbase_del_index(IndexTable, Type, Params)->
       Key = generate_key( KeyList ),
       ?DEBUG("~p process delete index ~p",[{?MODULE,?LINE}, {Key,KeyList }  ]),
       converter_monitor:stat(try_del_index,  IndexTable , { Type, Key }, true ),
-      Res = del_key(Key, IndexTable ),
-      converter_monitor:stat(del_index,  IndexTable , { Type, Key }, Res ),
-      Res
+      
+      case catch  del_key(Key, IndexTable ) of
+        {hbase_exception, Res }->   
+            converter_monitor:stat(del_index,  IndexTable , { Type, Key }, false ),
+            throw({hbase_exception, Res })
+        ;    
+        Res ->
+            converter_monitor:stat(del_index,  IndexTable , { Type, Key }, true ),
+            Res
+     end
+        
 .
 
 index_work_add(Name, Params, TreeEts)->
@@ -1250,12 +1273,15 @@ del_fact(B, TreeEts,  1)->
       index_work_del(Name, ProtoType, TreeEts),
        ?DEBUG("~p delete key ~p",[{?MODULE,?LINE}, RealName ]),
 
-      Res = del_key( generate_key(ProtoType), RealName),
-       ?DEBUG("~p delete has result ~p",[{?MODULE,?LINE}, {Res,RealName} ]),
-
-      converter_monitor:stat(del,  RealName , ProtoType, Res),
-      Res
-      
+        case catch  del_key( generate_key(ProtoType), RealName) of
+        {hbase_exception, Res }->   
+            converter_monitor:stat(del,  RealName , ProtoType, false ),
+            throw({hbase_exception, Res })
+        ;    
+        Res ->
+            converter_monitor:stat(del,  RealName , ProtoType, true ),
+            Res
+        end     
 ;
 del_fact(_,_,_)->
     true.
@@ -1513,6 +1539,7 @@ store_new_fact(LTableName, LProtoType)->
 				true;
                         Res ->
                             ?WAIT("~p got from hbase ~p ~n",[?LINE,{Res,LTableName, LProtoType }]),
+                             converter_monitor:stat(add,  LTableName , LProtoType, false ),
                              throw({hbase_exception, Res })
 
 	    end

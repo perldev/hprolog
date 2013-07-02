@@ -40,7 +40,7 @@ server(Prefix) ->
 	      [erlang:system_info(version)]),
     TreeEts = ets:new(tree_processes,[ public, set,named_table,{ keypos, 2 } ] ),   
     ets:insert(TreeEts, {system_record,?PREFIX, Prefix}),    
-    ets:insert(TreeEts, {system_record,?AIM_COUNTER, 0}),    
+%     ets:insert(TreeEts, {system_record,?AIM_COUNTER, 0}),    
 
     server_loop(TreeEts, ?TRACE_OFF).
 
@@ -114,7 +114,7 @@ server_loop(TreeEts, TraceOn) ->
                process_prove(TempAim, Goal, Res, StartTime ),
 % 	       clean(tree_processes),%%%this is very bad design or solution
 	       prolog:clean_tree(TreeEts),
-	       ets:insert(TreeEts, {system_record, ?AIM_COUNTER, 0}),
+% 	       ets:insert(TreeEts, {system_record, ?AIM_COUNTER, 0}),
 	       server_loop(TreeEts, TraceOn);
 	{error,P = {_, Em, E }} ->
 	    io:fwrite("Error: ~p~n", [P]),
@@ -143,8 +143,8 @@ process_prove(  TempAim , Goal, Res, StartTime)->
                                         
                   lists:foreach(fun shell_var_match/1, dict:to_list(NewLocalContext) ),
                   ?SYSTEM_STAT(tree_processes, {0,0,0}),
-                  [{_,_, Count}] = ets:lookup(tree_processes, ?AIM_COUNTER),
-                  io:fwrite(" elapsed time ~p next solution ~p process varients ~p ~n", [ timer:now_diff(FinishTime, StartTime)*0.000001,Prev, Count] ),
+%                   [{_,_, Count}] = ets:lookup(tree_processes, ?AIM_COUNTER),
+                  io:fwrite(" elapsed time ~p next solution ~p process varients  ~n", [ timer:now_diff(FinishTime, StartTime)*0.000001,Prev] ),
                   Line = io:get_line(': '),
                   case string:chr(Line, $;) of
                        0 ->
