@@ -188,17 +188,17 @@
 -define(SCANNERS_HOSTS_LINK, hbase_scanners_hosts ).
 -define(HBASE_HOSTS, 
 	[
-	%{"http://hd-test-2.ceb.loc:60050/", "hd-test-2.ceb.loc:60050" },
-	%{"http://es-1.ceb.loc:60050/", "es-1.ceb.loc:60050" },
-	% {"http://es-2.ceb.loc:60050/", "es-2.ceb.loc:60050" },
-	% {"http://es-3.ceb.loc:60050/", "es-3.ceb.loc:60050" }
-        % ]).
-      	 {"http://avias-db-2.ceb.loc:60050/", "avias-db-2.ceb.loc:60050" },
-	 {"http://avias-db-2.ceb.loc:60050/", "avias-db-2.ceb.loc:60050" },
-	 {"http://avias-db-2.ceb.loc:60050/", "avias-db-2.ceb.loc:60050" },
-	 {"http://avias-db-2.ceb.loc:60050/", "avias-db-2.ceb.loc:60050" },
-         {"http://avias-db-2.ceb.loc:60050/", "avias-db-2.ceb.loc:60050" }
-	]).
+	{"http://hd-test-2.ceb.loc:60050/", "hd-test-2.ceb.loc:60050" },
+	{"http://es-1.ceb.loc:60050/", "es-1.ceb.loc:60050" },
+	 {"http://es-2.ceb.loc:60050/", "es-2.ceb.loc:60050" },
+	 {"http://es-3.ceb.loc:60050/", "es-3.ceb.loc:60050" }
+         ]).
+%      	 {"http://avias-db-2.ceb.loc:60050/", "avias-db-2.ceb.loc:60050" },
+%	 {"http://avias-db-2.ceb.loc:60050/", "avias-db-2.ceb.loc:60050" },
+%	 {"http://avias-db-2.ceb.loc:60050/", "avias-db-2.ceb.loc:60050" },
+%	 {"http://avias-db-2.ceb.loc:60050/", "avias-db-2.ceb.loc:60050" },
+ %        {"http://avias-db-2.ceb.loc:60050/", "avias-db-2.ceb.loc:60050" }
+%	]).
 -define(HBASE_HOSTS_COUNT,4).
 
 
