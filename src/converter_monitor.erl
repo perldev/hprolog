@@ -215,23 +215,7 @@ process_stat(Nothing, Acum )->
 	 Acum
 .
 
-find_shortes(LongName, Prefixes) when is_atom(LongName) ->
-  find_shortes(atom_to_list(LongName), Prefixes);
-find_shortes(LongName, Prefixes) ->
-    NameSpace = lists:foldl(fun(E, Prefix)-> 
-				      case lists:prefix(E, LongName) of
-					    true ->
-						 case length(Prefix)>length(E) of
-						    true  -> Prefix;
-						    false ->  E
-						 end; 
-					    false ->
-						  Prefix
-				      end
-			     end, "" , Prefixes ),
-    Name = common:get_namespace_name(NameSpace, LongName),		     
-    { Name, common:get_logical_name(NameSpace, ?META_FACTS) }
-.
+
 	
 -else.
 update_hbase_stat()->
@@ -239,7 +223,23 @@ update_hbase_stat()->
 
    
 -endif.
-
+find_shortes(LongName, Prefixes) when is_atom(LongName) ->
+  find_shortes(atom_to_list(LongName), Prefixes);
+find_shortes(LongName, Prefixes) ->
+    NameSpace = lists:foldl(fun(E, Prefix)-> 
+                                      case lists:prefix(E, LongName) of
+                                            true ->
+                                                 case length(Prefix)>length(E) of
+                                                    true  -> Prefix;
+                                                    false ->  E
+                                                 end; 
+                                            false ->
+                                                  Prefix
+                                      end
+                             end, "" , Prefixes ),
+    Name = common:get_namespace_name(NameSpace, LongName),                   
+    { Name, common:get_logical_name(NameSpace, ?META_FACTS) }
+.
    
 %%prototype do not use     
 stat(Type, Name,  _ProtoType, Res)->
