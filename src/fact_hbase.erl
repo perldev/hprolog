@@ -787,6 +787,31 @@ hbase_get_key(ProtoType, Table, Family, Key)->
 	end
 .
 
+get_list_namespaces()->
+   
+      TableList = fact_hbase:get_table_list(),
+      %HACK
+      
+      
+      MetaTables = lists:filter(fun(E) ->  
+                        Name = lists:reverse(E),
+                        %%find all meta tables called meta
+                        case Name of
+                           [$a,$t,$e,$m|_Tail]-> true;
+                           _ -> false
+                        end
+                        
+                   end, TableList  ),
+                   
+      NameSpaces = lists:foldl( fun(E, Acum)->
+                                    Name = lists:reverse(E),
+                                    [$a,$t,$e,$m|Tail] = Name,
+                                    [ lists:reverse(Tail) | Acum]
+                                end,[],MetaTables),
+      NameSpaces
+.
+
+
 
 
 
