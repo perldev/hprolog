@@ -152,29 +152,12 @@ start_converter()->
     ets:insert(?APPLICATION,{converter_run, true}).   
 
     
+    
+    
 %%update statistic of     
 -ifdef(USE_HBASE).
 update_hbase_stat()->
-      
-      TableList = fact_hbase:get_table_list(),
-      %HACK
-      
-      
-      MetaTables = lists:filter(fun(E) ->  
-			Name = lists:reverse(E),
-			%%find all meta tables called meta
-			case Name of
-			   [$a,$t,$e,$m|_Tail]-> true;
-			   _ -> false
-			end
-			
-		   end, TableList  ),
-		   
-      NameSpaces = lists:foldl( fun(E, Acum)->
-				    Name = lists:reverse(E),
-				    [$a,$t,$e,$m|Tail] = Name,
-				    [ lists:reverse(Tail) | Acum]
-				end,[],MetaTables),
+      NameSpaces = fact_hbase:get_list_namespaces(),
       Stat = ets:tab2list(?STAT),
       ?LOG("~p update  stat of hbase   ~p~n",[{?MODULE,?LINE}, {NameSpaces, Stat} ]),
       lists:foldl(fun process_stat/2, NameSpaces, Stat  ),	 
