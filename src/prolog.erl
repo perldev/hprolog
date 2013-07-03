@@ -125,6 +125,70 @@ create_inner_structs(Prefix)->
 
 
 
+
+ets_code_record_process( {Name, ProtoType, Body}, In)->
+       ?DEBUG("~p process ets code ~p~n",[{?MODULE,?LINE}, {Name, ProtoType, Body}  ]),  
+
+       NormalProtoType  =  list_to_tuple( [ Name| tuple_to_list(ProtoType) ] ),
+       PrologCode =  erlog_io:write1({':-',NormalProtoType, Body  }),      
+       ?DEBUG("~p process ets code ~p~n",[{?MODULE,?LINE}, PrologCode  ]),  
+
+       V2 = list_to_binary( lists:flatten(PrologCode)++"." ),
+       <<In/binary, V2/binary >>
+;
+ets_code_record_process( { Name,  Body}, In)->
+        ?DEBUG("~p process ets code ~p~n",[{?MODULE,?LINE}, { Name,  Body}  ]),  
+       PrologCode =  erlog_io:write1({':-',Name, Body}),
+       ?DEBUG("~p process ets code ~p~n",[{?MODULE,?LINE}, PrologCode  ]),  
+
+       V2 = list_to_binary( lists:flatten(PrologCode)++"." ),
+       <<In/binary, V2/binary >>
+;
+ets_code_record_process({Name}, In)->
+       ?DEBUG("~p process ets code ~p~n",[{?MODULE,?LINE},{Name}  ]),  
+       PrologCode =  erlog_io:write1({':-', Name, true }),
+       ?DEBUG("~p process ets code ~p~n",[{?MODULE,?LINE}, PrologCode  ]),  
+       V2 = list_to_binary( lists:flatten(PrologCode)++"." ),
+       
+       <<In/binary, V2/binary >>
+
+
+
+.
+
+
+
+process_code_ets_key('$end_of_table', _RealRulesTable, _)->
+    true;
+process_code_ets_key(Key, RealRulesTable, RulesTable2)->
+
+    List = ets:lookup(RealRulesTable, Key),
+ %%     {Name , ProtoType, BodyRule}
+    Binary = lists:foldl(fun ets_code_record_process/2, <<>> , List),    
+    NewKey = ets:next(RealRulesTable, Key),    
+    ?DEBUG("~p put code  to ~p  ~p~n",[{?MODULE,?LINE}, Binary, {RulesTable2, Key}  ]),
+    fact_hbase:hbase_low_put_key(RulesTable2, atom_to_list(Key),?FAMILY, ?CODE_COLUMN, binary_to_list(Binary)),
+    process_code_ets_key(NewKey, RealRulesTable, RulesTable2 )
+.
+
+memory2hbase(NameSpace1, NameSpace2)->
+        RealRulesTable = common:get_logical_name(NameSpace1, ?RULES),
+        RulesTable2 = common:get_logical_name(NameSpace2, ?RULES_TABLE),
+        fact_hbase:delete_all_rules(NameSpace2),
+        FirstKey = ets:first(RealRulesTable),
+        case catch  process_code_ets_key(FirstKey, RealRulesTable, RulesTable2 ) of
+            {'EXIT', Reason}->
+                throw(Reason);
+            NewList ->
+                NewList
+        end        
+.
+
+
+
+
+
+
 process_term(Rule  = {':-',Name, Body}, Prefix) when is_atom(Name)->
      ?DEBUG("~p got rule ~p~n",[{?MODULE,?LINE}, Rule  ]),    
      ets:insert(common:get_logical_name(Prefix, ?RULES), { Name, Body } ),
@@ -696,6 +760,12 @@ inner_defined_aim(NextBody, PrevIndex ,{ op, _OrderStatus, _, _Name }, Context, 
 %%{',',{ is, {'+', {'X1'},{'Y3'}} , {'+',{'Y'},{'X'} } }
 %%{Accum} it means that we work only with one X = X1 + XY, but not  X+C1 = X1 + XY!!
 
+
+inner_defined_aim(_NextBody, _PrevIndex , Body = {'copy_namespace',  NameSpace2 },  Context, _Index, TreeEts)->
+      [ { system_record, ?PREFIX, NameSpace1 } ] = ets:lookup(TreeEts, ?PREFIX),
+      Res = prolog:memory2hbase( NameSpace1, NameSpace2),
+      {Res, Context}      
+;
 inner_defined_aim(NextBody, PrevIndex , Body = {'date', _Ini, _Typei, _Accumi },  Context, Index, TreeEts)->
 	
 

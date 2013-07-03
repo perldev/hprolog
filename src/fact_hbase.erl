@@ -119,6 +119,66 @@ load_rules2ets(Prefix)->
      
 .
 
+delete_all_rules(Prefix)->
+       Scanner  = generate_scanner(1024,<<>>),
+       RealTable = common:get_logical_name(Prefix, ?RULES_TABLE),
+       ScannerUrl  = get_scanner(RealTable, Scanner),
+       Names = get_list_of_rules(ScannerUrl, RealTable, [] ),
+       ?DEBUG("~p delete rules ~p from ~p~n",[{?MODULE,?LINE}, Names, Prefix]),
+       lists:foreach( fun(E)->  
+                         del_key(binary_to_list(E), RealTable)
+                       end, Names)
+.
+get_list_of_rules([], Table, In )->
+    ?LOG("~p empty scanner ~p ~n",[{?MODULE,?LINE},Table]), 
+    In
+    
+;
+get_list_of_rules(Scanner, Table, In)->
+         ?DEBUG("~p send to ~p ~n",[ {?MODULE,?LINE}, {Scanner } ] ),
+        Host = get_host(Scanner),
+        case catch  httpc:request( get, { Scanner,[ {"Accept","application/json"}, {"Host", Host}]},
+                                    [ {connect_timeout,?DEFAULT_TIMEOUT },
+                                      {timeout, ?DEFAULT_TIMEOUT }],
+                                    [ {sync, true},{ body_format, binary } ] ) of
+                    { ok, { {_NewVersion, 200, _NewReasonPhrase}, _NewHeaders, Text1 } } ->
+                            NewList = get_rules_name( Text1, Table ),
+                            get_list_of_rules(Scanner, Table, In ++ NewList );%% TODO another solution
+                           
+                    { ok, { {_NewVersion, 204, _NewReasonPhrase}, _NewHeaders, Text1 } } ->
+                           In;
+                    Res ->
+                          ?DEBUG("~p got ~p ~n",[ {?MODULE,?LINE}, Res ] ),  
+                          unlink ( spawn(?MODULE,delete_scanner,[Scanner]) ),
+                          In   
+        end
+.
+
+
+get_rules_name(<<"">>, _Table ) ->
+      []
+;   
+get_rules_name([], _Table ) ->
+      []
+;    
+get_rules_name(Code, Table ) when is_list(Code)->
+      get_rules_name(  list_to_binary(Code), Table )
+;    
+get_rules_name(  Code,  Table )->
+    Json = jsx:decode( Code ),
+    ?DEBUG("~p got ~p ~n",[ {?MODULE,?LINE}, Json ] ),
+    [{_Row, Rules }] = Json,
+    lists:map(fun get_name/1 ,Rules )
+.
+get_name(Elem)->
+      [{_Key, RuleName},{_Cell, _Columns }] = Elem,
+      RealName  = base64:decode(RuleName),
+      ?DEBUG("~p find rule  ~p ~n",[ {?MODULE,?LINE}, RealName ] ),
+      RealName
+.
+
+
+
 
 get_cache_meta_info([], Table)->
     ?LOG("~p empty scanner~n",[{?MODULE,?LINE}])
@@ -492,6 +552,7 @@ process_hbase_rule(Elem,  Table)->
       CodeList = binary:split(Code, [<<".">>],[global]),
       lists:foldl(fun compile_patterns/2,  Table,  CodeList)
 .
+
 compile_patterns(<<>>,  Table)->
     Table
 
