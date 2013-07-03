@@ -5,13 +5,15 @@
 -define(META_INFO_BATCH, 3). %%for using as batch param for scanner meta info
 -define(AIM_COUNTER, aim_counter).
 
+-define(DEV_BUILD,1). %%this uncommented line means that hbase driver will use avias
+
 
 %-define(USE_HBASE,1).
--define(UPDATE_STAT_INTERVAL,320000).%%interval of updating meta stat of prolog statements
+%-define(UPDATE_STAT_INTERVAL,20000).%%interval of updating meta stat of prolog statements
 
 -define(SIMPLE_HBASE_ASSERT,0).
 
-%-define(ENABLE_LOG,1).
+-define(ENABLE_LOG,1).
 -define(COMPILE_TRACE, 1).
 
 -define('DEV_DEBUG_MATCH'(Str, Pars ), true ).
@@ -186,20 +188,31 @@
 -define(HBASE_INDEX, hbase_fact_index).
 -define(SCANNERS_HOSTS_TABLE, hbase_scanners ).
 -define(SCANNERS_HOSTS_LINK, hbase_scanners_hosts ).
+
+-ifdef(DEV_BUILD).
+
+-define(HBASE_HOSTS, 
+        [
+         {"http://avias-db-2.ceb.loc:60050/", "avias-db-2.ceb.loc:60050" },
+         {"http://avias-db-2.ceb.loc:60050/", "avias-db-2.ceb.loc:60050" },
+         {"http://avias-db-2.ceb.loc:60050/", "avias-db-2.ceb.loc:60050" },
+         {"http://avias-db-2.ceb.loc:60050/", "avias-db-2.ceb.loc:60050" },
+        {"http://avias-db-2.ceb.loc:60050/", "avias-db-2.ceb.loc:60050" }
+        ]).
+-define(HBASE_HOSTS_COUNT,5).
+-else.
+
 -define(HBASE_HOSTS, 
 	[
-	{"http://hd-test-2.ceb.loc:60050/", "hd-test-2.ceb.loc:60050" },
-	{"http://es-1.ceb.loc:60050/", "es-1.ceb.loc:60050" },
+	 {"http://hd-test-2.ceb.loc:60050/", "hd-test-2.ceb.loc:60050" },
+	 {"http://es-1.ceb.loc:60050/", "es-1.ceb.loc:60050" },
 	 {"http://es-2.ceb.loc:60050/", "es-2.ceb.loc:60050" },
 	 {"http://es-3.ceb.loc:60050/", "es-3.ceb.loc:60050" }
          ]).
-%      	 {"http://avias-db-2.ceb.loc:60050/", "avias-db-2.ceb.loc:60050" },
-%	 {"http://avias-db-2.ceb.loc:60050/", "avias-db-2.ceb.loc:60050" },
-%	 {"http://avias-db-2.ceb.loc:60050/", "avias-db-2.ceb.loc:60050" },
-%	 {"http://avias-db-2.ceb.loc:60050/", "avias-db-2.ceb.loc:60050" },
- %        {"http://avias-db-2.ceb.loc:60050/", "avias-db-2.ceb.loc:60050" }
-%	]).
 -define(HBASE_HOSTS_COUNT,4).
+
+-endif.
+
 
 
 -define(EMPTY,{}).
@@ -222,13 +235,14 @@
 'to_integer',
 'to_list',
 'write_unicode',
-length,
+'length',
 
 'inner_retract___',
 'meta',
 'functor',
 'arg',
 'atom',
+'copy_namespace',
 'use_namespace',
 'create_namespace',
 'integer',
