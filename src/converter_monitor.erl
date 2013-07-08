@@ -18,6 +18,7 @@ start_link() ->
 
 	  
 %%TODO name spaces
+
 init([]) ->
 	 common:prepare_log("log/e_"),
 	 inets:start(),
@@ -38,13 +39,15 @@ start_statistic()->
     ets:new(?APPLICATION, [named_table, set, public]),
     lists:foreach(fun(E)-> ets:insert(?SCANNERS_HOSTS_TABLE, {E,0,0} )  end,?HBASE_HOSTS),
     ets:new( ?SCANNERS_HOSTS_LINK, [named_table, set, public] )
-.
+
+    .
 
 check_run()->
       case ets:lookup(?APPLICATION, converter_run) of
             []-> false;
             [{_, Res}] -> Res
-      end.
+    
+    end.
 
     
 handle_call(Info,_From ,State) ->
@@ -156,6 +159,7 @@ start_converter()->
     
 %%update statistic of     
 -ifdef(USE_HBASE).
+
 update_hbase_stat()->
       NameSpaces = fact_hbase:get_list_namespaces(),
       Stat = ets:tab2list(?STAT),
@@ -163,6 +167,31 @@ update_hbase_stat()->
       lists:foldl(fun process_stat/2, NameSpaces, Stat  ),	 
       ets:delete_all_objects(?STAT).
       
+-else.
+
+update_hbase_stat()->
+	ets:delete_all_objects(?STAT).
+
+   
+-endif.
+
+find_shortes(LongName, Prefixes) when is_atom(LongName) ->
+  find_shortes(atom_to_list(LongName), Prefixes);
+find_shortes(LongName, Prefixes) ->
+    NameSpace = lists:foldl(fun(E, Prefix)-> 
+                                      case lists:prefix(E, LongName) of
+                                            true ->
+                                                 case length(Prefix)>length(E) of
+                                                    true  -> Prefix;
+                                                    false ->  E
+                                                 end; 
+                                            false ->
+                                                  Prefix
+                                      end
+                             end, "" , Prefixes ),
+    Name = common:get_namespace_name(NameSpace, LongName),                   
+    { Name, common:get_logical_name(NameSpace, ?META_FACTS) }
+.
       
 %TODO do not add inner predicates
 %    hbase_low_get_key(MetaTable, "stat", FactNameL, "facts_count")
@@ -204,30 +233,8 @@ process_stat(Nothing, Acum )->
 .
 
 
-	
--else.
-update_hbase_stat()->
-	ets:delete_all_objects(?STAT).
 
-   
--endif.
-find_shortes(LongName, Prefixes) when is_atom(LongName) ->
-  find_shortes(atom_to_list(LongName), Prefixes);
-find_shortes(LongName, Prefixes) ->
-    NameSpace = lists:foldl(fun(E, Prefix)-> 
-                                      case lists:prefix(E, LongName) of
-                                            true ->
-                                                 case length(Prefix)>length(E) of
-                                                    true  -> Prefix;
-                                                    false ->  E
-                                                 end; 
-                                            false ->
-                                                  Prefix
-                                      end
-                             end, "" , Prefixes ),
-    Name = common:get_namespace_name(NameSpace, LongName),                   
-    { Name, common:get_logical_name(NameSpace, ?META_FACTS) }
-.
+	
    
 %%prototype do not use     
 stat(Type, Name,  _ProtoType, Res)->
