@@ -3,7 +3,7 @@
 
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2, terminate/2, code_change/3]).
 -export([start_link/0, stop/0, status/0,stat/4,statistic/0, regis_timer_restart/1, regis/2 ,regis/1, kill_process_after/1 ]).
--export([stop_converter/0, start_converter/0, start_statistic/0, update_hbase_stat/0, check_run/0, find_shortes/2]).
+-export([stop_converter/0, start_converter/0, start_statistic/0, update_hbase_stat/0, check_run/0, find_shortes/2,process_stat/2]).
 
 
 
@@ -187,12 +187,17 @@ process_stat({ {add, RealFactName }, {_, TrueCount,_, _FalseCount }  }, Acum)->
 process_stat({ {'search', RealFactName }, {_, TrueCount,_, _FalseCount }  }, Acum )->
 	  {Name, MetaTable} = find_shortes(RealFactName, Acum),
   	  ?LOG("~p save count to stat hbase ~p to ~p ~n",[{?MODULE,?LINE}, {RealFactName, TrueCount}, {Name, MetaTable} ]),
-	  PreVal  = common:inner_to_int( fact_hbase:hbase_low_get_key(MetaTable,  Name, "stat", "facts_reqs") ),
+	  PreVal1  = common:inner_to_int( fact_hbase:hbase_low_get_key(MetaTable,  Name, "stat", "facts_reqs") ),
+	  
+	  PreVal = case PreVal of
+                        false -> 0;
+                        _ -> PreVal
+                    end,
 	  ?LOG("~p new count  ~p ~n",[{?MODULE,?LINE}, {Name, MetaTable, PreVal} ]),
-	  fact_hbase:hbase_low_put_key(MetaTable, Name, "stat", "facts_reqs", integer_to_list( PreVal + TrueCount ) ),
+	  NewCount = PreVal + TrueCount,
+	  fact_hbase:hbase_low_put_key(MetaTable, Name, "stat", "facts_reqs", integer_to_list( NewVal ) ),
 	  Acum
 ;
-
 process_stat(Nothing, Acum )->
 	 ?LOG("~p dont logging this ~p  ~n",[{?MODULE,?LINE}, Nothing]),
 	 Acum
