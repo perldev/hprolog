@@ -115,7 +115,8 @@ load_rules2ets(Prefix)->
       get_link_meta_info(ScannerUrlAiMeta, common:get_logical_name(Prefix, ?META_LINKS)  ),
       get_meta_facts(ScannerUrlMeta, common:get_logical_name(Prefix, ?META) ),
       get_and_load_rules(ScannerUrl, common:get_logical_name(Prefix,?RULES) ),
-      weight_prolog_sort(Prefix)
+      weight_prolog_sort(Prefix),
+      true
      
 .
 
@@ -1191,6 +1192,7 @@ put_key_body(Name, Key, Body )->
                                 [ {sync, true}, {headers_as_is, true } ] ) of
 			 { ok, { {_NewVersion, 200, _NewReasonPhrase}, _NewHeaders, Text1 } } ->
 			    	?DEBUG("~p process data with ~n ~p ~n~n~n",[{?MODULE,?LINE}, {Text1} ] ),
+			    	converter_monitor:stat(add_index,  Name , Body, true ), 
 				true;
                         Res ->
                             ?WAIT("~p got from hbase ~p ~n",[?LINE,{Res,Name,Body }]),
@@ -1622,6 +1624,7 @@ store_new_fact(LTableName, LProtoType)->
                                 [ {sync, true}, {headers_as_is, true } ] ) of
 			 { ok, { {_NewVersion, 200, _NewReasonPhrase}, _NewHeaders, Text1 } } ->
 			    	?DEBUG("~p process data with ~n ~p ~n~n~n",[{?MODULE,?LINE}, Text1 ] ),
+                                converter_monitor:stat(add,  LTableName , LProtoType, true ),
 				true;
                         Res ->
                             ?WAIT("~p got from hbase ~p ~n",[?LINE,{Res,LTableName, LProtoType }]),
