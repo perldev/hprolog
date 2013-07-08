@@ -187,15 +187,15 @@ process_stat({ {add, RealFactName }, {_, TrueCount,_, _FalseCount }  }, Acum)->
 process_stat({ {'search', RealFactName }, {_, TrueCount,_, _FalseCount }  }, Acum )->
 	  {Name, MetaTable} = find_shortes(RealFactName, Acum),
   	  ?LOG("~p save count to stat hbase ~p to ~p ~n",[{?MODULE,?LINE}, {RealFactName, TrueCount}, {Name, MetaTable} ]),
-	  PreVal1  = common:inner_to_int( fact_hbase:hbase_low_get_key(MetaTable,  Name, "stat", "facts_reqs") ),
+	  PreVal1  = common:inner_to_int( catch fact_hbase:hbase_low_get_key(MetaTable,  Name, "stat", "facts_reqs") ),
 	  
-	  PreVal = case PreVal of
+	  PreVal = case PreVal1 of
                         false -> 0;
-                        _ -> PreVal
+                        _ -> PreVal1
                     end,
 	  ?LOG("~p new count  ~p ~n",[{?MODULE,?LINE}, {Name, MetaTable, PreVal} ]),
 	  NewCount = PreVal + TrueCount,
-	  fact_hbase:hbase_low_put_key(MetaTable, Name, "stat", "facts_reqs", integer_to_list( NewVal ) ),
+	  fact_hbase:hbase_low_put_key(MetaTable, Name, "stat", "facts_reqs", integer_to_list( NewCount ) ),
 	  Acum
 ;
 process_stat(Nothing, Acum )->
