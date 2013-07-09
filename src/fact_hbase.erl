@@ -170,6 +170,7 @@ get_rules_name(  Code,  Table )->
     [{_Row, Rules }] = Json,
     lists:map(fun get_name/1 ,Rules )
 .
+
 get_name(Elem)->
       [{_Key, RuleName},{_Cell, _Columns }] = Elem,
       RealName  = base64:decode(RuleName),
@@ -256,11 +257,6 @@ process_cache_link(Meta, Table)->
 					end, 
 				      RowCells) 
 		      end, Cache )
-
-
-    
-    
-
 .
 
 
