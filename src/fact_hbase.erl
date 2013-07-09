@@ -45,7 +45,7 @@ weight_prolog_sort(Prefix)->
         Links = common:get_logical_name(Prefix, ?META_LINKS),
         FirstKey = ets:first(Links),
         case catch  process_ets_key(FirstKey, Links, Weights, []) of
-            {'EXIT', Reason}->
+            {'EXIT', _Reason}->
                 nothing;
             NewList ->
                 ets:delete_all_objects(Links),
@@ -64,7 +64,6 @@ process_ets_key(Key, Links, Weights, Acum)->
                                 [ WeightsB ] = ets:lookup(Weights, NameFact),
                                 [ WeightsA ] = ets:lookup(Weights, NameFact1),
                                 ?DEBUG("~p compare weights ~p ~n",[{?MODULE,?LINE}, {WeightsB, WeightsA }]),
-
                                 erlang:element(3,WeightsB) > erlang:element(3,WeightsA)                  
                         end, List),
     NewKey = ets:next(Links, Key),
@@ -1944,12 +1943,14 @@ hbase_low_get_key(Table, Key, Family,  SecondKey)->
 				    [ {sync, true}, { body_format, binary } ] ) of
                     { ok, { {_NewVersion, 200, _NewReasonPhrase}, _NewHeaders, Text1 } } ->  
 			     ?DEBUG("~p process key value ~p~n",[{?MODULE,?LINE}, Text1]),
-			     onevalue(Text1);		   
+			     onevalue(Text1);
+                    { ok, { {_NewVersion, 404, _NewReasonPhrase}, _NewHeaders, _Text1 } } ->  
+                             throw({hbase_exception, not_found});
                     Res -> 
 			    ?DEBUG("~p  got  key   return ~p ~n  ~p  ~n",
 				    [{?MODULE,?LINE},
 				    {Table, Key, Family,  SecondKey}, Res ]),
-                            []         
+                            throw({hbase_exception, Res})         
 	end
 .
 
