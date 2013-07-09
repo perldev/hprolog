@@ -165,16 +165,16 @@ start_converter()->
 %%update statistic of     
 -ifdef(USE_HBASE).
 
-update_hbase_stat()->
+update_hbase_stat(Fun)->
       NameSpaces = fact_hbase:get_list_namespaces(),
       Stat = ets:tab2list(?STAT),
       ?LOG("~p update  stat of hbase   ~p~n",[{?MODULE,?LINE}, {NameSpaces, Stat} ]),
-      lists:foldl(fun process_stat/2, {NameSpaces}, Stat  ),	 
+      lists:foldl(fun process_stat/2, {NameSpaces, Fun}, Stat  ),	 
       ets:delete_all_objects(?STAT).
       
 -else.
 
-update_hbase_stat()->
+update_hbase_stat(_Fun)->
 	ets:delete_all_objects(?STAT).
 
    
