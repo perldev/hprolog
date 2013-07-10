@@ -105,9 +105,24 @@ delete_inner_structs(Prefix)->
       ets:delete_all_objects(common:get_logical_name(Prefix, ?HBASE_INDEX))
 .
 
-%  | {heir,none}
-% Set a process as heir. The heir will inherit the table if the owner terminates. The message {'ETS-TRANSFER',tid(),FromPid,HeirData} will
 
+%for dynamic change cloud rules in web  console
+only_rules_create_inner(Prefix)->
+        Pid = erlang:whereis(converter_monitor), %%in result all ets tables will be transfered to converter_monitor
+        ets:new(common:get_logical_name(Prefix, ?DYNAMIC_STRUCTS),[named_table, set, public, { heir,Pid, some_data } ]),
+        ets:new(common:get_logical_name(Prefix, ?RULES),[named_table, bag, public, { heir,Pid, some_data }])
+.
+
+only_rules_delete_inner(Prefix)->
+        ets:delete_all_objects(common:get_logical_name(Prefix, ?RULES) ),
+        ets:delete_all_objects(common:get_logical_name(Prefix, ?DYNAMIC_STRUCTS))
+
+        
+
+.
+
+% Set a process as heir. The heir will inherit the table if the owner terminates. The message {'ETS-TRANSFER',tid(),FromPid,HeirData} will
+%  | {heir,none}
 
 create_inner_structs(Prefix)->
     Pid = erlang:whereis(converter_monitor), %%in result all ets tables will be transfered to converter_monitor
