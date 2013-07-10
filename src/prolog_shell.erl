@@ -18,7 +18,7 @@ api_start_anon(Prefix)->
 
 api_start(Prefix)->
     prolog:create_inner_structs(Prefix),
-    ?INCLUDE_HBASE( Prefix )
+   ?INCLUDE_HBASE( Prefix )
 .
 
 start(Prefix)-> 
@@ -30,7 +30,10 @@ start(Prefix)->
 	  true  -> do_nothing
     end,
     prolog:create_inner_structs(Prefix),
-    ?INCLUDE_HBASE( Prefix ),
+    case (catch ?INCLUDE_HBASE( Prefix ) ) of
+        true-> io:format("~p namespace was loaded ~n",[Prefix]);
+        Res ->io:format("unable to load namespace ~p  ~n",[Res])
+    end,
     server(Prefix) 
 .
 
@@ -228,7 +231,7 @@ get_code_memory(Prefix)->
 
 				LName = atom_to_list(Name),
 				LCount = integer_to_list(Count),
-				V2 = list_to_binary(""++LName++ " arity  - "++ LCount ++ ". \n") ,
+				V2 = list_to_binary("%"++LName++ " arity  - "++ LCount ++ ". \n") ,
 				<<In/binary, V2/binary>>
 			end, <<>>, Meta  ),
 	   RulesCode = lists:foldl(fun process_inner/2, <<>> , Rules  ),
@@ -264,7 +267,7 @@ get_code_memory_html(Prefix)->
 
 				LName = atom_to_list(Name),
 				LCount = integer_to_list(Count),
-				V2 = list_to_binary("<strong>"++LName++ "</strong> arity  - "++ LCount ++ ". <br/>") ,
+				V2 = list_to_binary("<strong>%"++LName++ "</strong> arity  - "++ LCount ++ ". <br/>") ,
 				<<In/binary, V2/binary>>
 			end, <<>>, Meta  ),
 
