@@ -256,6 +256,12 @@ var_match_list(Var, List, Context)->
 match_common([], [], Context)->
 	{true, Context}
 ;
+match_common([], List, Context)->
+	{false, Context}
+;	
+match_common(List, [], Context)->
+	{false, Context}
+;
 match_common([Head|VarList1], [Head  |VarList2], Context)->
 	match_common(VarList1, VarList2, Context)
 ;
