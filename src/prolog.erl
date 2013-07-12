@@ -577,6 +577,11 @@ inner_defined_aim(NextBody, PrevIndex ,Body = { 'length', _List, _Size   }, Cont
          Result -> prolog_matching:var_match(Size, Result, Context)
     end   
 ;
+inner_defined_aim(NextBody, PrevIndex ,{ abolish,  Name  }, Context, _Index, _  ) ->
+    throw({prolog, not_implemented})
+%    Res = fact_hbase:create_new_namespace(Name),
+ %   {Res, Context}
+;
 inner_defined_aim(NextBody, PrevIndex ,{ create_namespace, Name  }, Context, _Index, _  ) ->
     Res = fact_hbase:create_new_namespace(Name),
     {Res, Context}
@@ -809,9 +814,9 @@ inner_defined_aim(NextBody, PrevIndex , {'is',  NewVarName = { _Accum }, Expr },
 % L =.. [ F | Args ],
 
 inner_defined_aim(NextBody, PrevIndex ,{ '=..', First, Second }, Context, _Index, _TreeEts  )->
-    Second = prolog_matching:bound_body(Second, Context),
-    ToTerm = list_to_tuple(Second),
-    prolog_matching:var_match(First, ToTerm, Context)
+    BoundFirst = prolog_matching:bound_body(First, Context),
+    ToTerm = tuple_to_list(BoundFirst),
+    prolog_matching:var_match(Second, ToTerm, Context)
    
 ;
 inner_defined_aim(NextBody, PrevIndex ,{ '=:=', First, Second }, Context, _Index, _TreeEts  )->
