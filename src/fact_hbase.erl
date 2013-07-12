@@ -239,7 +239,6 @@ process_cache_link(Meta, Table)  when is_list(Meta)->
 ;
 process_cache_link(Meta, Table)->
        ?DEBUG("~p got meta ~p ~n ",[ {?MODULE,?LINE}, Meta ] ),
-
        Json = jsx:decode( Meta ),
        ?DEBUG("~p got  json is ~p ~n",[ {?MODULE,?LINE}, Json ] ),
         [ { _Row, Cache } ] = Json, 
@@ -1227,7 +1226,6 @@ hbase_del_index(IndexTable, Type, Params)->
       Key = generate_key( KeyList ),
       ?DEBUG("~p process delete index ~p",[{?MODULE,?LINE}, {Key,KeyList }  ]),
       converter_monitor:stat(try_del_index,  IndexTable , { Type, Key }, true ),
-      
       case catch  del_key(Key, IndexTable ) of
         {hbase_exception, Res }->   
             converter_monitor:stat(del_index,  IndexTable , { Type, Key }, false ),
@@ -1281,8 +1279,6 @@ check_params_facts(Name, TreeEts) ->
 	  [ {Name, Count, HashFunction }  ] -> {Count, HashFunction};
 	  []-> false
      end
-
-
 .
 
 check_exist_facts(Name, TreeEts) when is_list(Name)->
@@ -1353,7 +1349,7 @@ del_fact(B, TreeEts,  1)->
       converter_monitor:stat(try_del,  RealName , ProtoType, true ),
       ?DEBUG("~p delete index ~p",[{?MODULE,?LINE}, RealName ]),
 
-      index_work_del(Name, ProtoType, TreeEts),
+       index_work_del(Name, ProtoType, TreeEts),
        ?DEBUG("~p delete key ~p",[{?MODULE,?LINE}, RealName ]),
 
         case catch  del_key( generate_key(ProtoType), RealName) of
@@ -1370,6 +1366,39 @@ del_fact(_,_,_)->
     true.
 
 
+delete_all_fact(Name, TreeEts )->
+    delete_all_fact(Name, TreeEts,?SIMPLE_HBASE_ASSERT )
+.
+
+delete_all_fact(Name, TreeEts, 0 )->
+    true;
+delete_all_fact(Name, TreeEts, 1 )->
+    RealName = common:get_logical_name(TreeEts, Name),
+    MetaTable = common:get_logical_name(TreeEts, ?META_FACTS),
+    converter_monitor:stat(try_abolish,  RealName , {}, true ),
+    TableNameIndex = common:get_logical_name(TreeEts, ?HBASE_INDEX),
+    ListIndex = ets:lookup(TableNameIndex, Name),
+    TableListIndex = lists:map(  fun({_Name, TableIndex, _})->
+                                    TableIndex
+                            end, ListIndex),
+    Table2Delete =  [RealName| TableListIndex],
+    case catch lists:foreach( fun delete_table/1, Table2Delete) of
+         ok ->
+                converter_monitor:stat(abolish,  RealName , {}, true ),
+                del_key(Name, MetaTable );
+         Exception ->
+                del_key(Name, MetaTable ),
+                converter_monitor:stat(abolish,  RealName , {}, false ),
+                throw(Exception)
+         
+    end    
+
+    
+.    
+
+   
+    
+
 del_rule(Rule, TreeEts)->
   del_rule(Rule, TreeEts, ?SIMPLE_HBASE_ASSERT)    
 .
@@ -1378,7 +1407,25 @@ del_rule(Rule, TreeEts, 1)->
   del_key(Rule, TableName);
 del_rule(_,_,_)->
   true.
+  
+delete_table(TableName) when is_atom(TableName)->
+    delete_table(atom_to_list(TableName)) 
+;
+delete_table(TableName)->
+        {Hbase_Res, _Host } = get_rand_host(),
+        case catch  httpc:request( delete, { Hbase_Res ++ TableName ++ "/schema"  ,
+                                                []}, [{connect_timeout,?DEFAULT_TIMEOUT }, {timeout, ?DEFAULT_TIMEOUT }],
+                                [ {sync, true}, {headers_as_is, true } ] ) of
+                         { ok, { {_NewVersion, 200, _NewReasonPhrase}, _NewHeaders, Text1 } } ->
+                                ?DEBUG("~p process delete data with ~n ~p ~n~n~n",[{?MODULE,?LINE}, TableName ] ),
+                                true;
+                        Res ->
+                            ?WAIT("~p got from hbase ~p for table ~p  ",[?LINE,Res,  TableName]),
+                             throw({hbase_exception, { {delete, TableName}, Res} })
 
+        end
+
+.
 
 del_key(Key, TableName, Family, Col )->
       

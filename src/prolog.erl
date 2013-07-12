@@ -577,11 +577,6 @@ inner_defined_aim(NextBody, PrevIndex ,Body = { 'length', _List, _Size   }, Cont
          Result -> prolog_matching:var_match(Size, Result, Context)
     end   
 ;
-inner_defined_aim(NextBody, PrevIndex ,{ abolish,  Name  }, Context, _Index, _  ) ->
-    throw({prolog, not_implemented})
-%    Res = fact_hbase:create_new_namespace(Name),
- %   {Res, Context}
-;
 inner_defined_aim(NextBody, PrevIndex ,{ create_namespace, Name  }, Context, _Index, _  ) ->
     Res = fact_hbase:create_new_namespace(Name),
     {Res, Context}
@@ -811,8 +806,13 @@ inner_defined_aim(NextBody, PrevIndex , {'is',  NewVarName = { _Accum }, Expr },
 	 prolog_matching:var_match(NewVarName, CalcRes, Context)
 
 ;
-% L =.. [ F | Args ],
 
+inner_defined_aim(NextBody, PrevIndex ,{ 'abolish', Body  }, Context, _Index, TreeEts  )->
+        BBody = prolog_matching:bound_body(Body, Context),
+        Res  = inner_abolish(BBody, TreeEts),
+        {Res, Context}
+;
+% L =.. [ F | Args ],
 inner_defined_aim(NextBody, PrevIndex ,{ '=..', First, Second }, Context, _Index, _TreeEts  )->
     BoundFirst = prolog_matching:bound_body(First, Context),
     ToTerm = tuple_to_list(BoundFirst),
@@ -1820,8 +1820,97 @@ delete_fact(TreeEts, Body, Context ,1)->
                         ?DEV_DEBUG("~p delete fact ", [{?MODULE,?LINE}]),
                          dynamic_del_fact(BodyBounded, TreeEts)
         end.
+        
+        
+ %%abolish return always true       
+-ifdef(USE_HBASE).
+        
+inner_abolish({'/', Name, Arity }, TreeEts) when is_atom(Name), is_integer(Arity) ->
+       MetaTable = common:get_logical_name(TreeEts, ?META),
+       RulesTable = common:get_logical_name(TreeEts, ?RULES), 
+       case ets:lookup(MetaTable,Name ) of
+                []-> 
+                       case ets:lookup(RulesTable, Name) of
+                            [] -> true;
+                            RulesList  ->
+                                    NewRulesList = lists:filter(
+                                                    fun({_Name, ProtoType, _Body})->
+                                                        Arity  /= tuple_size(ProtoType)                                             
+                                                    end, RulesList   ),
+                                    ets:delete(RulesTable, Name),
+                                    ets:insert(RulesTable, NewRulesList),
+                                    [ { system_record, ?PREFIX, NameSpace1 } ] = ets:lookup(TreeEts, ?PREFIX),
+                                    prolog:memory2hbase( NameSpace1, NameSpace1),
+                                    true
+                       end;
+                [ {Name, Arity, _HashFunction }  ] -> 
+                        ets:delete(MetaTable, Name),
+                        fact_hbase:delete_all_fact(Name, TreeEts );               
+                 _-> true
+                
+             end
+;
+inner_abolish(Name, TreeEts) when is_atom(Name) ->
+                RulesTable = common:get_logical_name(TreeEts, ?RULES), 
+                case ets:lookup(RulesTable, Name) of
+                            [] -> true;
+                            RulesList  ->
+                                    NewRulesList = lists:filter(
+                                                    fun(RuleBody )->
+                                                         2  /= tuple_size(RuleBody)
+                                                    end, RulesList   ),
+                                    ets:delete(RulesTable, Name),
+                                    ets:insert(RulesTable, NewRulesList),
+                                    [ { system_record, ?PREFIX, NameSpace1 } ] = ets:lookup(TreeEts, ?PREFIX),
+                                    prolog:memory2hbase( NameSpace1, NameSpace1),
+                                    true
+               end
+
+;
+inner_abolish(_, _TreeEts) ->
+    true
+.
+
+-else.
+
+inner_abolish({'/', Name, Arity }, TreeEts) when is_atom(Name), is_integer(Arity) ->
+        RulesTable = common:get_logical_name(TreeEts, ?RULES), 
+        case ets:lookup(RulesTable, Name) of
+                            [] -> true;
+                            RulesList  ->
+                                    NewRulesList = lists:filter(
+                                                    fun({_Name, ProtoType, _Body})->
+                                                        Arity  /= tuple_size(ProtoType)                                             
+                                                    end, RulesList   ),
+                                    ets:delete(RulesTable, Name),
+                                    ets:insert(RulesTable, NewRulesList),
+                                    true
+        end
+;
+inner_abolish(Name, TreeEts) when is_atom(Name) ->
+                RulesTable = common:get_logical_name(TreeEts, ?RULES), 
+                case ets:lookup(RulesTable, Name) of
+                            [] -> true;
+                            RulesList  ->
+                                    NewRulesList = lists:filter(
+                                                    fun(RuleBody )->
+                                                         2  /= tuple_size(RuleBody)
+                                                    end, RulesList   ),
+                                    ets:delete(RulesTable, Name),
+                                    ets:insert(RulesTable, NewRulesList),
+                                    true
+                                 
+               end
+
+;
+inner_abolish(_, _TreeEts) ->
+    true
+.
 
 
+
+-endif.
+        
 %%%TODO test various variants wheather worker_linked_rules is failed or dynamic_new_rule/add_new_fact was failed
 add_fact(Context, Body, last, TreeEts,  1)->
       BodyBounded = bound_aim(Body, Context),

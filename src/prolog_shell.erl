@@ -231,7 +231,7 @@ get_code_memory(Prefix)->
 
 				LName = atom_to_list(Name),
 				LCount = integer_to_list(Count),
-				V2 = list_to_binary("%"++LName++ " arity  - "++ LCount ++ ". \n") ,
+				V2 = list_to_binary("% "++LName++ " arity  - "++ LCount ++ ". \n") ,
 				<<In/binary, V2/binary>>
 			end, <<>>, Meta  ),
 	   RulesCode = lists:foldl(fun process_inner/2, <<>> , Rules  ),

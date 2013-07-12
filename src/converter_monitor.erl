@@ -206,8 +206,10 @@ find_shortes(LongName, Prefixes) ->
 %       MetaTable = common:get_logical_name(Prefix, ?META_FACTS),
 %       FactNameL = erlang:atom_to_list(FactName),
 %       hbase_low_get_key(MetaTable, "stat", FactNameL, "facts_reqs")
-%       
+%
 
+
+%%%VERY IMPORTANT PART!!!!
 process_stat({ {add, RealFactName }, {_, TrueCount,_, _FalseCount }  }, Acum)->
           { Namespaces, LogFun } = Acum,
 	  %HACK replace it
