@@ -8,12 +8,12 @@
 -define(DEV_BUILD,1). %%this uncommented line means that hbase driver will use avias
 
 
-%-define(USE_HBASE,1).
--define(UPDATE_STAT_INTERVAL,20000).%%interval of updating meta stat of prolog statements
+-define(USE_HBASE,1).
+-define(UPDATE_STAT_INTERVAL,120000).%%interval of updating meta stat of prolog statements
 
 -define(SIMPLE_HBASE_ASSERT,0).
 
--define(ENABLE_LOG,1).
+%-define(ENABLE_LOG,1).
 -define(COMPILE_TRACE, 1).
 
 -define('DEV_DEBUG_MATCH'(Str, Pars ), true ).
@@ -29,6 +29,7 @@
 -define(SYNC_DEBUG, 1). %%for debug process's calls
 -define(SYNC_COUNT, 1). %%count
 -define(LOG_APPLICATION,   application:start(log4erl), log4erl:conf(?LOG_CONF) ).
+
 -else.
 
 -define(LOG_APPLICATION,  true ).
@@ -236,6 +237,9 @@
 'to_list',
 'write_unicode',
 'length',
+'localtime',
+'date_diff',
+
 
 'inner_retract___',
 'meta',
@@ -245,6 +249,7 @@
 'copy_namespace',
 'use_namespace',
 'create_namespace',
+'abolish',
 'integer',
 'list',
 'atomic',

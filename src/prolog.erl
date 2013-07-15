@@ -781,6 +781,24 @@ inner_defined_aim(_NextBody, _PrevIndex , Body = {'copy_namespace',  NameSpace2 
       Res = prolog:memory2hbase( NameSpace1, NameSpace2),
       {Res, Context}      
 ;
+inner_defined_aim(NextBody, PrevIndex , Body = {'date_diff', _First, _Second, _Type, _Acum },  Context, Index, TreeEts)->
+      ?DEV_DEBUG("~p call date function with ~p",[{?MODULE,?LINE},Body]),
+      BBody = prolog_matching:bound_body(Body, Context),
+      {'date_diff', First, Second, Type, Acum } = BBody,
+      case catch common:date_diff(First, Second, Type) of
+        {'EXIT', Reason}->
+            throw({exception_invalid_date, Reason});
+         Res->
+            prolog_matching:var_match(Body, {'date_diff', First, Second, Type, Res }, Context) 
+      end
+;
+inner_defined_aim(NextBody, PrevIndex , Body = {'localtime', _In },  Context, Index, TreeEts)->
+        
+
+      ?DEV_DEBUG("~p call date function with ~p",[{?MODULE,?LINE},{In, Type, Accum}]),
+      Date = common:get_date(),
+      prolog_matching:var_match(Body, {'localtime', Date}, Context)       
+;
 inner_defined_aim(NextBody, PrevIndex , Body = {'date', _Ini, _Typei, _Accumi },  Context, Index, TreeEts)->
 	
 
@@ -789,15 +807,14 @@ inner_defined_aim(NextBody, PrevIndex , Body = {'date', _Ini, _Typei, _Accumi },
       Res =
 	case common:get_date(In,Type) of		
 	  false ->
-	      false;
+	      {false, Context};
 	  Var -> 
-	      case  prolog_matching:is_var(Accum )  of%%simlpe pattern matching
-		      true -> { In, Type, Var };
-		      Var  ->   { In, Type, Var };
-		      _Nothing->  false   
-	       end
+                 prolog_matching:var_match(Body, 
+                 {'date',In, Type, Var }
+                 , Context)
+	  
 	end,
-      {Res, Context}      
+       Res
 ;
 inner_defined_aim(NextBody, PrevIndex , {'is',  NewVarName = { _Accum }, Expr },
 		  Context, _Index , _TreeEts )->

@@ -328,7 +328,7 @@ get_date_string(Date)->
 	)
 .
 fill_null_integer2list(Item) when Item<10 ->
-    [$0,integer_to_list(Item)]
+    [$0|integer_to_list(Item)]
 
 ;
 fill_null_integer2list(Item)->
@@ -336,28 +336,84 @@ fill_null_integer2list(Item)->
 
 .
 
+
+
+date_diff(First, Second, Type)->
+   D1 =  get_date_params(First),
+   D2 =  get_date_params(Second),
+   time_difference(D1, D2, Type)
+.
+
+time_difference({ {Year, Month, Day }, {Hour,Minute}  }, 
+                { {Year1, Month1, Day1 }, {Hour1, Minute1} }, 'day' )->
+    Date1 = {  {Year, Month, Day }, {Hour,Minute, 0 } }, 
+    Date2 = { {Year1, Month1, Day1 }, {Hour1, Minute1, 0 } },
+    { Days, _Time} = calendar:time_difference(Date1, Date2),
+    Days
+;
+time_difference({ {Year, Month, Day }, {Hour,Minute}  }, 
+                { {Year1, Month1, Day1 }, {Hour1, Minute1} }, 'minute' )->
+    Date1 = {  {Year, Month, Day }, {Hour,Minute, 0 } }, 
+    Date2 = { {Year1, Month1, Day1 }, {Hour1, Minute1, 0 } },
+    { Days, { DHour, DMinute, _} } = calendar:time_difference(Date1, Date2),
+    DHour*60 + DMinute + ( Days*24*60)
+;
+time_difference({ {Year, Month, Day }, {Hour,Minute}  }, 
+                { {Year1, Month1, Day1 }, {Hour1, Minute1} }, 'hour' )->
+    Date1 = {  {Year, Month, Day }, {Hour,Minute, 0 } }, 
+    Date2 = { {Year1, Month1, Day1 }, {Hour1, Minute1, 0 } },
+    { Days, { DHour, _DMinute, _} } = calendar:time_difference(Date1, Date2),
+    DHour +  Days*24
+;
+time_difference({ {Year, Month, Day }, {Hour,Minute}  }, 
+                { {Year1, Month1, Day1 }, {Hour1, Minute1} }, 'second' )->
+    Date1 = {  {Year, Month, Day }, {Hour,Minute, 0 } }, 
+    Date2 = { {Year1, Month1, Day1 }, {Hour1, Minute1, 0 } },
+    { Days, {DHour, DMinute, DSeconds} } = calendar:time_difference(Date1, Date2),
+    DHour*3600 + DMinute*60 + ( Days* 86400) + DSeconds
+.
+
+get_date()->
+    Date = default_date(),
+    { {Year,Month,Day}, {Hour,Min} } = Date,
+    lists:concat( 
+        [ int2month(Month)," ",
+          fill_null_integer2list(Day)," ",
+          integer_to_list(Year)," ",
+          fill_null_integer2list(Hour),":",fill_null_integer2list(Min)]
+        )
+     
+
+.
+
 %%if not available  return current_date
 get_date(Date)->
       case  catch get_date_params(Date) of
-       { {Year,Month,Day}, {Hour,Minute} } ->
+       { {Year,Month,Day}, {Hour, Minute} } ->
            { {Year,Month,Day}, {Hour,Minute} };
        _ ->
             default_date()
       end
-
 .
-get_date_params(Date)->
+%  Jul 05 2013 14:15
+get_date_params([Mon1,Mon2,Mon3,32, Day1,Day2,32,Year1,Year2,Year3,Year4,32, Hour1,Hour2,$:,Minute1, Minute2 ] )->
+   Year= [Year1,Year2,Year3,Year4],
+   Month = month2int([Mon1,Mon2,Mon3]),
+   Day = [ Day1, Day2 ],
+   Hour = [ Hour1,Hour2],
+   Minute = [Minute1, Minute2],
+   { { list_to_integer(Year), Month, list_to_integer(Day) }, {list_to_integer(Hour),list_to_integer(Minute)} }
+;
 
+get_date_params(Date)->
 %  ("1231-32-23 33:43"," ")
    [ Date,Time ] =   string:tokens(Date," "),
    [ Year,Month,Day ] = string:tokens(Date,"-"),
    [  Hour,Minute ] = string:tokens(Time,":"),
    { { list_to_integer(Year), list_to_integer(Month),list_to_integer(Day) }, {list_to_integer(Hour),list_to_integer(Minute)} }
-
-
 .
 default_date()->
-      {{Year,Month,Day},{Hour,Min,_}}=calendar:local_time(),
+      {{Year,Month,Day},{Hour,Min,_}} = calendar:local_time(),
       CreateTime={ {Year,Month,Day},{Hour,Min} },
       CreateTime
 .
@@ -466,4 +522,36 @@ month2int("Dec")->
   12;
 month2int(_)->
   false.
+  
+  
+int2month(1)->
+    "Jan";
+int2month(2)->
+    "Feb";
+int2month(3)->
+    "Mar";
+int2month(4)->
+    "Apr";
+int2month(5)->
+    "May";
+int2month(6)->
+    "Jun";
+int2month(7)->
+    "Jul";
+int2month(8)->
+    "Aug";
+int2month(9)->
+    "Sep";
+int2month(10)->
+    "Oct";
+int2month(11)->
+    "Nov";
+int2month(12)->
+    "Dec";
+int2month(_)->
+    false.
+
+
+
+  
   
