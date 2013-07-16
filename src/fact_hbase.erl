@@ -979,6 +979,7 @@ generate_scanner(Limit, <<  Filter/binary >>)->
 .
 %%TODO ADD SUPERVISOUR FOR all scanners
 
+
 get_scanner(Facts, Scanner)->
 	  
 	{Hbase_Res, Host } = get_rand_host(),
@@ -1041,6 +1042,20 @@ delete_host(Scanner)->
     ets:delete(?SCANNERS_HOSTS_LINK, Scanner )
 .
 
+get_data(Scanner, statistic) ->
+    Host = get_host(Scanner),
+    case catch  httpc:request( get, { Scanner,[ {"Accept","application/json"}, {"Host", Host }]},
+                                    [ {connect_timeout,?DEFAULT_TIMEOUT },
+                                      {timeout, ?DEFAULT_TIMEOUT } ],
+                                    [ {sync, true},{ body_format, binary } ] ) of
+            { ok, { {_NewVersion, 200, _NewReasonPhrase}, _NewHeaders, Text1 } } ->
+                %%Result = process_data(Text1, statistic);
+                Text1;
+            Error ->
+                ?DEBUG("~p got ~p ~n",[ {?MODULE,?LINE}, Error ] ),
+                unlink ( spawn(?MODULE,delete_scanner,[Scanner]) ),
+                []
+    end;
 get_data(undefined, _)->
     [];
 get_data([], _)->
