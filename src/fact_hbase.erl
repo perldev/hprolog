@@ -249,7 +249,7 @@ process_cache_link(Meta, Table)->
 			lists:foreach( fun(E)-> 
 					  CacheInfo  =  get_val(E, <<"column">>) ,
 					  Col = common:inner_to_atom( cut_family( ?CACHE_FAMILY, CacheInfo )  ),
-					  Val = binary_to_list( get_val(E, <<"$">> ) ) ,
+					  Val = unicode:characters_to_list( get_val(E, <<"$">> ) ) ,
 					  ?DEBUG("~p insert cache info ~p ~n",[ {?MODULE,?LINE}, 
 										   { RowName, Col, Val  } ] ),
 					  ets:insert(Table, { RowName, Col, Val  })
@@ -516,7 +516,7 @@ get_column(Columns, Find)->
 		    case Val of
 			Find -> 
 			       { value, { _ ,Value64 } } = lists:keysearch( <<"$">>, 1, List  ),
-			       binary_to_list( base64:decode( Value64 ) );
+			       unicode:characters_to_list( base64:decode( Value64 ) );
 			_-> I
 		    end
 		end,"", Columns)
@@ -555,7 +555,7 @@ compile_patterns(<<>>,  Table)->
 compile_patterns( OnePattern,  Table )->
       HackNormalPattern =  <<OnePattern/binary, " . ">>,
       ?DEBUG("~p begin process one pattern   ~p ~n",[ {?MODULE,?LINE}, HackNormalPattern ] ),
-     {ok, Terms , L1} = erlog_scan:string( binary_to_list(HackNormalPattern) ),
+     {ok, Terms , L1} = erlog_scan:string( unicode:characters_to_list(HackNormalPattern) ),
      Res =  erlog_parse:term(Terms),
      fill_rule_tree(Res,  Table),
      Table
@@ -680,7 +680,7 @@ process_key_data(Meta)->
         [ { _Row, [ [ Key, { Cell, Vals }  ] ] } ] = Json, 
 	lists:map(fun(Elem)->
  		        ?DEBUG("~p read ~p ", [{?MODULE,?LINE}, Elem ] ), 
-			    Val = binary_to_list( get_val(Elem, <<"$">> ) ) ,
+			    Val = unicode:characters_to_list( get_val(Elem, <<"$">> ) ) ,
 			    Val
 		      end, Vals )
 .
@@ -1847,6 +1847,8 @@ process_data(Text1, ProtoType)->
 				end, Columns) )
 				
 		  end, Result),
+	?DEBUG("~p result facts ~p ~n",[{?MODULE,?LINE}, Got ] ),
+	  
 	Got
 .
 
