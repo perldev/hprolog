@@ -104,18 +104,22 @@ read_stream(Fd, L0) ->
 read(P) -> read(standard_io, P).
 
 read(Io, P) ->
+    
     case scan_erlog_term(Io, P, 1) of
 	{ok,Ts, _} ->
 	    case erlog_parse:term(Ts) of
 		{ok,T} -> {ok,T};
 		{error,Pe} -> {error,Pe}
 	    end;
+        {error,Se} -> {error,Se};
+
 	{error,Se,_} -> {error,Se};
 	{eof,_} -> {ok,end_of_file}		%Prolog does this
     end.
 
 scan_erlog_term(Io, Prompt, Line) ->
-    io:request(Io, {get_until,Prompt,erlog_scan,tokens,[Line]}).
+%     io:format("~p",[io:getopts(Io)] ),
+    io:request(Io, {get_until, unicode, Prompt,erlog_scan,tokens,[Line]}).
 
 -record(ops, {op=false,q=true}).
 
