@@ -1318,7 +1318,7 @@ add_new_rule(Tree = { ':-', ProtoType, BodyRule}, Pos, TableName, 1 )->
 	?DEBUG("~p new rule to hbase  ~p ~n",[ {?MODULE,?LINE}, Tree ] ),
        [ Name | _ProtoType ] = tuple_to_list(ProtoType),
        PrologCode =  erlog_io:write1(Tree),
-       V2 = list_to_binary( lists:flatten(PrologCode)++"." ),
+       V2 = unicode:characters_to_binary( lists:flatten(PrologCode)++"." ),
       	?DEBUG("~p new rule table is  ~p ~n",[ {?MODULE,?LINE}, TableName ] ),
 
        case check_exist_rule( TableName, Name ) of
@@ -1909,7 +1909,7 @@ create_hbase_json_filter( {Pat, Name} ) when is_integer(Pat)->
 ;
 create_hbase_json_filter({Pat, Name}) when is_list(Pat)->
 
-      create_hbase_json_filter({ list_to_binary ( Pat ),  Name})
+      create_hbase_json_filter({ unicode:characters_to_binary ( Pat ),  Name})
 ;
 create_hbase_json_filter({Pat, Name})->
 
