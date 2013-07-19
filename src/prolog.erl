@@ -793,9 +793,8 @@ inner_defined_aim(NextBody, PrevIndex , Body = {'date_diff', _First, _Second, _T
       end
 ;
 inner_defined_aim(NextBody, PrevIndex , Body = {'localtime', _In },  Context, Index, TreeEts)->
-        
+      
 
-      ?DEV_DEBUG("~p call date function with ~p",[{?MODULE,?LINE},{In, Type, Accum}]),
       Date = common:get_date(),
       prolog_matching:var_match(Body, {'localtime', Date}, Context)       
 ;
