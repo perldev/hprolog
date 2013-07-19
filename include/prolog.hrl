@@ -5,7 +5,7 @@
 
 -define(META_INFO_BATCH, 3). %%for using as batch param for scanner meta info
 
-%-define(USE_HBASE,1).
+-define(USE_HBASE,1).
 -define(UPDATE_STAT_INTERVAL,20000).%%interval of updating meta stat of prolog statements
 
 -define(SIMPLE_HBASE_ASSERT,1).
@@ -196,3 +196,19 @@
 -define(DEBUG_STATUS, debug_status).
 
 -record(browscap, { browser = null, version = null, majorver = null, minorver = null, platform = null }).
+
+-record(filter, {
+    name,
+    comparator_type, 
+    comparator,
+    family,
+    qualifier,
+    compare_operator,
+    latest_version_boolean,
+    filterIfColumnMissing_boolean,
+    minColumn,
+    minColumnInclusive_bool,
+    maxColumn,
+    maxColumnInclusive_bool,
+    opts
+    }).
