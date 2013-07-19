@@ -53,8 +53,8 @@
 
 base(L, Cs, B) ->
     case base1(Cs, B, 0) of
-	{N,[]} -> {token,{number,L,N}};
-	{_,_} -> {error,"illegal based number"}
+        {N,[]} -> {token,{number,L,N}};
+        {_,_} -> {error,"illegal based number"}
     end.
 
 base1([C|Cs], Base, SoFar) when C >= $0, C =< $9, C < Base + $0 ->
@@ -75,17 +75,17 @@ base1([], _Base, N) -> {N,[]}.
 
 chars([$\\,$x,C|Cs0]) ->
     case hex_char(C) of
-	true ->
-	    case base1([C|Cs0], 16, 0) of
-		{N,[$\\|Cs1]} -> [N|chars(Cs1)];
-		_Other -> [escape_char($x)|chars([C|Cs0])]
-	    end;
-	false -> [escape_char($x)|chars([C|Cs0])]
+        true ->
+            case base1([C|Cs0], 16, 0) of
+                {N,[$\\|Cs1]} -> [N|chars(Cs1)];
+                _Other -> [escape_char($x)|chars([C|Cs0])]
+            end;
+        false -> [escape_char($x)|chars([C|Cs0])]
     end;
 chars([$\\,C|Cs0]) when C >= $0, C =< $7 ->
     case base1(Cs0, 8, C - $0) of
-	{N,[$\\|Cs1]} -> [N|chars(Cs1)];
-	_Other -> [escape_char(C)|chars(Cs0)]
+        {N,[$\\|Cs1]} -> [N|chars(Cs1)];
+        _Other -> [escape_char(C)|chars(Cs0)]
     end;
 chars([$\\,C|Cs]) -> [escape_char(C)|chars(Cs)];
 chars([C|Cs]) -> [C|chars(Cs)];
@@ -94,17 +94,18 @@ chars([]) -> [].
 hex_char(C) when C >= $0, C =< $9 -> true;
 hex_char(C) when C >= $a, C =< $f -> true;
 hex_char(C) when C >= $A, C =< $F -> true;
+
 hex_char(_) -> false.
 
-escape_char($n) -> $\n;				%\n = LF
-escape_char($r) -> $\r;				%\r = CR
-escape_char($t) -> $\t;				%\t = TAB
-escape_char($v) -> $\v;				%\v = VT
-escape_char($b) -> $\b;				%\b = BS
-escape_char($f) -> $\f;				%\f = FF
-escape_char($e) -> $\e;				%\e = ESC
-escape_char($s) -> $\s;				%\s = SPC
-escape_char($d) -> $\d;				%\d = DEL
+escape_char($n) -> $\n;                         %\n = LF
+escape_char($r) -> $\r;                         %\r = CR
+escape_char($t) -> $\t;                         %\t = TAB
+escape_char($v) -> $\v;                         %\v = VT
+escape_char($b) -> $\b;                         %\b = BS
+escape_char($f) -> $\f;                         %\f = FF
+escape_char($e) -> $\e;                         %\e = ESC
+escape_char($s) -> $\s;                         %\s = SPC
+escape_char($d) -> $\d;                         %\d = DEL
 escape_char(C) -> C.
 
 format_error({illegal,S}) -> ["illegal characters ",io_lib:write_string(S)];
@@ -120,19 +121,19 @@ string(String, Line) -> string(String, Line, String, []).
 %%  start while line number returned is line of token end. We want line
 %%  of token start.
 
-string([], L, [], Ts) ->			%No partial tokens!
+string([], L, [], Ts) ->                        %No partial tokens!
     {ok,yyrev(Ts),L};
 string(Ics0, L0, Tcs, Ts) ->
     case yystate(yystate(), Ics0, L0, 0, reject, 0) of
-	{A,Alen,Ics1,L1} ->	%Accepting end state
-	    string_cont(Ics1, L1, yyaction(A, Alen, Tcs, L0), Ts);
-	{A,Alen,Ics1,L1,_S1} ->			%Accepting transistion state
-	    string_cont(Ics1, L1, yyaction(A, Alen, Tcs, L0), Ts);
-	{reject,_Alen,Tlen,_Ics1,L1,_S1} ->	%After a non-accepting state
-	    {error,{L0,?MODULE,{illegal,yypre(Tcs, Tlen+1)}},L1};
-	{A,Alen,_Tlen,_Ics1,L1,_S1} ->
+        {A,Alen,Ics1,L1} ->     %Accepting end state
+            string_cont(Ics1, L1, yyaction(A, Alen, Tcs, L0), Ts);
+        {A,Alen,Ics1,L1,_S1} ->                 %Accepting transistion state
+            string_cont(Ics1, L1, yyaction(A, Alen, Tcs, L0), Ts);
+        {reject,_Alen,Tlen,_Ics1,L1,_S1} ->     %After a non-accepting state
+            {error,{L0,?MODULE,{illegal,yypre(Tcs, Tlen+1)}},L1};
+        {A,Alen,_Tlen,_Ics1,L1,_S1} ->
 
-	    string_cont(yysuf(Tcs, Alen), L1, yyaction(A, Alen, Tcs, L0), Ts)
+            string_cont(yysuf(Tcs, Alen), L1, yyaction(A, Alen, Tcs, L0), Ts)
     end.
 
 %% string_cont(RestChars, Line, Token, Tokens)
@@ -168,30 +169,30 @@ token({token,State,Line,Tcs,Tlen,Tline,Action,Alen}, Chars, _) ->
 
 token(S0, Ics0, L0, Tcs, Tlen0, Tline, A0, Alen0) ->
     case yystate(S0, Ics0, L0, Tlen0, A0, Alen0) of
-	%% Accepting end state, we have a token.
-	{A1,Alen1, Ics1,L1} ->
-	    token_cont(Ics1, L1, yyaction(A1, Alen1, Tcs, Tline));
-	%% Accepting transition state, can take more chars.
-	{A1,Alen1, [],L1,S1} ->			%Need more chars to check
-	    {more,{token,S1,Tcs,L1,Alen1,Tline,A1,Alen1}};
-	{A1,Alen1, Ics1,L1,_S1} ->		%Take what we got
-	    token_cont(Ics1, L1, yyaction(A1, Alen1, Tcs, Tline));
-	%% After a non-accepting state, maybe reach accept state later.
-	{A1,Alen1, Tlen1,[],L1,S1} ->		%Need more chars to check
-	    {more,{token,S1,Tcs,L1,Tlen1,Tline,A1,Alen1}};
-	{reject,_Alen1, Tlen1,eof,L1,_S1} ->	%No token match
-	    %% Check for partial token which is error.
-	    Ret = if Tlen1 > 0 -> {error,{Tline,?MODULE,
-					  %% Skip eof tail in Tcs.
-					  {illegal,yypre(Tcs, Tlen1)}},L1};
-		     true -> {eof,L1}
-		  end,
-	    {done,Ret,eof};
-	{reject,_Alen1,Tlen1,Ics1,L1,_S1} ->	%No token match
-	    Error = {Tline,?MODULE,{illegal,yypre(Tcs, Tlen1+1)}},
-	    {done,{error,Error,L1},Ics1};
-	{A1,Alen1,_Tlen1,_Ics1,L1,_S1} ->	%Use last accept match
-	    token_cont(yysuf(Tcs, Alen1), L1, yyaction(A1, Alen1, Tcs, Tline))
+        %% Accepting end state, we have a token.
+        {A1,Alen1, Ics1,L1} ->
+            token_cont(Ics1, L1, yyaction(A1, Alen1, Tcs, Tline));
+        %% Accepting transition state, can take more chars.
+        {A1,Alen1, [],L1,S1} ->                 %Need more chars to check
+            {more,{token,S1,Tcs,L1,Alen1,Tline,A1,Alen1}};
+        {A1,Alen1, Ics1,L1,_S1} ->              %Take what we got
+            token_cont(Ics1, L1, yyaction(A1, Alen1, Tcs, Tline));
+        %% After a non-accepting state, maybe reach accept state later.
+        {A1,Alen1, Tlen1,[],L1,S1} ->           %Need more chars to check
+            {more,{token,S1,Tcs,L1,Tlen1,Tline,A1,Alen1}};
+        {reject,_Alen1, Tlen1,eof,L1,_S1} ->    %No token match
+            %% Check for partial token which is error.
+            Ret = if Tlen1 > 0 -> {error,{Tline,?MODULE,
+                                          %% Skip eof tail in Tcs.
+                                          {illegal,yypre(Tcs, Tlen1)}},L1};
+                     true -> {eof,L1}
+                  end,
+            {done,Ret,eof};
+        {reject,_Alen1,Tlen1,Ics1,L1,_S1} ->    %No token match
+            Error = {Tline,?MODULE,{illegal,yypre(Tcs, Tlen1+1)}},
+            {done,{error,Error,L1},Ics1};
+        {A1,Alen1,_Tlen1,_Ics1,L1,_S1} ->       %Use last accept match
+            token_cont(yysuf(Tcs, Alen1), L1, yyaction(A1, Alen1, Tcs, Tline))
     end.
 
 %% tokens_cont(RestChars, Line, Token)
@@ -214,48 +215,57 @@ token_cont(Rest, Line, {error,S}) ->
 %% {tokens,State,CurrLine,TokenChars,TokenLen,TokenLine,Tokens,AccAction,AccLen}
 %% {skip_tokens,State,CurrLine,TokenChars,TokenLen,TokenLine,Error,AccAction,AccLen}
 
-tokens(Cont, Chars) -> tokens(Cont, Chars, 1).
+tokens(Cont, Chars) -> 
+
+%     io:format("~p ~p ~n",[{?MODULE,?LINE} ,{Cont, Chars} ]),
+
+    tokens(Cont, Chars, 1).
 
 tokens([], Chars, Line) ->
+%     io:format("~p ~p ~n",[{?MODULE,?LINE} ,{Line, Chars} ]),
+
     tokens(yystate(), Chars, Line, Chars, 0, Line, [], reject, 0);
-tokens({tokens,State,Line,Tcs,Tlen,Tline,Ts,Action,Alen}, Chars, _) ->
+tokens(S = {tokens,State,Line,Tcs,Tlen,Tline,Ts,Action,Alen}, Chars, _) ->
+%     io:format("~p ~p ~n",[{?MODULE,?LINE}, {S, Chars} ]),
     tokens(State, Chars, Line, Tcs ++ Chars, Tlen, Tline, Ts, Action, Alen);
-tokens({skip_tokens,State,Line,Tcs,Tlen,Tline,Error,Action,Alen}, Chars, _) ->
-    skip_tokens(State, Chars, Line, Tcs ++ Chars, Tlen, Tline, Error, Action, Alen).
+tokens(S = {skip_tokens,State,Line,Tcs,Tlen,Tline,Error,Action,Alen}, Chars, _) ->
+%      io:format("~p ~p ~n",[{?MODULE,?LINE}, {S, Chars} ]),
+     skip_tokens(State, Chars, Line, Tcs ++ Chars, Tlen, Tline, Error, Action, Alen).
 
 %% tokens(State, InChars, Line, TokenChars, TokenLen, TokenLine, Tokens,
 %%        AcceptAction, AcceptLen) ->
 %%    {more,Continuation} | {done,ReturnVal,RestChars}.
 
 tokens(S0, Ics0, L0, Tcs, Tlen0, Tline, Ts, A0, Alen0) ->
+%     io:format("~p ~p ~n",[{?MODULE,?LINE}, Tcs ]),
     case yystate(S0, Ics0, L0, Tlen0, A0, Alen0) of
-	%% Accepting end state, we have a token.
-	{A1,Alen1,Ics1,L1} ->
-	    tokens_cont(Ics1, L1, yyaction(A1, Alen1, Tcs, Tline), Ts);
-	%% Accepting transition state, can take more chars.
-	{A1,Alen1,[],L1,S1} ->			%Need more chars to check
-	    {more,{tokens,S1,L1,Tcs,Alen1,Tline,Ts,A1,Alen1}};
-	{A1,Alen1,Ics1,L1,_S1} ->		%Take what we got
-	    tokens_cont(Ics1, L1, yyaction(A1, Alen1, Tcs, Tline), Ts);
-	%% After a non-accepting state, maybe reach accept state later.
-	{A1,Alen1,Tlen1,[],L1,S1} ->		%Need more chars to check
-	    {more,{tokens,S1,L1,Tcs,Tlen1,Tline,Ts,A1,Alen1}};
-	{reject,_Alen1,Tlen1,eof,L1,_S1} ->	%No token match
-	    %% Check for partial token which is error, no need to skip here.
-	    Ret = if Tlen1 > 0 -> {error,{Tline,?MODULE,
-					  %% Skip eof tail in Tcs.
-					  {illegal,yypre(Tcs, Tlen1)}},L1};
-		     Ts == [] -> {eof,L1};
-		     true -> {ok,yyrev(Ts),L1}
-		  end,
-	    {done,Ret,eof};
-	{reject,_Alen1,Tlen1,_Ics1,L1,_S1} ->
-	    %% Skip rest of tokens.
-	    Error = {L1,?MODULE,{illegal,yypre(Tcs, Tlen1+1)}},
-	    skip_tokens(yysuf(Tcs, Tlen1+1), L1, Error);
-	{A1,Alen1,_Tlen1,_Ics1,L1,_S1} ->
-	    Token = yyaction(A1, Alen1, Tcs, Tline),
-	    tokens_cont(yysuf(Tcs, Alen1), L1, Token, Ts)
+        %% Accepting end state, we have a token.
+        {A1,Alen1,Ics1,L1} ->
+            tokens_cont(Ics1, L1, yyaction(A1, Alen1, Tcs, Tline), Ts);
+        %% Accepting transition state, can take more chars.
+        {A1,Alen1,[],L1,S1} ->                  %Need more chars to check
+            {more,{tokens,S1,L1,Tcs,Alen1,Tline,Ts,A1,Alen1}};
+        {A1,Alen1,Ics1,L1,_S1} ->               %Take what we got
+            tokens_cont(Ics1, L1, yyaction(A1, Alen1, Tcs, Tline), Ts);
+        %% After a non-accepting state, maybe reach accept state later.
+        {A1,Alen1,Tlen1,[],L1,S1} ->            %Need more chars to check
+            {more,{tokens,S1,L1,Tcs,Tlen1,Tline,Ts,A1,Alen1}};
+        {reject,_Alen1,Tlen1,eof,L1,_S1} ->     %No token match
+            %% Check for partial token which is error, no need to skip here.
+            Ret = if Tlen1 > 0 -> {error,{Tline,?MODULE,
+                                          %% Skip eof tail in Tcs.
+                                          {illegal,yypre(Tcs, Tlen1)}},L1};
+                     Ts == [] -> {eof,L1};
+                     true -> {ok,yyrev(Ts),L1}
+                  end,
+            {done,Ret,eof};
+        {reject,_Alen1,Tlen1,_Ics1,L1,_S1} ->
+            %% Skip rest of tokens.
+            Error = {L1,?MODULE,{illegal,yypre(Tcs, Tlen1+1)}},
+            skip_tokens(yysuf(Tcs, Tlen1+1), L1, Error);
+        {A1,Alen1,_Tlen1,_Ics1,L1,_S1} ->
+            Token = yyaction(A1, Alen1, Tcs, Tline),
+            tokens_cont(yysuf(Tcs, Alen1), L1, Token, Ts)
     end.
 
 %% tokens_cont(RestChars, Line, Token, Tokens)
@@ -284,21 +294,21 @@ skip_tokens(Ics, Line, Error)                           ->
 
 skip_tokens(S0, Ics0, L0, Tcs, Tlen0, Tline, Error, A0, Alen0) ->
     case yystate(S0, Ics0, L0, Tlen0, A0, Alen0) of
-	{A1,Alen1,Ics1,L1} ->			%Accepting end state
-	    skip_cont(Ics1, L1, yyaction(A1, Alen1, Tcs, Tline), Error);
-	{A1,Alen1,[],L1,S1} ->			%After an accepting state
-	    {more,{skip_tokens,S1,L1,Tcs,Alen1,Tline,Error,A1,Alen1}};
-	{A1,Alen1,Ics1,L1,_S1} ->
-	    skip_cont(Ics1, L1, yyaction(A1, Alen1, Tcs, Tline), Error);
-	{A1,Alen1,Tlen1,[],L1,S1} ->		%After a non-accepting state
-	    {more,{skip_tokens,S1,L1,Tcs,Tlen1,Tline,Error,A1,Alen1}};
-	{reject,_Alen1,_Tlen1,eof,L1,_S1} ->
-	    {done,{error,Error,L1},eof};
-	{reject,_Alen1,Tlen1,_Ics1,L1,_S1} ->
-	    skip_tokens(yysuf(Tcs, Tlen1+1), L1, Error);
-	{A1,Alen1,_Tlen1,_Ics1,L1,_S1} ->
-	    Token = yyaction(A1, Alen1, Tcs, Tline),
-	    skip_cont(yysuf(Tcs, Alen1), L1, Token, Error)
+        {A1,Alen1,Ics1,L1} ->                   %Accepting end state
+            skip_cont(Ics1, L1, yyaction(A1, Alen1, Tcs, Tline), Error);
+        {A1,Alen1,[],L1,S1} ->                  %After an accepting state
+            {more,{skip_tokens,S1,L1,Tcs,Alen1,Tline,Error,A1,Alen1}};
+        {A1,Alen1,Ics1,L1,_S1} ->
+            skip_cont(Ics1, L1, yyaction(A1, Alen1, Tcs, Tline), Error);
+        {A1,Alen1,Tlen1,[],L1,S1} ->            %After a non-accepting state
+            {more,{skip_tokens,S1,L1,Tcs,Tlen1,Tline,Error,A1,Alen1}};
+        {reject,_Alen1,_Tlen1,eof,L1,_S1} ->
+            {done,{error,Error,L1},eof};
+        {reject,_Alen1,Tlen1,_Ics1,L1,_S1} ->
+            skip_tokens(yysuf(Tcs, Tlen1+1), L1, Error);
+        {A1,Alen1,_Tlen1,_Ics1,L1,_S1} ->
+            Token = yyaction(A1, Alen1, Tcs, Tline),
+            skip_cont(yysuf(Tcs, Alen1), L1, Token, Error)
     end.
 
 %% skip_cont(RestChars, Line, Token, Error)
@@ -339,7 +349,7 @@ yystate(45, [C|Ics], Line, Tlen, _, _) when C >= $\000, C =< $\t ->
     yystate(45, Ics, Line, Tlen+1, 16, Tlen);
 yystate(45, [C|Ics], Line, Tlen, _, _) when C >= $\v, C =< $' ->
     yystate(45, Ics, Line, Tlen+1, 16, Tlen);
-yystate(45, [C|Ics], Line, Tlen, _, _) when C >= $), C =< $ÿ ->
+yystate(45, [C|Ics], Line, Tlen, _, _) when C >= $), C =<255 ->%$Ã¿ ->
     yystate(45, Ics, Line, Tlen+1, 16, Tlen);
 yystate(45, Ics, Line, Tlen, _, _) ->
     {16,Tlen,Ics,Line,45};
@@ -401,7 +411,7 @@ yystate(40, [C|Ics], Line, Tlen, Action, Alen) when C >= $\000, C =< $\t ->
     yystate(3, Ics, Line, Tlen+1, Action, Alen);
 yystate(40, [C|Ics], Line, Tlen, Action, Alen) when C >= $\v, C =< $[ ->
     yystate(3, Ics, Line, Tlen+1, Action, Alen);
-yystate(40, [C|Ics], Line, Tlen, Action, Alen) when C >= $], C =< $ÿ ->
+yystate(40, [C|Ics], Line, Tlen, Action, Alen) when C >= $],C=< 255 ->  %C =< $Ã¿ ->
     yystate(3, Ics, Line, Tlen+1, Action, Alen);
 yystate(40, Ics, Line, Tlen, Action, Alen) ->
     {Action,Alen,Tlen,Ics,Line,40};
@@ -413,7 +423,7 @@ yystate(39, [C|Ics], Line, Tlen, _, _) when C >= $\000, C =< $\t ->
     yystate(45, Ics, Line, Tlen+1, 13, Tlen);
 yystate(39, [C|Ics], Line, Tlen, _, _) when C >= $\v, C =< $' ->
     yystate(45, Ics, Line, Tlen+1, 13, Tlen);
-yystate(39, [C|Ics], Line, Tlen, _, _) when C >= $), C =< $ÿ ->
+yystate(39, [C|Ics], Line, Tlen, _, _) when C >= $),C=<255-> % C =< $Ã¿ ->
     yystate(45, Ics, Line, Tlen+1, 13, Tlen);
 yystate(39, Ics, Line, Tlen, _, _) ->
     {13,Tlen,Ics,Line,39};
@@ -494,7 +504,7 @@ yystate(37, Ics, Line, Tlen, _, _) ->
     {2,Tlen,Ics,Line,37};
 yystate(36, [C|Ics], Line, Tlen, _, _) when C >= $\000, C =< $\t ->
     yystate(36, Ics, Line, Tlen+1, 15, Tlen);
-yystate(36, [C|Ics], Line, Tlen, _, _) when C >= $\v, C =< $ÿ ->
+yystate(36, [C|Ics], Line, Tlen, _, _) when C >= $\v, C=<255 ->% C =< $Ã¿ ->
     yystate(36, Ics, Line, Tlen+1, 15, Tlen);
 yystate(36, Ics, Line, Tlen, _, _) ->
     {15,Tlen,Ics,Line,36};
@@ -528,7 +538,7 @@ yystate(33, [C|Ics], Line, Tlen, Action, Alen) when C >= $], C =< $` ->
     yystate(6, Ics, Line, Tlen+1, Action, Alen);
 yystate(33, [C|Ics], Line, Tlen, Action, Alen) when C >= $a, C =< $f ->
     yystate(33, Ics, Line, Tlen+1, Action, Alen);
-yystate(33, [C|Ics], Line, Tlen, Action, Alen) when C >= $g, C =< $ÿ ->
+yystate(33, [C|Ics], Line, Tlen, Action, Alen) when C >= $g,C=<255-> % C =< $Ã¿ ->
     yystate(6, Ics, Line, Tlen+1, Action, Alen);
 yystate(33, Ics, Line, Tlen, Action, Alen) ->
     {Action,Alen,Tlen,Ics,Line,33};
@@ -542,7 +552,7 @@ yystate(32, [C|Ics], Line, Tlen, _, _) when C >= $0, C =< $7 ->
     yystate(24, Ics, Line, Tlen+1, 5, Tlen);
 yystate(32, [C|Ics], Line, Tlen, _, _) when C >= $8, C =< $w ->
     yystate(3, Ics, Line, Tlen+1, 5, Tlen);
-yystate(32, [C|Ics], Line, Tlen, _, _) when C >= $y, C =< $ÿ ->
+yystate(32, [C|Ics], Line, Tlen, _, _) when C >= $y, C=<255 -> %C =< $Ã¿ ->
     yystate(3, Ics, Line, Tlen+1, 5, Tlen);
 yystate(32, Ics, Line, Tlen, _, _) ->
     {5,Tlen,Ics,Line,32};
@@ -558,7 +568,7 @@ yystate(31, [C|Ics], Line, Tlen, Action, Alen) when C >= $\v, C =< $& ->
     yystate(31, Ics, Line, Tlen+1, Action, Alen);
 yystate(31, [C|Ics], Line, Tlen, Action, Alen) when C >= $(, C =< $[ ->
     yystate(31, Ics, Line, Tlen+1, Action, Alen);
-yystate(31, [C|Ics], Line, Tlen, Action, Alen) when C >= $], C =< $ÿ ->
+yystate(31, [C|Ics], Line, Tlen, Action, Alen) when C >= $], C=<255->  %C =< $Ã¿ ->
     yystate(31, Ics, Line, Tlen+1, Action, Alen);
 yystate(31, Ics, Line, Tlen, Action, Alen) ->
     {Action,Alen,Tlen,Ics,Line,31};
@@ -610,7 +620,7 @@ yystate(25, [C|Ics], Line, Tlen, Action, Alen) when C >= $0, C =< $7 ->
     yystate(25, Ics, Line, Tlen+1, Action, Alen);
 yystate(25, [C|Ics], Line, Tlen, Action, Alen) when C >= $8, C =< $[ ->
     yystate(6, Ics, Line, Tlen+1, Action, Alen);
-yystate(25, [C|Ics], Line, Tlen, Action, Alen) when C >= $], C =< $ÿ ->
+yystate(25, [C|Ics], Line, Tlen, Action, Alen) when C >= $], C=<255-> %C =< $Ã¿ ->
     yystate(6, Ics, Line, Tlen+1, Action, Alen);
 yystate(25, Ics, Line, Tlen, Action, Alen) ->
     {Action,Alen,Tlen,Ics,Line,25};
@@ -690,7 +700,7 @@ yystate(17, [C|Ics], Line, Tlen, _, _) when C >= $\v, C =< $! ->
     yystate(6, Ics, Line, Tlen+1, 12, Tlen);
 yystate(17, [C|Ics], Line, Tlen, _, _) when C >= $#, C =< $[ ->
     yystate(6, Ics, Line, Tlen+1, 12, Tlen);
-yystate(17, [C|Ics], Line, Tlen, _, _) when C >= $], C =< $ÿ ->
+yystate(17, [C|Ics], Line, Tlen, _, _) when C >= $], C=<255-> %C =< $Ã¿ ->
     yystate(6, Ics, Line, Tlen+1, 12, Tlen);
 yystate(17, Ics, Line, Tlen, _, _) ->
     {12,Tlen,Ics,Line,17};
@@ -720,7 +730,7 @@ yystate(15, [C|Ics], Line, Tlen, Action, Alen) when C >= $8, C =< $[ ->
     yystate(31, Ics, Line, Tlen+1, Action, Alen);
 yystate(15, [C|Ics], Line, Tlen, Action, Alen) when C >= $], C =< $w ->
     yystate(31, Ics, Line, Tlen+1, Action, Alen);
-yystate(15, [C|Ics], Line, Tlen, Action, Alen) when C >= $y, C =< $ÿ ->
+yystate(15, [C|Ics], Line, Tlen, Action, Alen) when C >= $y, C=< 255-> %C =< $Ã¿ ->
     yystate(31, Ics, Line, Tlen+1, Action, Alen);
 yystate(15, Ics, Line, Tlen, Action, Alen) ->
     {Action,Alen,Tlen,Ics,Line,15};
@@ -758,7 +768,7 @@ yystate(12, [C|Ics], Line, Tlen, Action, Alen) when C >= $], C =< $` ->
     yystate(31, Ics, Line, Tlen+1, Action, Alen);
 yystate(12, [C|Ics], Line, Tlen, Action, Alen) when C >= $a, C =< $f ->
     yystate(12, Ics, Line, Tlen+1, Action, Alen);
-yystate(12, [C|Ics], Line, Tlen, Action, Alen) when C >= $g, C =< $ÿ ->
+yystate(12, [C|Ics], Line, Tlen, Action, Alen) when C >= $g,C=<255 -> %C =< $Ã¿ ->
     yystate(31, Ics, Line, Tlen+1, Action, Alen);
 yystate(12, Ics, Line, Tlen, Action, Alen) ->
     {Action,Alen,Tlen,Ics,Line,12};
@@ -788,7 +798,7 @@ yystate(9, [C|Ics], Line, Tlen, Action, Alen) when C >= $8, C =< $[ ->
     yystate(6, Ics, Line, Tlen+1, Action, Alen);
 yystate(9, [C|Ics], Line, Tlen, Action, Alen) when C >= $], C =< $w ->
     yystate(6, Ics, Line, Tlen+1, Action, Alen);
-yystate(9, [C|Ics], Line, Tlen, Action, Alen) when C >= $y, C =< $ÿ ->
+yystate(9, [C|Ics], Line, Tlen, Action, Alen) when C >= $y, C=<255  -> %C =< $Ã¿ ->
     yystate(6, Ics, Line, Tlen+1, Action, Alen);
 yystate(9, Ics, Line, Tlen, Action, Alen) ->
     {Action,Alen,Tlen,Ics,Line,9};
@@ -812,8 +822,10 @@ yystate(7, [C|Ics], Line, Tlen, _, _) when C >= $\v, C =< $& ->
     yystate(31, Ics, Line, Tlen+1, 10, Tlen);
 yystate(7, [C|Ics], Line, Tlen, _, _) when C >= $(, C =< $[ ->
     yystate(31, Ics, Line, Tlen+1, 10, Tlen);
-yystate(7, [C|Ics], Line, Tlen, _, _) when C >= $], C =< $ÿ ->
+yystate(7, [C|Ics], Line, Tlen, _, _) when C >= $], C=< 255-> %C =< $Ã¿ ->
     yystate(31, Ics, Line, Tlen+1, 10, Tlen);
+yystate(7, [C|Ics], Line, Tlen, _, _) when C >= 1024, C =< 1279 ->
+    yystate(31, Ics, Line, Tlen+1, 10, Tlen);  
 yystate(7, Ics, Line, Tlen, _, _) ->
     {10,Tlen,Ics,Line,7};
 yystate(6, [$\n|Ics], Line, Tlen, Action, Alen) ->
@@ -828,8 +840,12 @@ yystate(6, [C|Ics], Line, Tlen, Action, Alen) when C >= $\v, C =< $! ->
     yystate(6, Ics, Line, Tlen+1, Action, Alen);
 yystate(6, [C|Ics], Line, Tlen, Action, Alen) when C >= $#, C =< $[ ->
     yystate(6, Ics, Line, Tlen+1, Action, Alen);
-yystate(6, [C|Ics], Line, Tlen, Action, Alen) when C >= $], C =< $ÿ ->
+yystate(6, [C|Ics], Line, Tlen, Action, Alen) when C >= $],C=<255->  %C =< $Ã¿ ->
     yystate(6, Ics, Line, Tlen+1, Action, Alen);
+%% 6 - means open ", adding cyrrilic symbols
+yystate(6, [C|Ics], Line, Tlen, Action, Alen) when C >= 1024, C =< 1279 ->
+    yystate(6, Ics, Line, Tlen+1, Action, Alen);    
+    
 yystate(6, Ics, Line, Tlen, Action, Alen) ->
     {Action,Alen,Tlen,Ics,Line,6};
 yystate(5, [C|Ics], Line, Tlen, _, _) when C >= $0, C =< $9 ->
@@ -848,6 +864,7 @@ yystate(4, [C|Ics], Line, Tlen, Action, Alen) when C >= $A, C =< $F ->
     yystate(4, Ics, Line, Tlen+1, Action, Alen);
 yystate(4, [C|Ics], Line, Tlen, Action, Alen) when C >= $a, C =< $f ->
     yystate(4, Ics, Line, Tlen+1, Action, Alen);
+
 yystate(4, Ics, Line, Tlen, Action, Alen) ->
     {Action,Alen,Tlen,Ics,Line,4};
 yystate(3, Ics, Line, Tlen, _, _) ->
@@ -877,8 +894,14 @@ yystate(0, [C|Ics], Line, Tlen, Action, Alen) when C >= $0, C =< $7 ->
     yystate(0, Ics, Line, Tlen+1, Action, Alen);
 yystate(0, [C|Ics], Line, Tlen, Action, Alen) when C >= $8, C =< $[ ->
     yystate(31, Ics, Line, Tlen+1, Action, Alen);
-yystate(0, [C|Ics], Line, Tlen, Action, Alen) when C >= $], C =< $ÿ ->
+    
+yystate(0, [C|Ics], Line, Tlen, Action, Alen) when C >= $], C=<255-> % C =< $Ã¿ ->
     yystate(31, Ics, Line, Tlen+1, Action, Alen);
+    
+yystate(0, [C|Ics], Line, Tlen, Action, Alen)  when C >= 1024, C =< 1279 ->
+    yystate(31, Ics, Line, Tlen+1, Action, Alen);    
+    
+    
 yystate(0, Ics, Line, Tlen, Action, Alen) ->
     {Action,Alen,Tlen,Ics,Line,0};
 yystate(S, Ics, Line, Tlen, Action, Alen) ->

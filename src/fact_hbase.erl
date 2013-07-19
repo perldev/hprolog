@@ -1798,7 +1798,7 @@ get_list_facts()->
 get_val_simple(E, Key)->
 	  
 	  case  lists:keysearch(Key, 1, E) of
-	      	  {value, {_, Value} } -> binary_to_list(Value);
+	      	  {value, {_, Value} } -> unicode:characters_to_list(Value);
 		  Undef-> 
 		      ?WAIT("~p mistake with ~p", [E,Key]), <<"">>
 	  end
