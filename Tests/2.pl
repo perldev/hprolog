@@ -65,12 +65,12 @@ max_col(N,X,Y,Max):-max_str(N,X,Y,V),!, Y1 is Y-1, max_col(N,X,Y1,V2),(V2>V,!, M
 
 
 %%%%%%%%%%%%%
-test1:- maxvector(a, X), writeln('max'=X),!,
-         maxvector2(a, X1), writeln('max'=X1),!,
-         maxvector3(a, X2), writeln('max'=X2),!,
-         maxvector4(a, X3), writeln('max'=X3),!,
-         maxvector5(a, X4), writeln('max'=X4),!,
-         maxvector6(a, X5), writeln('max'=X5).
+test1:- maxvector(a, X), writeln('max1'=X),!,
+         maxvector2(a, X1), writeln('max2'=X1),!,
+         maxvector3(a, X2), writeln('max3'=X2),!,
+         maxvector4(a, X3), writeln('max4'=X3),!,
+         maxvector5(a, X4), writeln('max5'=X4),!,
+         maxvector6(a, X5), writeln('max6'=X5).
          
 test2:- summ(a,3,X), writeln('sum'=X),!,
         summ2(a,3,0,X1), writeln('sum'=X1).

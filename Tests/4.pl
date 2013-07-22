@@ -2,8 +2,8 @@
 %числа
 
 plus(A,B,C):- nonvar(A), nonvar(B), C is A+B.
-plus(A,B,C):-var(A),nonvar(B),A is C-B.
-plus(A,B,C):-var(B),nonvar(A),B is C-A.
+plus(A,B,C):- var(A),nonvar(B),A is C-B.
+plus(A,B,C):- var(B),nonvar(A),B is C-A.
 
 filter(a,X):-atom(X).
 filter(i,X):-integer(X).
@@ -37,13 +37,11 @@ checknum(N1,M1,L,R):- simple3(N1,M1,[N1|L],R).
 member([X|_],X).
 member([_|L],X):-member(L,X).
 
-%%%%%%%%%%%%%%
-
 test1 :- plus(X,1,6), writeln(x=X),
          plus(1,5,Y), writeln(x=Y),
          Ls=[aa,1,1.5,b,2,1+2,c,4,45,6,[1,3],day(monday)],
          %%Ls=[aa,1,b,2,1+2,c,4,1.5,45,6,str(1,3),day(monday)],
-         writeln(list=Ls),
+         write(list=Ls),nl,
          filter_list(Ls,A,a),writeln(atoms=A),
          filter_list(Ls,In,i),writeln(ints=In),
          filter_list(Ls,At,at),writeln(atomics=At).

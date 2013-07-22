@@ -26,7 +26,7 @@ make2(0,S,S):-!.
 make2(N,T,S):- N1 is N-1, make2(N1,[N|T],S).
                   
 test_all:-
-   N=4,
+   N=10,
    %%% writeln('Count:'), read(N),
    hanoy(N,1,2,3,X),
    %writeln(X),

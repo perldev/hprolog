@@ -13,7 +13,7 @@
 
 -define(SIMPLE_HBASE_ASSERT,1).
 
-%-define(ENABLE_LOG,1).
+-define(ENABLE_LOG,1).
 -define(COMPILE_TRACE, 1).
 
 -define('DEV_DEBUG_MATCH'(Str, Pars ), true ).
@@ -297,3 +297,18 @@
 ).
 
 
+-record(filter, {
+    name,
+    comparator_type, 
+    comparator,
+    family,
+    qualifier,
+    compare_operator,
+    latest_version_boolean,
+    filterIfColumnMissing_boolean,
+    minColumn,
+    minColumnInclusive_bool,
+    maxColumn,
+    maxColumnInclusive_bool,
+    opts
+    }).

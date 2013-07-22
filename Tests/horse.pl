@@ -20,6 +20,8 @@ step(X,Y,X1,Y1):-X1 is X-1, Y1 is Y-2.
 %                  myabs(Dx,ADx),myabs(Dy,ADy), ADx=\=ADy,
 %                  X1 is X+Dx, Y1 is Y+Dy.
 %                  
+not(X):- call(X),!,fail;true.
+writeln(X):- write(X),nl.
 
 find(_,_,_,0,R,R).
 find(X,Y,MN,N,R,R2):-
@@ -27,7 +29,6 @@ find(X,Y,MN,N,R,R2):-
           step(X,Y,X1,Y1),
           good(X1,Y1,MN),
           N1 is N-1,
-          system_stat,
           find(X1,Y1,MN,N1,[X/Y|R],R2).
 
 memb([X|_],X).

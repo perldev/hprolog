@@ -79,10 +79,9 @@ finds(X,Y,MN,N,R,R2):-
           allsteps(MN,X,Y,All),
           %% setof([P,Xn/Yn],(step(X,Y,Xn,Yn),good(Xn,Yn,MN),pos(Xn,Yn,P,MN)), All), %% это не реализовано
           member(All, [_,X1/Y1]),
-          
           not(member(R, X1/Y1)),
           N1 is N-1,
-          write(X1),write("-"),write(Y1),nl,system_stat,
+          write(X1),write("-"),write(Y1),nl,
           finds(X1,Y1,MN,N1,[X/Y|R],R2).
 
 goal2(M):-

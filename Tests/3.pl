@@ -86,11 +86,11 @@ test1:-
 test2:-
        make2(3,[],Xx),
        writeln(Xx),
-       sub(Xx,L1), writeln(sub=L1),false;
+       sub(Xx,L1), writeln(sub = L1),false;
        true.
 
 test3:-
-       make2(5,[],X),
+       make2(7,[],X),
        writeln(X),
        rev(X,X1), writeln(rev=X1),
        sort_in(X1,X2),writeln(sorted=X2),

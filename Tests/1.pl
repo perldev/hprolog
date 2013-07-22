@@ -14,18 +14,23 @@ figur(line(point(1,2), point(1,2))).
 figur(point(2,2)).
 figur(circle(point(1,2),100)).
 
-%%      сын,отец   
-father('виктор', 'андрей').
-father('петр', 'андрей').
-father('андрейВикторович','виктор').
-father('виталина','виктор').
-father('тарас','виктор').
+# :- op(xyz,fact(Y,U)).
 
-man('андрейВикторович').
-man('виктор').
-man('петр').
-wom('виталина').
-man(andray).
+
+%%      сын,отец   
+father('victor', 'andrey').
+father('petr', 'andrey').
+father('andreyVictorovich','victor').
+father('vitalina','victor').
+father('taras','victor').
+
+man('andreyVictorovich').
+man('victor').
+man('petr').
+man('taras').
+man('andrey').
+wom('vitalina').
+man('andrey').
 
 son(Son,X):-father(Son,X),man(Son).
 dot(Dt,X):-father(Dt,X),wom(Dt).
@@ -35,10 +40,10 @@ uncle(U,S):- father(U,X),broth(X,S).
 
 %%%%%%%%%
 test1(QQ):-writeln('1 ---family tree:'),
-   broth(X,Y), write('братья'=X:Y), nl,
-   dot(X1,_), write('дочь'=X1), nl,
+   broth(X,Y), write('brother'=X:Y), nl,
+   dot(X1,_), write('doughter'=X1), nl,
    !,
-   son(Son,'андрей'), writeln('son'=Son),
+   son(Son,'andrey'), writeln('son'=Son),
    %!,
    writeln('2 ---unification:'),
    figur(Z), figur(L), L=line(Z,MM),
@@ -57,8 +62,10 @@ test3(_):- s(X), write(X),false;nl.
 member([X|_],X).
 member([_|L],X):-member(L,X).
 
+some_test(X1):- member([1,2,3,4],X1),assertz(aa(X1)),system_stat,write(X1),X1=4.
+
 test5:- writeln('assertz'),
-           member([1,2,3,4],X1),assertz(aa(X1)),X1=4,
+           member([1,2,3,4],X1),assertz(aa(X1)),system_stat,write(X1),X1=4,
            aa(Y1),write(Y1),Y1=4,
            !,
            nl,writeln('asserta'),
