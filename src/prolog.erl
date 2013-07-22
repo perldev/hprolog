@@ -731,8 +731,25 @@ inner_defined_aim(NextBody, PrevIndex ,Body = {read, X }, Context, _Index, TreeE
 	_ ->
 	    ?WRITELN(TreeEts, "i can parse input"),
 	      {false, Context}
-    end
+ 
+ end
 ;
+inner_defined_aim(NextBody, PrevIndex ,Body = {read_str, X }, Context, _Index, TreeEts)->
+    TempX = ?READ_STR(TreeEts), %%read prolog term
+    case TempX of
+        { ok, Term } ->
+              Res = prolog_matching:var_match( Term, X, Context ),
+              Res;
+        _ ->
+            ?WRITELN(TreeEts, "i can parse input"),
+             {false, Context}
+ 
+ end
+;
+
+
+
+
 inner_defined_aim(NextBody, PrevIndex ,Body = { 'write', X }, Context, _Index,  TreeEts  ) ->
     X1 = prolog_matching:bound_body( X, Context),
 %     ?DEBUG("~p write ~p ~n",[X, dict:to_list(Context)]),

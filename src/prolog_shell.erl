@@ -119,9 +119,13 @@ server_loop(TreeEts, TraceOn) ->
 	       prolog:clean_tree(TreeEts),
 % 	       ets:insert(TreeEts, {system_record, ?AIM_COUNTER, 0}),
 	       server_loop(TreeEts, TraceOn);
+
 	{error,P = {_, Em, E }} ->
 	    io:fwrite("Error: ~p~n", [P]),
-	    server_loop(TreeEts, TraceOn)
+	    server_loop(TreeEts, TraceOn);
+	{error,P} ->
+            io:fwrite("Error during parsing: ~p~n", [P]),
+            server_loop(TreeEts, TraceOn)
     end.
 
 process_prove(  TempAim , Goal, Res, StartTime)->

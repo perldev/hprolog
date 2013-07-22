@@ -16,12 +16,17 @@ parse_as_term(S)->
       erlog_parse:term(Terms).
 
 %TODO adding parsing predicates
+console_read_str(_)-> 
+       io:put_chars("\""),
+       io:get_line(""),
+       io:put_chars("\"").
+       
 console_read(_)->
        erlog_io:read('').
 console_get_char(_)->
        io:get_chars("", 1).
 console_write(_, X)->
-      io:format("~p",[X]).
+       io:format("~p",[X]).
       
 console_write_unicode(_,X)->
      io:format("~ts",[unicode:characters_to_list(X)]).
@@ -30,9 +35,20 @@ console_writenl(_, X)->
     io:format("~p~n",[X]).
     
 console_nl(_)->
-	io:format("~n",[]).
+    io:format("~n",[]).
 
 %TODO adding parsing predicates
+
+
+web_console_read_str(TreeEts)->
+        [{system_record, _, Parent}] = ets:lookup(TreeEts, ?IO_SERVER ),
+        Parent ! {result, read, erlang:self() },
+        receive 
+             {read, List }->
+                  inner_to_list(List)
+        end
+
+.
 
 web_console_read(TreeEts)->
 	[{system_record, _, Parent}] = ets:lookup(TreeEts, ?IO_SERVER ),
@@ -41,7 +57,9 @@ web_console_read(TreeEts)->
 	receive 
 	     {read, List }->
 		  Term = inner_to_list(List),
-		  (catch parse_as_term(Term) )
+% 		  (catch 
+		  parse_as_term(Term) 
+% 		  )
 	     %TODO add after statement
 	end.
       

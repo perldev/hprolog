@@ -11,7 +11,7 @@
 -define(USE_HBASE,1).
 -define(UPDATE_STAT_INTERVAL,120000).%%interval of updating meta stat of prolog statements
 
--define(SIMPLE_HBASE_ASSERT,0).
+-define(SIMPLE_HBASE_ASSERT,1).
 
 %-define(ENABLE_LOG,1).
 -define(COMPILE_TRACE, 1).
@@ -59,14 +59,21 @@
 -define('WRITE'(Parent,X), common:web_console_write(Parent, X)  ).
 -define('WRITELN'(Parent,X), common:web_console_writenl(Parent, X) ).
 -define(GET_CHAR(Parent),  common:web_console_get_char(Parent) ).
--define(READ(Parent), common:web_console_read(Parent) ).
 -define(NL(Parent),common:web_console_nl(Parent) ).   
+
+-define(READ(Parent), common:web_console_read(Parent) ).
+-define(READ_STR(Parent), common:web_console_read_str(Parent) ).
 
 -else.
 -define('WRITE'(Parent,X), common:console_write(Parent, X)  ).
 -define('WRITELN'(Parent,X), common:console_writenl(Parent, X) ).
 -define(GET_CHAR(Parent),  common:console_get_char(Parent) ).
+
 -define(READ(Parent), common:console_read(Parent) ).
+-define(READ_STR(Parent), common:console_read_str(Parent) ).
+
+
+
 -define(NL(Parent),common:console_nl(Parent) ).     
        
 -endif.
@@ -263,6 +270,7 @@
 'retract',
 'get_char',
 'read',
+'read_str',
 'write',
 'writeln',
 'nl',

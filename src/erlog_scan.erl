@@ -351,6 +351,9 @@ yystate(45, [C|Ics], Line, Tlen, _, _) when C >= $\v, C =< $' ->
     yystate(45, Ics, Line, Tlen+1, 16, Tlen);
 yystate(45, [C|Ics], Line, Tlen, _, _) when C >= $), C =<255 ->%$ÿ ->
     yystate(45, Ics, Line, Tlen+1, 16, Tlen);
+yystate(45, [C|Ics], Line, Tlen, _, _) when C >= 1024, C =<1279 ->%$ÿ ->
+    yystate(45, Ics, Line, Tlen+1, 16, Tlen);
+    
 yystate(45, Ics, Line, Tlen, _, _) ->
     {16,Tlen,Ics,Line,45};
 yystate(44, [$'|Ics], Line, Tlen, _, _) ->
@@ -413,6 +416,9 @@ yystate(40, [C|Ics], Line, Tlen, Action, Alen) when C >= $\v, C =< $[ ->
     yystate(3, Ics, Line, Tlen+1, Action, Alen);
 yystate(40, [C|Ics], Line, Tlen, Action, Alen) when C >= $],C=< 255 ->  %C =< $ÿ ->
     yystate(3, Ics, Line, Tlen+1, Action, Alen);
+yystate(40, [C|Ics], Line, Tlen, Action, Alen) when C >= 1024,C=< 1279 ->  %C =< $ÿ ->
+    yystate(3, Ics, Line, Tlen+1, Action, Alen);
+    
 yystate(40, Ics, Line, Tlen, Action, Alen) ->
     {Action,Alen,Tlen,Ics,Line,40};
 yystate(39, [$\n|Ics], Line, Tlen, _, _) ->
@@ -424,6 +430,8 @@ yystate(39, [C|Ics], Line, Tlen, _, _) when C >= $\000, C =< $\t ->
 yystate(39, [C|Ics], Line, Tlen, _, _) when C >= $\v, C =< $' ->
     yystate(45, Ics, Line, Tlen+1, 13, Tlen);
 yystate(39, [C|Ics], Line, Tlen, _, _) when C >= $),C=<255-> % C =< $ÿ ->
+    yystate(45, Ics, Line, Tlen+1, 13, Tlen);
+yystate(39, [C|Ics], Line, Tlen, _, _) when C >= 1024,C=<1279-> % C =< $ÿ ->
     yystate(45, Ics, Line, Tlen+1, 13, Tlen);
 yystate(39, Ics, Line, Tlen, _, _) ->
     {13,Tlen,Ics,Line,39};
@@ -494,6 +502,8 @@ yystate(38, [C|Ics], Line, Tlen, Action, Alen) when C >= $a, C =< $z ->
     yystate(26, Ics, Line, Tlen+1, Action, Alen);
 yystate(38, [C|Ics], Line, Tlen, Action, Alen) when C >= ${, C =< $} ->
     yystate(34, Ics, Line, Tlen+1, Action, Alen);
+yystate(38, [C|Ics], Line, Tlen, Action, Alen) when C >= 1024, C =< 1279 ->
+    yystate(34, Ics, Line, Tlen+1, Action, Alen);  
 yystate(38, Ics, Line, Tlen, Action, Alen) ->
     {Action,Alen,Tlen,Ics,Line,38};
 yystate(37, [$0|Ics], Line, Tlen, _, _) ->
@@ -540,6 +550,8 @@ yystate(33, [C|Ics], Line, Tlen, Action, Alen) when C >= $a, C =< $f ->
     yystate(33, Ics, Line, Tlen+1, Action, Alen);
 yystate(33, [C|Ics], Line, Tlen, Action, Alen) when C >= $g,C=<255-> % C =< $ÿ ->
     yystate(6, Ics, Line, Tlen+1, Action, Alen);
+yystate(33, [C|Ics], Line, Tlen, Action, Alen) when C >= 1024,C=<1279-> % C =< $ÿ ->
+    yystate(6, Ics, Line, Tlen+1, Action, Alen);
 yystate(33, Ics, Line, Tlen, Action, Alen) ->
     {Action,Alen,Tlen,Ics,Line,33};
 yystate(32, [$x|Ics], Line, Tlen, _, _) ->
@@ -553,6 +565,8 @@ yystate(32, [C|Ics], Line, Tlen, _, _) when C >= $0, C =< $7 ->
 yystate(32, [C|Ics], Line, Tlen, _, _) when C >= $8, C =< $w ->
     yystate(3, Ics, Line, Tlen+1, 5, Tlen);
 yystate(32, [C|Ics], Line, Tlen, _, _) when C >= $y, C=<255 -> %C =< $ÿ ->
+    yystate(3, Ics, Line, Tlen+1, 5, Tlen);
+yystate(32, [C|Ics], Line, Tlen, _, _) when C >= 1024, C=<1279 -> %C =< $ÿ ->
     yystate(3, Ics, Line, Tlen+1, 5, Tlen);
 yystate(32, Ics, Line, Tlen, _, _) ->
     {5,Tlen,Ics,Line,32};
@@ -569,6 +583,8 @@ yystate(31, [C|Ics], Line, Tlen, Action, Alen) when C >= $\v, C =< $& ->
 yystate(31, [C|Ics], Line, Tlen, Action, Alen) when C >= $(, C =< $[ ->
     yystate(31, Ics, Line, Tlen+1, Action, Alen);
 yystate(31, [C|Ics], Line, Tlen, Action, Alen) when C >= $], C=<255->  %C =< $ÿ ->
+    yystate(31, Ics, Line, Tlen+1, Action, Alen);
+yystate(31, [C|Ics], Line, Tlen, Action, Alen) when C >= 1024, C=<1279->  %C =< $ÿ ->
     yystate(31, Ics, Line, Tlen+1, Action, Alen);
 yystate(31, Ics, Line, Tlen, Action, Alen) ->
     {Action,Alen,Tlen,Ics,Line,31};
@@ -622,6 +638,9 @@ yystate(25, [C|Ics], Line, Tlen, Action, Alen) when C >= $8, C =< $[ ->
     yystate(6, Ics, Line, Tlen+1, Action, Alen);
 yystate(25, [C|Ics], Line, Tlen, Action, Alen) when C >= $], C=<255-> %C =< $ÿ ->
     yystate(6, Ics, Line, Tlen+1, Action, Alen);
+yystate(25, [C|Ics], Line, Tlen, Action, Alen) when C >= 1024, C=<1279-> %C =< $ÿ ->
+    yystate(6, Ics, Line, Tlen+1, Action, Alen);
+    
 yystate(25, Ics, Line, Tlen, Action, Alen) ->
     {Action,Alen,Tlen,Ics,Line,25};
 yystate(24, [$\\|Ics], Line, Tlen, _, _) ->
@@ -702,6 +721,8 @@ yystate(17, [C|Ics], Line, Tlen, _, _) when C >= $#, C =< $[ ->
     yystate(6, Ics, Line, Tlen+1, 12, Tlen);
 yystate(17, [C|Ics], Line, Tlen, _, _) when C >= $], C=<255-> %C =< $ÿ ->
     yystate(6, Ics, Line, Tlen+1, 12, Tlen);
+yystate(17, [C|Ics], Line, Tlen, _, _) when C >= 1024, C=<1079-> %C =< $ÿ ->
+    yystate(6, Ics, Line, Tlen+1, 12, Tlen);
 yystate(17, Ics, Line, Tlen, _, _) ->
     {12,Tlen,Ics,Line,17};
 yystate(16, [$\\|Ics], Line, Tlen, Action, Alen) ->
@@ -732,6 +753,10 @@ yystate(15, [C|Ics], Line, Tlen, Action, Alen) when C >= $], C =< $w ->
     yystate(31, Ics, Line, Tlen+1, Action, Alen);
 yystate(15, [C|Ics], Line, Tlen, Action, Alen) when C >= $y, C=< 255-> %C =< $ÿ ->
     yystate(31, Ics, Line, Tlen+1, Action, Alen);
+    
+yystate(15, [C|Ics], Line, Tlen, Action, Alen) when C >= 1024, C=< 1279-> %C =< $ÿ ->
+    yystate(31, Ics, Line, Tlen+1, Action, Alen);
+    
 yystate(15, Ics, Line, Tlen, Action, Alen) ->
     {Action,Alen,Tlen,Ics,Line,15};
 yystate(14, Ics, Line, Tlen, _, _) ->
@@ -770,6 +795,10 @@ yystate(12, [C|Ics], Line, Tlen, Action, Alen) when C >= $a, C =< $f ->
     yystate(12, Ics, Line, Tlen+1, Action, Alen);
 yystate(12, [C|Ics], Line, Tlen, Action, Alen) when C >= $g,C=<255 -> %C =< $ÿ ->
     yystate(31, Ics, Line, Tlen+1, Action, Alen);
+
+yystate(12, [C|Ics], Line, Tlen, Action, Alen) when C >=1024,C=<1279 -> %C =< $ÿ ->
+    yystate(31, Ics, Line, Tlen+1, Action, Alen);   
+
 yystate(12, Ics, Line, Tlen, Action, Alen) ->
     {Action,Alen,Tlen,Ics,Line,12};
 yystate(11, [C|Ics], Line, Tlen, Action, Alen) when C >= $0, C =< $9 ->
@@ -800,6 +829,10 @@ yystate(9, [C|Ics], Line, Tlen, Action, Alen) when C >= $], C =< $w ->
     yystate(6, Ics, Line, Tlen+1, Action, Alen);
 yystate(9, [C|Ics], Line, Tlen, Action, Alen) when C >= $y, C=<255  -> %C =< $ÿ ->
     yystate(6, Ics, Line, Tlen+1, Action, Alen);
+
+yystate(9, [C|Ics], Line, Tlen, Action, Alen) when C >= 1024, C =< 1279  -> 
+    yystate(6, Ics, Line, Tlen+1, Action, Alen);
+ 
 yystate(9, Ics, Line, Tlen, Action, Alen) ->
     {Action,Alen,Tlen,Ics,Line,9};
 yystate(8, [C|Ics], Line, Tlen, _, _) when C >= $0, C =< $9 ->
@@ -931,18 +964,22 @@ yyaction(5, TokenLen, YYtcs, TokenLine) ->
     {token,{number,TokenLine,hd(chars(string:substr(TokenChars, 3)))}};
 yyaction(6, TokenLen, YYtcs, TokenLine) ->
     TokenChars = yypre(YYtcs, TokenLen),
-    {token,{atom,TokenLine,list_to_atom(TokenChars)}};
+    {token,{atom,TokenLine,
+            unicode_to_atom(TokenChars)
+            }};
 yyaction(7, _, _, TokenLine) ->
     {token,{atom,TokenLine,'!'}};
 yyaction(8, _, _, TokenLine) ->
     {token,{atom,TokenLine,';'}};
 yyaction(9, TokenLen, YYtcs, TokenLine) ->
     TokenChars = yypre(YYtcs, TokenLen),
-    {token,{atom,TokenLine,list_to_atom(TokenChars)}};
+    {token,{atom,TokenLine,unicode_to_atom(TokenChars)}};
 yyaction(10, TokenLen, YYtcs, TokenLine) ->
     TokenChars = yypre(YYtcs, TokenLen),
     S = string:substr(TokenChars, 2, TokenLen - 2),
-    case catch list_to_atom(chars(S)) of
+    
+    
+    case catch unicode_to_atom(chars(S)) of
         {'EXIT',_} ->
             {error,"illegal atom " ++ TokenChars};
         Atom ->
@@ -950,7 +987,7 @@ yyaction(10, TokenLen, YYtcs, TokenLine) ->
     end;
 yyaction(11, TokenLen, YYtcs, TokenLine) ->
     TokenChars = yypre(YYtcs, TokenLen),
-    {token,{var,TokenLine,list_to_atom(TokenChars)}};
+    {token,{var,TokenLine, unicode_to_atom(TokenChars) }};
 yyaction(12, TokenLen, YYtcs, TokenLine) ->
     TokenChars = yypre(YYtcs, TokenLen),
     S = string:substr(TokenChars, 2, TokenLen - 2),
@@ -959,9 +996,18 @@ yyaction(13, _, _, TokenLine) ->
     {token,{' (',TokenLine}};
 yyaction(14, TokenLen, YYtcs, TokenLine) ->
     TokenChars = yypre(YYtcs, TokenLen),
-    {token,{list_to_atom(TokenChars),TokenLine}};
+    {token,{  unicode_to_atom(TokenChars),TokenLine}};
 yyaction(15, _, _, TokenLine) ->
     {end_token,{dot,TokenLine}};
 yyaction(16, _, _, _) ->
     skip_token;
 yyaction(_, _, _, _) -> error.
+
+unicode_to_atom(X)->
+    U =  unicode:characters_to_binary(X),
+    binary_to_atom(U, utf8)
+.
+
+
+
+
