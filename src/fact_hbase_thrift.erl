@@ -513,7 +513,7 @@ thrift_mappper(Conn, Acum)->
         
 thrift_mappper_low(PidReducer,  {_Location, StartKey, EndKey},  {EtsStat, EtsBuffer, Table, ProtoType})->
                    {Host, Port} = ?THRIFT_CONF, 
-                   {ok, State}  = hbase_thrift_api:connect(Host, Port, [], hbase_thrift ),
+                   {ok, State}  = thrift_connection_pool:connect(Host, Port, [], hbase_thrift ),
                     io:format("connecting ~p ~n",[ State] ),             
                     Filter = create_filter4all_values(ProtoType, undefined, 1),                    
                     {State1, {ok, ScannerId}} =generate_scanner(Table,?LIMIT, Filter, State, StartKey, EndKey),

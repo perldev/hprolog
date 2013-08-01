@@ -34,7 +34,7 @@ init([Count]) ->
 start_pool(Count)->
                       {Host, Port}  = ?THRIFT_CONF,
                       lists:map( fun(E)-> 
-                            case catch hbase_thrift_api:connect(Host, Port, [], hbase_thrift ) of
+                            case catch thrift_connection_pool:connect(Host, Port, [], hbase_thrift ) of
                                 {ok, State} ->
                                         {E, State};
                                 Exception ->
