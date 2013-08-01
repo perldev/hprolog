@@ -115,9 +115,21 @@ load_rules2ets(Prefix)->
       get_meta_facts(ScannerUrlMeta, common:get_logical_name(Prefix, ?META) ),
       get_and_load_rules(ScannerUrl, common:get_logical_name(Prefix,?RULES) ),
       weight_prolog_sort(Prefix),
+      start_thrift_pool(?USE_THRIFT),      
       true
      
 .
+
+
+start_thrift_pool(0)->
+    false;
+start_thrift_pool(1)->
+    case lists:member(thrift_connection_pool,  global:registered_names() ) of
+          false -> thrift_connection_pool:start_link(?DEFAULT_COUNT_THRIFT);
+          true  -> do_nothing
+    end.
+
+
 
 delete_all_rules(Prefix)->
        Scanner  = generate_scanner(1024,<<>>),
@@ -149,7 +161,7 @@ get_list_of_rules(Scanner, Table, In)->
                            In;
                     Res ->
                           ?DEBUG("~p got ~p ~n",[ {?MODULE,?LINE}, Res ] ),  
-                          unlink ( spawn(?MODULE,delete_scanner,[Scanner]) ),
+                          unlink ( spawn(?MODULE, delete_scanner,[Scanner]) ),
                           In   
         end
 .
@@ -574,7 +586,7 @@ fill_rule_tree( Rule, _Table )->
 
 
 start_fact_process( Aim, TreeEts, ParentPid)->
-   spawn( ?MODULE, fact_start_link, [ Aim, TreeEts, ParentPid] )
+   spawn_link( ?MODULE, fact_start_link, [ Aim, TreeEts, ParentPid] )
 .
 %%TODO add rest call to find all facts and rules 
 fact_start_link( Aim,  TreeEts, ParentPid )->
@@ -596,6 +608,8 @@ fact_start_link( Aim,  TreeEts, ParentPid )->
 .
 
 fact_start_link_hbase( Aim,  TreeEts, ParentPid )->
+
+      %TODO remove this converts
       Name = element(1,Aim), %%from the syntax tree get name of fact
       Search =  common:my_delete_element(1, Aim),%%get prototype
       ProtoType = tuple_to_list(Search ),
@@ -606,12 +620,9 @@ fact_start_link_hbase( Aim,  TreeEts, ParentPid )->
       case check_params_facts(Name, TreeEts) of
 	  {CountParams, HashFunction} ->
 		 case  check_index(ProtoType, Name, TreeEts) of
-		      []->
-			    HbaseTable =  common:get_logical_name(TreeEts, Name ),  
-			    %%TODO throw exception if prototype contain something except constants or variables
-			    %%TODO process exception  timeouts etc
-			      Scanner = ( catch start_recr( atom_to_list(HbaseTable), ProtoType  ) ),
-			      process_loop_hbase( Scanner, ProtoType);
+		       []->
+			      start_process_loop_hbase(Name, ProtoType, TreeEts);
+
 		       {Name,  PartKey }->
     			      ?DEBUG("~p find whole_key ~p ~n",[{?MODULE,?LINE}, { Name, PartKey } ]),
 			       process_indexed_hbase(atom_to_list(NameTable),
@@ -633,10 +644,24 @@ fact_start_link_hbase( Aim,  TreeEts, ParentPid )->
 .
 
 
-get_indexed_records(PartKey, IndexTable) when is_atom(IndexTable)->
+get_indexed_records(PartKey, IndexTable) ->
+
+      get_indexed_records( PartKey, IndexTable,?USE_THRIFT )
+.
+
+
+get_indexed_records(PartKey, IndexTable, 1) when is_atom(IndexTable)->
+      get_indexed_records( PartKey, atom_to_list(IndexTable), 1 )
+;
+get_indexed_records(PartKey, IndexTable, 1) ->
+
+     ?DEBUG("~p got index ~n",[{?MODULE,?LINE}  ]),
+     fact_hbase_thrift:get_key_custom(IndexTable, ?FAMILY, PartKey, default)    
+;
+get_indexed_records(PartKey, IndexTable, 0) when is_atom(IndexTable)->
       get_indexed_records( PartKey, atom_to_list(IndexTable) )
 ;
-get_indexed_records(PartKey, IndexTable)->
+get_indexed_records(PartKey, IndexTable, 0)->
       {Hbase_Res, Host } = get_rand_host(),
       case catch  httpc:request( get, { Hbase_Res++IndexTable++"/"++PartKey++"/"++?FAMILY,
 					  [ {"Accept","application/json"}, {"Host", Host}] 
@@ -706,24 +731,15 @@ process_indexed_hbase(Table, ProtoType, [], TreeEts)->
             ?LOG("~p got unexpected ~p ~n",[{?MODULE,?LINE}, Some ])
     end    
 ;
-process_indexed_hbase(Table, ProtoType,  PreRes, TreeEts)->
-    	?WAIT("~p regis  wait  hbase   indexed fact  ~p ~n",[{?MODULE,?LINE}, PreRes ]),
+process_indexed_hbase(Table, ProtoType,  [NewKey| NewPreRes] , TreeEts)->
+    	?WAIT("~p regis  wait  hbase   indexed fact  ~n",[{?MODULE,?LINE} ]),
         receive 
 	    {PidReciverResult, get_pack_of_facts} ->
-		  ?WAIT("~p GOT  wait in hbase indexed ~p ~n",[{?MODULE,?LINE},PreRes]),
-		   ?DEBUG("~p got new request ~p ~n",[{?MODULE,?LINE}, PreRes ]),
-		   case catch lists:split(?GET_FACT_PACK, PreRes) of
-			{'EXIT',R} ->
-			    ?DEBUG("~p  indexed fact return  ~p  ~n",[{?MODULE,?LINE}, PreRes ]),
-			    PidReciverResult ! [],
-                           exit(normal); 
-                        {NewKey, NewPreRes} ->
-			    ?DEBUG("~p indexed fact return  ~p  ~n",[{?MODULE,?LINE}, {NewKey, NewPreRes} ]),
-			    Row =  hbase_get_key(ProtoType, Table, ?FAMILY, NewKey),
-  			    ?DEBUG("~p got row  ~p  ~n",[{?MODULE,?LINE}, Row ]),
-			    PidReciverResult ! Row,
-			    process_indexed_hbase(Table, ProtoType,  NewPreRes, TreeEts)
-		   end;
+		  ?WAIT("~p GOT  wait in hbase indexed ~n",[{?MODULE,?LINE} ]),
+                   Row =  hbase_get_key(ProtoType, Table, ?FAMILY, NewKey),
+                   ?DEBUG("~p got row  ~p  ~n",[{?MODULE,?LINE}, Row ]),
+		    PidReciverResult ! Row,
+		   process_indexed_hbase(Table, ProtoType,  NewPreRes, TreeEts);
             {'EXIT', From, Reason} ->
                   ?WAIT("~p GOT  exit in fact hbase ~p ~n",[{?MODULE,?LINE}, ProtoType ]),
                   ?LOG("~p got exit signal  ~p ~n",[{?MODULE,?LINE}, {From, Reason} ]);
@@ -757,7 +773,14 @@ hbase_get_key(Table,  Key)->
                             {hbase_exception, Res}
 	end
 .
+
 hbase_get_key(ProtoType, Table, Family, Key)->
+    hbase_get_key(ProtoType, Table, Family, Key, ?USE_THRIFT).
+%%HACK avoid = [Key]
+hbase_get_key(ProtoType, Table, Family, Key, 1)->
+    fact_hbase_thrift:get_key(ProtoType, Table, Family, Key)
+;    
+hbase_get_key(ProtoType, Table, Family, Key, 0)->
       { Hbase_Res, Host } = get_rand_host(),
       Url = lists:flatten(Hbase_Res ++ Table++"/"++Key++"/"++Family),
       ?DEBUG("~p get indexed  key by url ~p",[{?MODULE,?LINE}, Url]),
@@ -844,6 +867,25 @@ check_index(ProtoType, Name, TreeEts)->
 	      end
         end
 .
+
+
+start_process_loop_hbase(Name, ProtoType,  TreeEts)->
+    start_process_loop_hbase(Name, ProtoType,  TreeEts, ?USE_THRIFT)
+.
+
+
+start_process_loop_hbase(Name, ProtoType,  TreeEts, 1)->
+    ?DEBUG("~p start_process_loop_hbase ~n", [{?MODULE,?LINE}] ),
+    fact_hbase_thrift:start_process_loop_hbase(Name, ProtoType,  TreeEts)
+;
+start_process_loop_hbase(Name, ProtoType,  TreeEts, 0)->
+                              HbaseTable =  common:get_logical_name(TreeEts, Name ),  
+                              %%TODO throw exception if prototype contain something except constants or variables
+                              %%TODO process exception  timeouts etc
+                              Scanner = ( catch start_recr( atom_to_list(HbaseTable), ProtoType  ) ),
+                              process_loop_hbase( Scanner, ProtoType).
+
+
 process_loop_hbase( {hbase_exception, Reason}, ProtoType)->
     receive 
             {PidReciverResult ,get_pack_of_facts} ->
@@ -1550,8 +1592,9 @@ check_exist_rule(TableName, Name) when is_integer(Name)->
 check_exist_rule(TableName, LName)->
    
     {Hbase_Res, Host } = get_rand_host(),
-    ?DEBUG("~p check url ~p~n",[{?MODULE,?LINE},Hbase_Res++TableName++"/"++LName++"/"++?FAMILY++":"++?CODE_COLUMN ]),
-    case catch  httpc:request( 'get', { Hbase_Res++TableName++"/"++LName++"/"++?FAMILY++":"++?CODE_COLUMN,
+    Url =  Hbase_Res++TableName++"/"++LName++"/"++?FAMILY++":"++?CODE_COLUMN,
+    ?DEBUG("~p check url ~p~n",[{?MODULE,?LINE},Url ]),
+    case catch  httpc:request( 'get', { Url,
 				    [ {"Accept","application/json"}, {"Host", Host}]},
 				    [ {connect_timeout, ?DEFAULT_TIMEOUT },
 				      {timeout, ?DEFAULT_TIMEOUT }],
@@ -1960,6 +2003,13 @@ meta_info(_, _)  ->
 
 
 hbase_low_put_key(Table, Key, Family, Key2, Value)->
+        hbase_low_put_key(Table, Key, Family, Key2, Value, ?USE_THRIFT)
+.
+
+hbase_low_put_key(Table, Key, Family, Key2, Value, 1)->
+        fact_hbase_thrift:put_key(Table, Key, Family, Key2, Value)
+;
+hbase_low_put_key(Table, Key, Family, Key2, Value, 0)->
 
 %  curl -X POST -H "Content-Type: text/xml" 
 % --data '<?xml version="1.0" encoding="UTF-8" standalone="yes" ?>
@@ -1971,7 +2021,7 @@ hbase_low_put_key(Table, Key, Family, Key2, Value)->
     Body = <<"<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\" ?><CellSet><Row key=\"", 
 		    BKey/binary, "\">", MakeCellSet/binary, "</Row></CellSet>" >>,    
     
-    case catch  httpc:request( 'post', { Hbase_Res++Table++"/"++Key++"/"++?LINKS_FAMILY,
+    case catch  httpc:request( 'post', { Hbase_Res++Table++"/"++Key++"/"++Family,
  				[ {"Content-Length", integer_to_list( erlang:byte_size(Body) )},
 				  {"Content-Type","text/xml"},
  				  {"Host", Host}
@@ -1992,6 +2042,13 @@ hbase_low_put_key(Table, Key, Family, Key2, Value)->
 .
 
 hbase_low_get_key(Table, Key, Family,  SecondKey)->
+    hbase_low_get_key(Table, Key, Family,  SecondKey,?USE_THRIFT).
+
+hbase_low_get_key(Table, Key, Family,  SecondKey,1)->
+    fact_hbase_thrift:low_get_key(Table, Key, Family,  SecondKey)
+
+;
+hbase_low_get_key(Table, Key, Family,  SecondKey, 0)->
        { Hbase_Res, Host } = get_rand_host(),
        case catch  httpc:request( get, 
 				    { Hbase_Res++Table++"/"++Key++"/"++Family++":"++SecondKey,
