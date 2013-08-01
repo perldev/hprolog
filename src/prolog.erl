@@ -966,6 +966,37 @@ aim(NextBody, PrevIndex, Body = {',', ProtoType, Second }, Context, Index, TreeE
                     Res
         end
 ;
+%  {':-',
+%                            {min,{'List1'},{'List2'},{'Output'}},
+%                            {',',
+%                             {length,{'List1'},{'N'}},
+%                             {',',
+%                              {length,{'List2'},{'M'}},
+%                              {';',
+%                               {'->',{'<',{'N'},{'M'}},{'=',{'Output'},true}},
+%                               {';',
+%                                {'->',
+%                                 {'=:=',{'N'},{'M'}},
+%                                 {'=',{'Output'},equal}},
+%                                {'=',{'Output'},other}}}}}}
+aim(NextBody, PrevIndex , Body = {';', {'->', Objection, FirstBody }, SecondBody }, Context, Index, TreeEts, Parent)->
+       %%we make just to temp aims with two patterns 
+         ets:insert(TreeEts,
+         #aim_record{ id = Index,
+                      prototype = ?LAMBDA,
+                      temp_prototype = ?LAMBDA, 
+                      solutions = [ {?LAMBDA,{',',Objection,
+                                                 {',', '!', FirstBody } 
+                                              } 
+                                     }, {?LAMBDA, SecondBody }],
+                      next = one,
+                      prev_id = PrevIndex,
+                      context = Context,
+                      next_leap = NextBody,
+                      parent = Parent 
+                      }),                      
+         next_aim(Parent, Index, TreeEts ) 
+;
 aim(NextBody, PrevIndex , Body = {';', FirstBody, SecondBody }, Context, Index, TreeEts, Parent)->
        %%we make just to temp aims with two patterns 
          ets:insert(TreeEts,
@@ -981,6 +1012,7 @@ aim(NextBody, PrevIndex , Body = {';', FirstBody, SecondBody }, Context, Index, 
                       }),                      
          next_aim(Parent, Index, TreeEts ) 
 ;
+
 %%YES im very lazy ;)
 aim(NextBody, PrevIndex, {'call', ProtoType }, Context, Index, TreeEts, Parent )->    
     BodyBounded = bound_aim(ProtoType, Context),
@@ -996,7 +1028,7 @@ aim(NextBody, PrevIndex, ProtoType, Context, Index, TreeEts, Parent )->
           true -> 
             ?TRACE(Index, TreeEts, bound_aim(ProtoType, Context), Context),
              Res = inner_defined_aim(NextBody, PrevIndex, ProtoType, Context, Index, TreeEts),             
-%              ets:update_counter(TreeEts, ?AIM_COUNTER, {3,1}),
+             ?AIM_COUNTER(TreeEts),
              process_builtin_pred(Res, NextBody,  PrevIndex, Index, TreeEts, Parent);
           false ->
              user_defined_aim(NextBody, PrevIndex, ProtoType, Context, Index, TreeEts, Parent)
@@ -1192,7 +1224,8 @@ next_aim( Parent, Index, TreeEts )->
       Res = ets:lookup(TreeEts, Index),  
       ?DEV_DEBUG("~p process aim ~p ~n",[{?MODULE,?LINE}, {Res, Parent, Index} ]),
 %       ?PAUSE,
-%       ets:update_counter(TreeEts, ?AIM_COUNTER, {3,1}), %%UPDATE counter
+      ?AIM_COUNTER(TreeEts),
+      %%UPDATE counter
       case Res of
         [ T = #aim_record{solutions = [], next = one }] ->%%one  it's pattern matching 
                 ?DEV_DEBUG("~p got to prev aim  ~p ~n",[{?MODULE,?LINE}, T#aim_record.prev_id]),
@@ -1261,7 +1294,7 @@ process_next_hbase([], T, TreeEts, Parent)->
         false;
 process_next_hbase( [Res], T, TreeEts, Parent)->
         %    Res = [{}]
-        %%TODO remove this to fact_hbase module
+        %%TODO remove this reorganization 
         NewIndex =  get_index(T#aim_record.id), % now(), %T#aim_record.id + 1,
         Name =  erlang:element(1, T#aim_record.prototype ),
         BoundProtoType = list_to_tuple( [Name|tuple_to_list( Res )] ),
@@ -1269,14 +1302,14 @@ process_next_hbase( [Res], T, TreeEts, Parent)->
         ?DEBUG("~p bound temp aim  ~p ~n",[{?MODULE,?LINE},
                                            {T#aim_record.prototype, T#aim_record.temp_prototype, BoundProtoType }]),
                                   
-                                           
+        %TODO mistakes there                                    
         { true, NewLocalContext } = prolog_matching:var_match(BoundProtoType, T#aim_record.prototype, T#aim_record.context),
         %%TODO remove all logs with dict:to_list functions
         ?DEBUG("~p process FACT ~p ~n",[{?MODULE,?LINE},  {
                                                             T#aim_record.prototype,
                                                             T#aim_record.temp_prototype,
                                                             T#aim_record.next_leap} ]),
-        %%TODO change all conv3 to aim procedure
+        %%TODO change all conv3е to aim procedure
         %% this case is needed for saving original context of current tree leap
         ?TRACE(T#aim_record.id, TreeEts, T#aim_record.temp_prototype, NewLocalContext),
         ?TRACE2(T#aim_record.id, TreeEts, BoundProtoType, NewLocalContext),
@@ -1474,15 +1507,7 @@ delete_about_me(Index,TreeEts)->
 conv3(  'finish', NewContext, PrevIndex, NewIndex, TreeEts, ParentIndex )->
         {true, NewContext, PrevIndex}
 ;
-%%TODO add cut deciesion
-conv3({ '->', Rule, Body }, Context, PrevIndex, Index, TreeEts, ParentIndex )->
-        %start process of fact and rule calculation
-%       ?DEBUG("~p  process  ~p ~n",[{?MODULE,?LINE}, {Rule, Body, dict:to_list(Context) } ]),
-        {Time , Res} =   timer:tc(?MODULE, 'aim' ,[ Body, PrevIndex , Rule, Context,  Index, TreeEts, ParentIndex] ),
-        ?TC("~p conv3 process in  ~p ~n",[{?MODULE,?LINE}, {Time,Res}  ]),
-        %%%form params for 
-        Res
-;
+
 conv3({ ',', Rule, Body }, Context, PrevIndex, Index, TreeEts, ParentIndex )->
 	%start process of fact and rule calculation
 % 	?DEBUG("~p  process  ~p ~n",[{?MODULE,?LINE}, {Rule, Body, dict:to_list(Context) } ]),
@@ -1598,7 +1623,6 @@ bound_struct_hack(Var = { _ }, Context)->
 	end
 ;
 bound_struct_hack({Operator, Var1, Var2}, Context)->
-	
          { BoundVar2, NewContext  } = bound_struct_hack(Var2, Context),
          { BoundVar1, NewContext1 } = bound_struct_hack(Var1, NewContext),
          { {Operator, BoundVar1, BoundVar2}, NewContext1}
@@ -1612,7 +1636,6 @@ bound_struct_hack(Var, Context) when is_tuple(Var)->
 			      tuple_to_list(Var) ),
 	{ list_to_tuple(BoundVar), NewContext }
 ;
-
 bound_struct_hack(Var, Context)->
 	 {Var, Context} 
 .
@@ -1669,7 +1692,8 @@ common_process_expr( Body, Context )->
       .
 
  
- 
+%%%TODO think about it 
+%% do we need automatic converting strings to number
 % {'+',{'+',{'R1'},{'R'}},{'R4'}}
 arithmetic_process(nothing, _Context)->
     false;
@@ -1688,7 +1712,6 @@ arithmetic_process( Name = {'-',Var}, Context )->
 	
        case arithmetic_process(NewVar, Context) of 
 	    false -> false;
-	    
 	    X when is_float(X) -> -1*X;
 	    X when is_integer(X) -> -1*X;
 	    X when is_atom(X) -> false;
