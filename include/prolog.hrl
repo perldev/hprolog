@@ -1,15 +1,26 @@
 
+%%default count of pool to the thrift server
+-define(DEFAULT_COUNT_THRIFT, 10).
+%% wheather using thrift
+-define(USE_THRIFT, 1).
+
+-define(THRIFT_RECONNECT_TIMEOUT, 10000).
+
 -define(DEFAULT_TIMEOUT, infinity).%%miliseconds
 -define(IO_SERVER, io).
--define(FATAL_WAIT_TIME, infinity).
+%%miliseconds
+-define(FATAL_WAIT_TIME, 60000).
 -define(META_INFO_BATCH, 3). %%for using as batch param for scanner meta info
 -define(AIM_COUNTER, aim_counter).
 
--define(DEV_BUILD,1). %%this uncommented line means that hbase driver will use avias
+%-define(DEV_BUILD,1). %%this uncommented line means that hbase driver will use avias
 
+-define(MAX_ETS_BUFFER_SIZE, 20000).
 
 -define(USE_HBASE,1).
 -define(UPDATE_STAT_INTERVAL,120000).%%interval of updating meta stat of prolog statements
+
+
 
 -define(SIMPLE_HBASE_ASSERT,1).
 
@@ -20,7 +31,31 @@
 -define(ROOT, console_root).
 -define(PREFIX, prefix).
 
+%%counter of operation, we can count tree lookups
+%-define(INCLUDE_COUNT,1).
+
+-ifdef(INCLUDE_COUNT).
+
+-define(AIM_COUNTER(TreeEts),   ets:update_counter(TreeEts, aim_counter, {3,1}) ).
+-define(START_COUNTER(TreeEts),  ets:insert(TreeEts, {system_record,aim_counter, 0} )   ).
+-define(GET_AIM_COUNT(TreeEts), common:return_count(TreeEts) ).
+
+-else.
+
+-define(AIM_COUNTER(TreeEts),   true ).
+-define(START_COUNTER(TreeEts),  true   ).
+-define(GET_AIM_COUNT(TreeEts), not_included).
+
+-endif.
+
+
+
+
+
 -ifdef(ENABLE_LOG).
+
+
+
 
 -define(TEST,1).
 -define(DEV_TEST,1).
@@ -169,13 +204,14 @@
 -define(SL_TIMER,60000). %minute
 % pay(Re,"75000.00",Currency,Date,From_okpo,To_okpo,From_account,To_account,FromName,ToName,FromMfo,ToMfo, Desc,Ip).
 
--define(LIMIT,1). %% LIMIT and GET_FACT_PACK must be equal 
+-define(LIMIT,100). %% LIMIT and GET_FACT_PACK must be equal 
 -define(GET_FACT_PACK, 1). 
 %%TODO realize algorithm for return first element, but in background continue process of receiveing data from hbase
 %%for example we return first element...and save to the memory 1024 records and in next call return from memory
 
 
 -define(UNDEF, undefined).
+-define(COUNT_MAPPERS, 1).
 
 -define(RESTART_CONVERTER, 120*1000).
 
@@ -197,7 +233,10 @@
 -define(SCANNERS_HOSTS_TABLE, hbase_scanners ).
 -define(SCANNERS_HOSTS_LINK, hbase_scanners_hosts ).
 
+
 -ifdef(DEV_BUILD).
+
+-define(THRIFT_CONF,  { "hd-test-2.ceb.loc", 9091 }  ). 
 
 -define(HBASE_HOSTS, 
         [
@@ -205,10 +244,13 @@
          {"http://avias-db-2.ceb.loc:60050/", "avias-db-2.ceb.loc:60050" },
          {"http://avias-db-2.ceb.loc:60050/", "avias-db-2.ceb.loc:60050" },
          {"http://avias-db-2.ceb.loc:60050/", "avias-db-2.ceb.loc:60050" },
-        {"http://avias-db-2.ceb.loc:60050/", "avias-db-2.ceb.loc:60050" }
+         {"http://avias-db-2.ceb.loc:60050/", "avias-db-2.ceb.loc:60050" }
         ]).
 -define(HBASE_HOSTS_COUNT,5).
+
 -else.
+
+-define(THRIFT_CONF,  { "hd-test-2.ceb.loc", 9090 }  ).
 
 -define(HBASE_HOSTS, 
 	[
