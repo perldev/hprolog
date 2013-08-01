@@ -4,7 +4,7 @@
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2, terminate/2, code_change/3]).
 -export([start_link/1, stop/0, status/0 ]).
 
--export([get_free/0, return/1,reconnect/1 ]).
+-export([get_free/0, return/1,reconnect/1, connect/4 ]).
 
 -include("prolog.hrl").
 
@@ -89,7 +89,7 @@ handle_cast( { reconnect,  Key }, MyState) ->
          {Host, Port}  = ?THRIFT_CONF,
          Stack = MyState#thrift_pool.free,
          ets:delete( MyState#thrift_pool.busy, Key  ),
-         case catch hbase_thrift_api:connect(Host, Port, [], hbase_thrift ) of
+         case catch thrift_connection_pool:connect(Host, Port, [], hbase_thrift ) of
                                 {ok, NewConn} ->
                                         {noreply, MyState#thrift_pool{ free = [ {Key, NewConn} | Stack ] } } ;  
                                 Exception ->
@@ -134,4 +134,8 @@ terminate(_Reason, _State) ->
 
 status()->
       gen_server:call(?MODULE, status).
+      
+connect(Host, Port, Opts, Service) ->
+    thrift_client_util:new(Host, Port, Service, Opts).      
+      
 
