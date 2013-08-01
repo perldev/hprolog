@@ -105,20 +105,18 @@ server_loop(TreeEts, TraceOn) ->
 	      io:fwrite("Goal : ~p~n", [Goal]),
 %%TODO  process body if we use  complain request
 %% solution make temp aim with updated variables
-	      {TempAim, _ShellContext }=  make_temp_aim(Goal), 
-	      ?DEBUG("TempAim : ~p~n", [TempAim]),
+	       {TempAim, _ShellContext } =  make_temp_aim(Goal), 
+	       ?DEBUG("TempAim : ~p~n", [TempAim]),
 	      
-	      prolog_trace:trace_on(TraceOn, TreeEts ),              
+	       prolog_trace:trace_on(TraceOn, TreeEts ),              
 
-	      ?DEBUG("~p make temp aim ~p ~n",[ {?MODULE,?LINE}, TempAim]),
-	      StartTime = erlang:now(),
-	      ?START_COUNTER(TreeEts),
-	      Res = (catch prolog:aim( finish, ?ROOT, Goal,  dict:new(), 
-                                                1, TreeEts, ?ROOT) ),
-               process_prove(TempAim, Goal, Res, StartTime ),
-% 	       clean(tree_processes),%%%this is very bad design or solution
+	       ?DEBUG("~p make temp aim ~p ~n",[ {?MODULE,?LINE}, TempAim]),
+	       StartTime = erlang:now(),
+	       ?START_COUNTER(TreeEts),
+	       Pid =  spawn( ?MODULE, aim_spawn,[start, self(), Goal, TreeEts] ),	      
+               process_prove(Pid, TempAim, Goal,  StartTime ),
+% 	       clean(tree_processes),%%%[this is very bad design or solution
 	       prolog:clean_tree(TreeEts),
-	       
 % 	       ets:insert(TreeEts, {system_record, ?AIM_COUNTER, 0}),
 	       server_loop(TreeEts, TraceOn);
 
@@ -130,15 +128,38 @@ server_loop(TreeEts, TraceOn) ->
             server_loop(TreeEts, TraceOn)
     end.
 
-process_prove(  TempAim , Goal, Res, StartTime)->
-      case Res of 
+    
+aim_spawn(start, Pid, Goal, TreeEts  )->
+                Res = ( catch prolog:aim( finish, ?ROOT, Goal,  dict:new(), 1, TreeEts, ?ROOT) ),
+                Pid ! Res,
+                receive 
+                    {next, Prev} ->
+                        aim_spawn(Prev, Pid, Res, TreeEts );
+                    finish ->
+                        exit(normal)    
+                end;
+aim_spawn(Prev, Pid, Goal, TreeEts  )->
+                Res = (catch prolog:next_aim(Prev, TreeEts )),
+                Pid ! Res,
+                receive 
+                    {next, Prev} ->
+                        aim_spawn(Prev, Pid, Res, TreeEts );
+                    finish ->
+                        exit(normal)    
+                        
+                end
+.
+                
+                
+                
+    
+process_prove(Pid,   TempAim , Goal, StartTime)->
+      receive  
 	     {'EXIT', FromPid, Reason}->
 		  ?DEBUG("~p exit aim ~p~n",[{?MODULE,?LINE}, {FromPid,Reason} ]),
 		  io:fwrite("Error~n ~p",[{Reason,FromPid}]),
 		  FinishTime = erlang:now(),
-		  io:fwrite(" elapsed time ~p ~n", [ timer:now_diff(FinishTime, StartTime)*0.000001 ] );
-		  
-            
+		  io:fwrite(" elapsed time ~p ~n", [ timer:now_diff(FinishTime, StartTime)*0.000001 ] );           
             {true, SomeContext, Prev} ->
                   ?DEBUG("~p got from prolog shell aim ~p~n",[?LINE ,{TempAim, Goal, dict:to_list(SomeContext)} ]),
                   FinishTime = erlang:now(),
@@ -157,17 +178,21 @@ process_prove(  TempAim , Goal, Res, StartTime)->
                   Line = io:get_line(': '),
                   case string:chr(Line, $;) of
                        0 ->
-                         io:fwrite("Yes~n");
+                          io:fwrite("Yes~n");
                        _ ->
-                         ?DEBUG("~p send next to pid ~p",[{?MODULE,?LINE}, Res]),
+                         ?DEBUG("~p send next to pid ~p",[{?MODULE,?LINE}, {Pid, Goal} ]),
                          ?START_COUNTER(tree_processes),
-                         process_prove( TempAim , Goal, (catch prolog:next_aim(Prev, tree_processes )), erlang:now() )              
+                         Pid ! {next, Prev},
+                         process_prove(Pid,  TempAim , Goal,  erlang:now() )              
                   end;        
 	    Res ->
 	           
 		   io:fwrite("No ~p~n",[Res]),FinishTime = erlang:now(),
     		   io:fwrite(" elapsed time ~p ~n", [ timer:now_diff(FinishTime, StartTime)*0.000001 ] )
-     end.
+    		   
+     end,
+     exit(Pid, finish)
+.
      
 
 

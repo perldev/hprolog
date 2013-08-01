@@ -9,7 +9,7 @@
 -define(DEFAULT_TIMEOUT, infinity).%%miliseconds
 -define(IO_SERVER, io).
 %%miliseconds
--define(FATAL_WAIT_TIME, 60000).
+-define(FATAL_WAIT_TIME,infinity).% 60000).
 -define(META_INFO_BATCH, 3). %%for using as batch param for scanner meta info
 -define(AIM_COUNTER, aim_counter).
 

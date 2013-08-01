@@ -12,9 +12,10 @@
          get_data/8,
          test_get_regions/0,
          generate_scanner/5,
-         process_data/5, 
+         process_data/6, 
          flash_stat/2,
-         thrift_mappper_low/3
+         thrift_mappper_low/3,
+         create_filter4all_values/3
          ]).
 
 -include_lib("deps/thrift/src/hbase_types.hrl").
@@ -187,7 +188,7 @@ get_key(ProtoType, Table, Family, Key)->
 finish_loop_hbase(State)->
     Pids = State#mapper_state.pids,
     lists:foreach(fun({Pid, ConnState, ScannerId } )-> 
-                    exit(finish, Pid),
+                    exit( Pid, finish),
                     delete_scanner({ConnState, ScannerId}) 
                   end, Pids),
     ets:delete(State#mapper_state.ets_buffer),
@@ -248,27 +249,36 @@ check_buffer(EtsBuffer, EtsStat, Mappers)->
             false ->
                 do_nothing
        end,
-       case ets:lookup(EtsStat, prev_iter_size) of
+       PrevIterSize = ets:lookup(EtsStat, prev_iter_size),
+       ?DEBUG("~p prev size of buffer ~p ~n",[ {?MODULE,?LINE}, { PrevIterSize, Count } ]),
+       case PrevIterSize of
             []->
                 ets:insert(EtsStat, {prev_iter_size,Count });
             [{_, Size}]->
-                    case Count > Size   of
-                        false->
+                    case Count < Size   of
+                        true ->
                                  ets:delete(EtsStat, prev_iter_size),
                                  ets:insert(EtsStat, { prev_iter_size, Count } ),
+                                 io:format("~p continue read from hbase ~n",[ {?MODULE,?LINE} ]),
                                  lists:foreach(fun({_, Pid})->  
                                                     Pid ! continue_ping   %%%TODO WARNING process could be dead                                                 
                                                 end, Mappers  );                       
-                        true->
-                            do_nothing
+                        false ->
+                           do_nothing
                             %%do not send continue_ping signal to ther mappers
                     end
        end  
 .       
        
 to_unicode_list( Val )->
-        list_to_tuple( lists:map( fun(E)->   unicode:characters_to_list(E)  end, Val ) )
+        list_to_tuple( lists:map( fun to_unicode/1, Val ) )
 .
+to_unicode(E)  when is_binary(E)->
+    unicode:characters_to_list(E);
+to_unicode(E)->
+    E.
+    
+    
        
 get_buffer_value(State)->
     EtsBuffer  = State#mapper_state.ets_buffer,
@@ -328,6 +338,9 @@ process_loop_hbase(start,   ProtoType,  State )->
                   Pids =  State#mapper_state.pids, 
                   NewPids = lists:keydelete(Pid, 1,  Pids),
                   process_loop_hbase( start,   ProtoType, State#mapper_state{ pids = NewPids} );
+             {'EXIT', From, normal} -> %%all except of normal
+                 process_loop_hbase(start,   ProtoType,  State );
+                  
             {'EXIT', From, Reason} -> %%all except of normal
                   ?WAIT("~p GOT  exit in fact hbase ~p ~n",[{?MODULE,?LINE}, ProtoType ]),
                   ?LOG("~p got exit signal  ~p ~n",[{?MODULE,?LINE}, {From, Reason} ]),
@@ -366,6 +379,8 @@ process_loop_hbase(normal ,  ProtoType, State)->
             {PidReciverResult ,get_pack_of_facts} ->                  
                    PidReciverResult !  get_buffer_value(State),
                    process_loop_hbase( normal,    ProtoType, State);
+            {'EXIT', From, normal} -> %%all except of normal
+                 process_loop_hbase(start,   ProtoType,  State );
             {'EXIT', From, Reason} ->
                   ?WAIT("~p GOT  exit in fact hbase ~p ~n",[{?MODULE,?LINE}, ProtoType ]),
                   ?LOG("~p got exit signal  ~p ~n",[{?MODULE,?LINE}, {From, Reason} ]),
@@ -516,7 +531,8 @@ thrift_mappper_low(PidReducer,  {_Location, StartKey, EndKey},  {EtsStat, EtsBuf
                    {ok, State}  = thrift_connection_pool:connect(Host, Port, [], hbase_thrift ),
                     io:format("connecting ~p ~n",[ State] ),             
                     Filter = create_filter4all_values(ProtoType, undefined, 1),                    
-                    {State1, {ok, ScannerId}} =generate_scanner(Table,?LIMIT, Filter, State, StartKey, EndKey),
+                    io:format(" generating filter  ~p ~n",[Filter] ),   
+                    {State1, {ok, ScannerId}} = generate_scanner(Table,?LIMIT, Filter, State, StartKey, EndKey),
                     %%START mappers
                     io:format("~n ~p create scanner now i will be listening to it ~n",[{?MODULE,?LINE}]),
                
@@ -530,7 +546,7 @@ start_process_loop_hbase(Name, ProtoType, TreeEts)->
 
         Table =  atom_to_list(common:get_logical_name(TreeEts, Name ) ) ,
         Regions = get_regions(Table),        
-        ?DEBUG("~p start_process_loop_hbase ~n", [{?MODULE,?LINE}, {Table, ProtoType, TreeEts} ] ),
+        ?DEBUG("~p start_process_loop_hbase ~p ~n", [{?MODULE,?LINE}, {Table, ProtoType, TreeEts} ] ),
 
         EtsBuffer = ets:new(result_table, [set, public] ),
         EtsStat = ets:new(my_state, [ bag, public  ]),
@@ -540,8 +556,6 @@ start_process_loop_hbase(Name, ProtoType, TreeEts)->
         {Pids, _ } = lists:mapfoldl(fun thrift_mappper/2, { EtsStat, EtsBuffer,Table, ProtoType}, Regions ),
         timer:apply_interval(1000, fact_hbase_thrift, flash_stat,[ EtsStat, EtsBuffer ]),
         %%TODO add continue_ping to 
-        
-        
         ?DEBUG("~p starting listener  ALL for thrift connections ~n", [{?MODULE,?LINE}] ),
         process_loop_hbase(start,   ProtoType, #mapper_state{pids = Pids, ets_buffer = EtsBuffer, ets_stat = EtsStat } )
 
@@ -561,10 +575,10 @@ get_data(EtsStat, EtsBuffer, Pid, Limit, Id, Prototype, State, I) ->
                             delete_scanner({NewState, Id });
                 { NewState, {ok, Data} } ->
                     
-                    io:format("~p fetch : data  in ~p ~n", [{?MODULE,?LINE},  timer:now_diff(now(),Time ) ]),
+                    io:format("~p fetch : data   in ~p ~n", [{?MODULE,?LINE}, timer:now_diff(now(),Time ) ]),
                     Size = ets:info(EtsBuffer, size ),            
-                    spawn(?MODULE, process_data, [EtsStat, EtsBuffer, Data,  Prototype, Size > ?MAX_ETS_BUFFER_SIZE ]),
-                    Pid ! {result, ack},
+                    spawn_link(?MODULE, process_data, [Pid, EtsStat, EtsBuffer, Data,  Prototype, Size > ?MAX_ETS_BUFFER_SIZE ]),
+                   
                     get_data(EtsStat, EtsBuffer, Pid, Limit, Id, Prototype, NewState, I + Limit)
                     ;
                 Error -> 
@@ -584,7 +598,7 @@ create_uniq_filename()->
 
 
 %%%write new data to the disk   
-process_data(EtsStat, _EtsBuffer, ResultList, ProtoType, true) ->
+process_data(Pid, EtsStat, _EtsBuffer, ResultList, ProtoType, true) ->
     %Data = [{tRowResult,<<"90c68ea27aab41601cd822bc5e84214f">>,
     %      [{<<"params:2">>,{tCell,<<"1">>,1371731480251}}]}],
     PreColumns = lists:seq(1, length(ProtoType)),
@@ -613,10 +627,11 @@ process_data(EtsStat, _EtsBuffer, ResultList, ProtoType, true) ->
     dets:close(Storage),
     ets:insert(EtsStat, {disk_storage, DiskName} ),
 
-    ets:delete_object(EtsStat, {mappers,Pid})
+    ets:delete_object(EtsStat, {mappers,Pid}),
+     Pid ! {result, ack}
 ;
 %%write new data to the memory
-process_data(EtsStat, EtsBuffer, ResultList, ProtoType, false) ->
+process_data(ParentPid, EtsStat, EtsBuffer, ResultList, ProtoType, false) ->
     %Data = [{tRowResult,<<"90c68ea27aab41601cd822bc5e84214f">>,
     %      [{<<"params:2">>,{tCell,<<"1">>,1371731480251}}]}],
     PreColumns = lists:seq(1, length(ProtoType)),
@@ -636,8 +651,8 @@ process_data(EtsStat, EtsBuffer, ResultList, ProtoType, false) ->
     io:format("process : ~p records in  ~p microseconds and find ~p records ~n", 
                 [AllCount,  { timer:now_diff(Time3, Time1), timer:now_diff(Time2, Time1)}, FoundCount ]),
     ets:insert(EtsStat, {count_processed, AllCount} ),
-    
-    ets:delete_object(EtsStat, {mappers,Pid})
+    ets:delete_object(EtsStat, {mappers,Pid}),
+    ParentPid ! {result, ack}
 .
 
 process_record_disk(E,  {ProtoType, Columns, DEtsBuffer, CountS, CountB } )->
@@ -678,7 +693,7 @@ process_tCell(Key, { ColumnsData, Record, [Head|ProtoType],  Context, true })->
         {NewVal, Res, NewContext } =
                 case dict:find(Key,  ColumnsData ) of
                   error -> {"", true, Context};
-                { ok,  {tCell, Value, _TimeStamp}  }->
+                  { ok,  {tCell, Value, _TimeStamp}  }->
                     %%CONVERT TO LIST when sending result to code processing
                     case Head  of
                         {R} when is_atom(R)->
@@ -691,10 +706,9 @@ process_tCell(Key, { ColumnsData, Record, [Head|ProtoType],  Context, true })->
                                     {Value, false, Context}
                              end
                             ;
-                        Value-> %%process all items in prototype to the unicode binary
-                            {Value, true, Context};
-                        _ ->
-                            {Value, false, Context}                     
+                        %%CAUSE there filter logic must work    
+                       _Some-> %%process all items in prototype to the unicode binary
+                            {Head, true, Context}                
                          
                     end    
 %                   unicode:characters_to_list(Value)
@@ -744,20 +758,34 @@ generate_scanner(Table,Limit,  Filter, State, StartKey, EndKey) ->
 create_filter4all_values([], Filters, _) ->
     Filters;
 create_filter4all_values([{Var}|T], Filters, I) when is_atom(Var) ->
-
     create_filter4all_values(T, Filters, I + 1);
     %%STARTING of filter string
-    create_filter4all_values([Value|T], Filter, I) when is_binary(Value), byte_size(Filter) =:= 0 ->
+create_filter4all_values([Value|T], Filter, I) when is_binary(Value), byte_size(Filter) =:= 0 ->
     NewFilter = create_one_filter(Value, I), 
     create_filter4all_values(T, NewFilter, I + 1); 
-create_filter4all_values([Value|T], Filter, I) when is_binary(Value), is_atom(Filter) ->
+    
+create_filter4all_values([Value|T], undefined, I) when is_binary(Value) ->
     NewFilter = create_one_filter(Value, I),
-    Compound = thrift_filters:compound_filters(default, <<"">>, NewFilter, <<"AND">>),
-    create_filter4all_values(T, Compound, I + 1);
-create_filter4all_values([Value|T], Filter, I) when is_binary(Value), is_binary(Filter) ->
+    create_filter4all_values(T, NewFilter, I + 1);
+    
+create_filter4all_values([Value|T], Filter, I) when is_binary(Value) ->
     NewFilter = create_one_filter(Value, I),
     Compound = thrift_filters:compound_filters(default, Filter, NewFilter, <<"AND">>),
-    create_filter4all_values(T, Compound, I + 1).
+    create_filter4all_values(T, Compound, I + 1);
+    
+create_filter4all_values([Value|T], Filter, I) when is_integer(Value) ->
+    NewVal = list_to_binary( integer_to_list(Value) ),
+    create_filter4all_values([NewVal|T], Filter, I);    
+create_filter4all_values([Value|T], Filter, I) when is_float(Value) ->
+    NewVal = list_to_binary( float_to_list(Value) ),
+    create_filter4all_values([NewVal|T], Filter, I);    
+
+create_filter4all_values([Value|T], Filter, I) when is_atom(Value) ->
+    NewVal = list_to_binary( atom_to_list(Value) ),
+    create_filter4all_values([NewVal|T], Filter, I);       
+create_filter4all_values([Value|T], Filter, I) when is_list(Value) ->
+    NewVal = unicode:characters_to_binary(Value),
+    create_filter4all_values([NewVal|T], Filter, I).
 
 create_one_filter(Value, Ar) ->
     {ok, Filter} = thrift_filters:init([]),
