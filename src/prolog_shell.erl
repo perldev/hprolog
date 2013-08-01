@@ -29,6 +29,7 @@ start(Prefix)->
 	  false -> converter_monitor:start_link();
 	  true  -> do_nothing
     end,
+
     prolog:create_inner_structs(Prefix),
     case (catch ?INCLUDE_HBASE( Prefix ) ) of
         true-> io:format("~p namespace was loaded ~n",[Prefix]);
@@ -43,8 +44,6 @@ server(Prefix) ->
 	      [erlang:system_info(version)]),
     TreeEts = ets:new(tree_processes,[ public, set,named_table,{ keypos, 2 } ] ),   
     ets:insert(TreeEts, {system_record,?PREFIX, Prefix}),    
-%     ets:insert(TreeEts, {system_record,?AIM_COUNTER, 0}),    
-
     server_loop(TreeEts, ?TRACE_OFF).
 
 %% A simple Prolog shell similar to a "normal" Prolog shell. It allows
@@ -108,15 +107,18 @@ server_loop(TreeEts, TraceOn) ->
 %% solution make temp aim with updated variables
 	      {TempAim, _ShellContext }=  make_temp_aim(Goal), 
 	      ?DEBUG("TempAim : ~p~n", [TempAim]),
+	      
 	      prolog_trace:trace_on(TraceOn, TreeEts ),              
 
 	      ?DEBUG("~p make temp aim ~p ~n",[ {?MODULE,?LINE}, TempAim]),
 	      StartTime = erlang:now(),
+	      ?START_COUNTER(TreeEts),
 	      Res = (catch prolog:aim( finish, ?ROOT, Goal,  dict:new(), 
                                                 1, TreeEts, ?ROOT) ),
                process_prove(TempAim, Goal, Res, StartTime ),
 % 	       clean(tree_processes),%%%this is very bad design or solution
 	       prolog:clean_tree(TreeEts),
+	       
 % 	       ets:insert(TreeEts, {system_record, ?AIM_COUNTER, 0}),
 	       server_loop(TreeEts, TraceOn);
 
@@ -150,14 +152,15 @@ process_prove(  TempAim , Goal, Res, StartTime)->
                                         
                   lists:foreach(fun shell_var_match/1, dict:to_list(NewLocalContext) ),
                   ?SYSTEM_STAT(tree_processes, {0,0,0}),
-%                   [{_,_, Count}] = ets:lookup(tree_processes, ?AIM_COUNTER),
-                  io:fwrite(" elapsed time ~p next solution ~p process varients  ~n", [ timer:now_diff(FinishTime, StartTime)*0.000001,Prev] ),
+                  Count = ?GET_AIM_COUNT(tree_processes),
+                  io:fwrite(" elapsed time ~p next solution ~p process varients ~p ~n", [ timer:now_diff(FinishTime, StartTime)*0.000001,Prev, Count] ),
                   Line = io:get_line(': '),
                   case string:chr(Line, $;) of
                        0 ->
                          io:fwrite("Yes~n");
                        _ ->
                          ?DEBUG("~p send next to pid ~p",[{?MODULE,?LINE}, Res]),
+                         ?START_COUNTER(tree_processes),
                          process_prove( TempAim , Goal, (catch prolog:next_aim(Prev, tree_processes )), erlang:now() )              
                   end;        
 	    Res ->

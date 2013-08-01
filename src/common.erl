@@ -6,6 +6,14 @@
           web_console_read/1, web_console_writenl/2,
          console_get_char/1, console_read/1, console_nl/1 ]).
 
+         
+return_count(TreeEts)->
+
+    case catch ets:lookup(TreeEts, aim_counter) of
+        []->0;
+        [{_,_, Count}]-> Count
+    end
+.
 
 regis_io_server(TreeEts, Io)->
     ets:insert(TreeEts, {system_record, ?IO_SERVER, Io} )
