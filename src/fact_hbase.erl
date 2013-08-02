@@ -1285,7 +1285,7 @@ hbase_del_index(IndexTable, Type, Params)->
       case catch  del_key(Key, IndexTable ) of
         {hbase_exception, Res }->   
             converter_monitor:stat(del_index,  IndexTable , { Type, Key }, false ),
-            throw({hbase_exception, Res })
+            true
         ;    
         Res ->
             converter_monitor:stat(del_index,  IndexTable , { Type, Key }, true ),
@@ -1484,6 +1484,12 @@ delete_table(TableName)->
 .
 
 del_key(Key, TableName, Family, Col )->
+    del_key(Key, TableName, Family, Col, ?USE_THRIFT).
+    
+del_key(Key, TableName, Family, Col , 1 )->
+      fact_hbase_thrift:del_key(Key, TableName, Family, Col)
+;
+del_key(Key, TableName, Family, Col, 0 )->
       
 	{Hbase_Res, _Host } = get_rand_host(),
 	
@@ -1509,7 +1515,13 @@ del_key(Key, TableName ) when is_atom(Key) ->
 
   del_key(atom_to_list(Key), TableName )
 ;
-del_key(Key, TableName )->
+del_key(Key, TableName)->
+    del_key(Key, TableName, ?USE_THRIFT).
+    
+del_key(Key, TableName , 1 )->
+     fact_hbase_thrift:del_key(TableName, Key)
+;
+del_key(Key, TableName , 0 )->
 	   {Hbase_Res, _Host } = get_rand_host(),
             case catch  httpc:request( delete, { Hbase_Res++TableName++"/"++Key, [] },
 				  [ {connect_timeout,?DEFAULT_TIMEOUT }, {timeout, ?DEFAULT_TIMEOUT }  ],
@@ -1699,7 +1711,15 @@ store_new_fact(Name, LProtoType) when is_atom(Name)->
 
     store_new_fact(atom_to_list( Name ), LProtoType)
 ;
-store_new_fact(LTableName, LProtoType)->
+store_new_fact(Name, LProtoType) ->
+    store_new_fact(Name , LProtoType, ?USE_THRIFT).
+    
+
+store_new_fact(LTableName, LProtoType, 1)->
+    fact_hbase_thrift:stor_new_fact(LTableName, LProtoType)
+
+;
+store_new_fact(LTableName, LProtoType, 0)->
 %     my  $POST = qq[<?xml version="1.0" encoding="UTF-8" standalone="yes" ?><CellSet><Row key="$key">$cell_set</Row></CellSet>];
 %     my $str = qq[curl -X POST -H "Content-Type: text/xml" --data '$POST'  $BASE/$key_url/params];
 %   my $key  = md5_hex( join(",",@arr) );

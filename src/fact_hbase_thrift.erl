@@ -15,7 +15,10 @@
          process_data/6, 
          flash_stat/2,
          thrift_mappper_low/3,
-         create_filter4all_values/3
+         create_filter4all_values/3,
+         del_key/4,
+         del_key/2,
+         stor_new_fact/2
          ]).
 
 -include_lib("deps/thrift/src/hbase_types.hrl").
@@ -85,8 +88,82 @@ process_one_record(ProtoType, Family, Data)->
 %                     {<<"params:8">>,{tCell,<<...>>,...}},
 %                     {<<"params:9">>,{tCell,...}}]},
 %%TODO WATCH by all mappers
+del_key(Key, TableName, Family, Col)->
+    {KeyC, Connection} = thrift_connection_pool:get_free(),
+    Time = now(),
+     case catch 
+        thrift_client:call(Connection, mutateRow, [TableName , Key,
+            [#mutation{isDelete = true,column = Family ++ ":" ++ Col} ], dict:new() ] )
+        of
+
+        { NewConnection, {ok,ok} } ->
+                ?DEBUG("~p delete data  in ~p  ~n", [{?MODULE,?LINE}, timer:now_diff(now(), Time ) ]),
+                thrift_connection_pool:return({KeyC, NewConnection}),
+                true
+            ;
+        Error -> 
+             %%%reconnection !!!??
+             thrift_connection_pool:reconnect(KeyC),
+             ?DEBUG("~p deleting key ~p error result: ~p ~n", [{?MODULE,?LINE},{TableName, KeyC, Family},Error]),
+             throw( {hbase_exception, Error} )         
+     end
+.
+del_key(TableName, Key )->
+    {KeyC, Connection} = thrift_connection_pool:get_free(),
+    Time = now(),
+     case catch 
+        thrift_client:call(Connection, deleteAllRow, [TableName , Key , dict:new() ] )
+        of
+        { NewConnection, {ok,ok} } ->
+            
+                ?DEBUG("~p delete data  in ~p  ~n", [{?MODULE,?LINE}, timer:now_diff(now(), Time ) ]),
+                thrift_connection_pool:return({KeyC, NewConnection}),
+                true
+            ;
+        Error -> 
+             %%%reconnection !!!??
+             thrift_connection_pool:reconnect(KeyC),
+             ?DEBUG("~p deleting key ~p error result: ~p ~n", [ {?MODULE,?LINE}, {TableName, Key}, Error ]),
+             throw( {hbase_exception, Error} )         
+     end
+.    
+
+% new_pay_req("ap_hui","test","13.13","UAH","bogdan","4627081201903007_not","0116","+380973426645","","13131313131313","","305299","14360570","hren dlya jiszni","P24MS1","178.215.171.45","13","13").
+
+stor_new_fact(Table, ProtoType)->
+    
+    {Mutation, _}  = lists:foldl(fun( E, I )->  
+                                {List, Index} = I, 
+                                Value = unicode:characters_to_binary(E),
+                                Key = ?FAMILY ++ ":" ++ integer_to_list(Index),
+                                Item = #mutation{isDelete=false, column= Key, value = Value},
+                                { [ Item|List ], Index+1}                          
+                            end ,
+                            {[],1},  ProtoType ),
+    Key = fact_hbase:generate_key(ProtoType),
+    Agrs = [Table , Key, Mutation, dict:new() ],
+    ?DEBUG("~p put data  in ~p  ~n", [{?MODULE,?LINE}, Agrs ]),
 
     
+    {KeyC, Connection} = thrift_connection_pool:get_free(),
+    Time = now(),
+     case catch 
+        thrift_client:call(Connection, mutateRow, Agrs )
+        of
+
+        { NewConnection, {ok,ok} } ->
+                ?DEBUG("~p put data  in ~p  ~n", [{?MODULE,?LINE}, timer:now_diff(now(), Time ) ]),
+                thrift_connection_pool:return({KeyC, NewConnection}),
+                true
+            ;
+        Error -> 
+             %%%reconnection !!!??
+             thrift_connection_pool:reconnect(KeyC),
+             ?DEBUG("puting data ~p error result: ~p ~n", [{Table, ProtoType},Error]),
+             throw( {hbase_exception, Error} )         
+     end
+  
+. 
 put_key(Table, Key, Family, Key2, Value)->
     {KeyC, Connection} = thrift_connection_pool:get_free(),
     Time = now(),
@@ -103,7 +180,7 @@ put_key(Table, Key, Family, Key2, Value)->
         Error -> 
              %%%reconnection !!!??
              thrift_connection_pool:reconnect(KeyC),
-             ?DEBUG("puting key ~p error result: ~p ~n", [{Table, Key, Family, Key2, Value},Error]),
+             ?DEBUG("~p puting key ~p error result: ~p ~n", [{?MODULE,?LINE},{Table, Key, Family, Key2, Value},Error]),
              throw( {hbase_exception, Error} )         
      end
   
@@ -250,7 +327,7 @@ check_buffer(EtsBuffer, EtsStat, Mappers)->
                 do_nothing
        end,
        PrevIterSize = ets:lookup(EtsStat, prev_iter_size),
-       ?DEBUG("~p prev size of buffer ~p ~n",[ {?MODULE,?LINE}, { PrevIterSize, Count } ]),
+       io:format("~p prev size of buffer ~p ~n",[ {?MODULE,?LINE}, { PrevIterSize, Count } ]),
        case PrevIterSize of
             []->
                 ets:insert(EtsStat, {prev_iter_size,Count });
@@ -500,15 +577,13 @@ flash_stat(Ets, EtsBuffer)->
     WorkSize = length(Mappers),
     
     Workers =  ets:lookup(Ets, workers) ,
-    io:format("working mappers now ~p~n",[ WorkSize ]),
+    io:format("working mappers ~p reducers ~p now ~n",[ length(Workers), WorkSize ]),
     
     ets:delete(Ets, count_processed_all),
     ets:insert(Ets, {count_processed_all, Value+Value1 }),
     ets:delete(Ets, count_processed),
-    
     check_buffer(EtsBuffer, Ets, Workers)
 .
-
 
     
     
@@ -572,22 +647,24 @@ get_data(EtsStat, EtsBuffer, Pid, Limit, Id, Prototype, State, I) ->
                 { NewState, {ok, []} } ->            
                             Pid ! {finish, self() },
                             io:format("~p  got finish  in ~p ~n", [{?MODULE,?LINE},  timer:now_diff( now(), Time )] ),
+                            ets:delete_object(EtsBuffer, {workers, self()}),
                             delete_scanner({NewState, Id });
                 { NewState, {ok, Data} } ->
                     
                     io:format("~p fetch : data   in ~p ~n", [{?MODULE,?LINE}, timer:now_diff(now(),Time ) ]),
                     Size = ets:info(EtsBuffer, size ),            
                     spawn_link(?MODULE, process_data, [Pid, EtsStat, EtsBuffer, Data,  Prototype, Size > ?MAX_ETS_BUFFER_SIZE ]),
-                   
                     get_data(EtsStat, EtsBuffer, Pid, Limit, Id, Prototype, NewState, I + Limit)
                     ;
                 Error -> 
                     io:format("~p error result: ~p ~n", [Id, Error]),
                     delete_scanner({State, Id }),
+                    ets:delete_object(EtsBuffer, {workers, self()}),
                     Pid ! {hbase_exception,Prototype }            
             end;
        Unexpected->
-           io:format("~p thrift mapper stoping due to  ~p ~n", [Id, Unexpected])
+           io:format("~p thrift mapper stoping due to  ~p ~n", [Id, Unexpected]),
+           ets:delete_object(EtsBuffer, {workers, self()})
    end
 .
 
