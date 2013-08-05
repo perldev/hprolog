@@ -7,11 +7,15 @@
 -export([get_free/0, return/1,reconnect/1, connect/4 ]).
 
 -include("prolog.hrl").
-
+-define(CRITICAL, 500).
+-define(SLEEP_CRITICAL, 1000).
 -record(thrift_pool,{
                   free,
-                  busy
-                  
+                  busy,
+                  speed_get,
+                  speed_return,
+                  sleep,
+                  sleep_timeout
                 }
                 ).
                 
@@ -28,7 +32,7 @@ start_link(Count) ->
 init([Count]) ->
 
         Free =  start_pool(Count),
-        { ok,#thrift_pool{free = Free, busy = ets:new(?THRIFT_BUSY, [set,  private]) } }
+        { ok,#thrift_pool{free = Free,speed_get = 0, sleep = 0, sleep_timeout = ?SLEEP_CRITICAL, speed_return = 0, busy = ets:new(?THRIFT_BUSY, [set,  private]) } }
 .
 
 start_pool(Count)->
@@ -59,17 +63,24 @@ reconnect(Key)->
 code_change(_OldVsn, State, _Extra) ->
     {ok, State}.
 
-
 handle_call(status,_From ,State)->
-    { reply,  { ets:tab2list(State#thrift_pool.busy), State#thrift_pool.free }, State }
+    { reply,  { ets:info(State#thrift_pool.busy, size),
+                length(State#thrift_pool.free) }, State }
 ;    
-handle_call(get_free,_From ,State) ->
-    [Head|Tail] = State#thrift_pool.free,
+
+
+
+handle_call(get_free,_From, State = #thrift_pool{ free  = [] }) ->
+    { reply,  {hbase_thrift_exception, empty_pool }, State }
+;
+handle_call(get_free,_From, State) ->
+    [Head|Tail] = State#thrift_pool.free,    
     {Key, Connection} = Head,
-    ets:insert(State#thrift_pool.busy, {Key, Connection , now() }  ),
+    Now = now(),
+    ets:insert(State#thrift_pool.busy, {Key, Connection , Now }  ),  
     ?WAIT("return  free  call ~p ~n",
                            [ Head ]),
-    {reply,  Head  ,State#thrift_pool{ free = Tail } }
+    {reply,  Head  ,State#thrift_pool{ free = Tail, sleep = 0 , speed_get = Now } }
 .
 
 stop() ->
@@ -81,8 +92,11 @@ handle_cast( { return,  NewState = {Key, _NewConn} }, MyState) ->
                            [ { ?MODULE, ?LINE }, NewState ]),
          Stack = MyState#thrift_pool.free,
          ets:delete( MyState#thrift_pool.busy, Key  ),
-         {noreply, MyState#thrift_pool{ free = [ NewState|Stack ] } } ;
+         {noreply, MyState#thrift_pool{ free = [ NewState|Stack ], speed_return = now() } } ;
          
+         
+handle_cast( { reconnect,  hbase_thrift_exception }, MyState) -> 
+        { noreply, MyState } ;
 handle_cast( { reconnect,  Key }, MyState) ->
          ?WAIT("~p got back new connection  ~p ~n",
                            [ { ?MODULE, ?LINE }, Key ]),
