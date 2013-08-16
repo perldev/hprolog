@@ -417,10 +417,24 @@ get_date(Date)->
       case  catch get_date_params(Date) of
        { {Year,Month,Day}, {Hour, Minute} } ->
            { {Year,Month,Day}, {Hour,Minute} };
+        { {Year,Month,Day}, {Hour, Minute, Seconds} } ->
+           { {Year,Month,Day}, {Hour,Minute, Seconds} };    
        _ ->
             default_date()
       end
 .
+%  Jul 05 2013 14:15:29
+get_date_params([Mon1,Mon2,Mon3,32, Day1,Day2,32,Year1,Year2,Year3,Year4,32, Hour1,Hour2,$:,Minute1, Minute2,$:, Second1, Second2 ] )->
+   Year= [Year1,Year2,Year3,Year4],
+   Month = month2int([Mon1,Mon2,Mon3]),
+   Day = [ Day1, Day2 ],
+   Hour = [ Hour1,Hour2],
+   Minute = [Minute1, Minute2],
+   Seconds = [Second1, Second2],
+  
+ { { list_to_integer(Year), Month, list_to_integer(Day) }, 
+   { list_to_integer(Hour),list_to_integer(Minute),  list_to_integer(Seconds)  } }
+;
 %  Jul 05 2013 14:15
 get_date_params([Mon1,Mon2,Mon3,32, Day1,Day2,32,Year1,Year2,Year3,Year4,32, Hour1,Hour2,$:,Minute1, Minute2 ] )->
    Year= [Year1,Year2,Year3,Year4],
@@ -428,7 +442,7 @@ get_date_params([Mon1,Mon2,Mon3,32, Day1,Day2,32,Year1,Year2,Year3,Year4,32, Hou
    Day = [ Day1, Day2 ],
    Hour = [ Hour1,Hour2],
    Minute = [Minute1, Minute2],
-   { { list_to_integer(Year), Month, list_to_integer(Day) }, {list_to_integer(Hour),list_to_integer(Minute)} }
+   { { list_to_integer(Year), Month, list_to_integer(Day) }, {list_to_integer(Hour),list_to_integer(Minute),  0 }  }
 ;
 
 get_date_params(Date)->
@@ -451,7 +465,7 @@ get_str_date({ {Year,Month,Day},{Hour,Min} } )->
   ])
 
 .
-%Jul 17 2012 08:56
+%Jul 17 2012 08:56:90
 get_date(In, year)->
 	Params = date_params(In),
 	 { Out, _Some } = string:to_integer( lists:nth(3, Params) ),
@@ -485,6 +499,11 @@ get_date(In, hour)->
   hour(Time)
 ;
 get_date(In, minute)->
+  Params = date_params(In),
+  Time = lists:nth(4, Params),
+  minute(Time)
+;
+get_date(In, second)->
   Params = date_params(In),
   Time = lists:nth(4, Params),
   minute(Time)

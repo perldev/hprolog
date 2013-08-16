@@ -585,7 +585,7 @@ fill_rule_tree( Rule, _Table )->
 
 start_fact_process( Aim, TreeEts, ParentPid)->
     %%TODO remove links
-   spawn( ?MODULE, fact_start_link, [ Aim, TreeEts, ParentPid] )
+   spawn_link( ?MODULE, fact_start_link, [ Aim, TreeEts, ParentPid] )
 .
 %%TODO add rest call to find all facts and rules 
 fact_start_link( Aim,  TreeEts, ParentPid )->
@@ -717,12 +717,12 @@ process_indexed_hbase(Table, ProtoType, {hbase,Reason}, TreeEts)->
     receive
         {PidReciverResult, get_pack_of_facts}->
             PidReciverResult !  {hbase,Reason};
-         Some -> 
+         Some ->     
+
             ?LOG("~p got unexpected ~p ~n",[{?MODULE,?LINE}, Some ])
     end    
 ;
 process_indexed_hbase(Table, ProtoType, [], TreeEts)->
-    
     receive
         {PidReciverResult, get_pack_of_facts}->
             PidReciverResult !  [];

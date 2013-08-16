@@ -16,6 +16,7 @@ all: $(EBIN_DIR)
 
 clean:
 	$(REBAR) clean
+	rm -rf deps
 
 ctags:
 	cd $(SRC_DIR) ; ctags -R . ../include 

@@ -67,6 +67,11 @@ clean_tree(TreeEts)->
 compile(Prefix, File)->
     {ok, Terms } = erlog_io:read_file(File),
     delete_inner_structs(Prefix),
+    lists:foldl(fun process_term_first/2, Prefix,  Terms ),
+    %%TODO process aim :- 
+    %%and repeat read_file
+    
+    
     lists:foldl(fun process_term/2, Prefix,  Terms ),
     ok
 .
@@ -202,7 +207,19 @@ memory2hbase(NameSpace1, NameSpace2)->
 
 
 
+process_term_first( Rule = {':-', Body }, Prefix ) ->
 
+
+     ?DEBUG("~p got rule ~p~n",[{?MODULE,?LINE}, Rule  ]),    
+%     ets:insert(common:get_logical_name(Prefix, ?RULES), { Name, Body } ),
+     Prefix
+;
+process_term_first( NothingRule, Prefix) ->
+
+     ?DEBUG("~p unnessery rule during first step  ~p~n",[{?MODULE,?LINE}, NothingRule  ]),    
+     Prefix
+
+.
 
 process_term(Rule  = {':-',Name, Body}, Prefix) when is_atom(Name)->
      ?DEBUG("~p got rule ~p~n",[{?MODULE,?LINE}, Rule  ]),    
@@ -414,18 +431,6 @@ add_operator(_OrderStatus, _, _Name, _TreeEts  )->
      false
 .
 
-% functors
-% arg 
-% {',',{fact,{'X'}},{',',{functor,{fgg,5,t},f,6},{fact,x1}}}
-%%TODO 
-check_functor(Some, Name, Count, Context)->
-      true
-.
-% {',',{fact,{'X'}},{',',{arg,5, {fgg,5,t},Val},{fact,x1}}}
-%%TODO 
-check_arg(Some, Count, Value, Context ) ->
-      true     
-.
 
 cut_all_solutions(TreeEts, Parent, Parent )->
     true;
@@ -441,16 +446,39 @@ cut_all_solutions(TreeEts, PrevIndex, Parent )->
 
 
 
+inner_defined_aim(_NextBody, PrevIndex ,Body_ = { 'atom_length', Name, _Length  }, Context, _Index, _TreeEts  ) ->
+ 
+        Body = prolog_matching:bound_body( Body_, Context),
+        Atom = erlang:element(2,Body ),
+        Count = erlang:element(3, Body ),
+        case is_atom(Atom) of
+            false ->
+                throw({instantiation_error, {Atom, Name} });
+            true ->
+                 Length =  length(atom_to_list (Atom)  ),
+                 case prolog_matching:is_var(Count) of
+                        true ->
+                             {true,   prolog_matching:store_var( {Count, Length } , Context ) };
+                        _->
+                            case Count of
+                                Length-> { true, Context};
+                                _->{false, Context}
+                            end
+                 
+                 end
+                
+        end   
+;     
 %%%usual assert
 inner_defined_aim(NextBody, PrevIndex ,{ 'assertz', Body = {':-', _ProtoType, _Body1 }  }, Context, Index, TreeEts  ) ->
   inner_defined_aim(NextBody, PrevIndex , { 'assert', Body   }, Context, Index, TreeEts   )
 ;
-inner_defined_aim(NextBody, PrevIndex ,{ 'assert', Body = {':-', _ProtoType, _Body1 }  }, Context, _Index, TreeEts ) ->
+inner_defined_aim(_NextBody, PrevIndex ,{ 'assert', Body = {':-', _ProtoType, _Body1 }  }, Context, _Index, TreeEts ) ->
       dynamic_new_rule(Body, last, TreeEts),
       {true, Context}
 
 ;
-inner_defined_aim(NextBody, PrevIndex ,{ 'asserta', Body = {':-', _ProtoType, _Body1 }   }, Context, _Index, TreeEts  )->
+inner_defined_aim(_NextBody, PrevIndex ,{ 'asserta', Body = {':-', _ProtoType, _Body1 }   }, Context, _Index, TreeEts  )->
      dynamic_new_rule(Body, first, TreeEts),
      {true,Context}
     
@@ -460,61 +488,57 @@ inner_defined_aim(NextBody, PrevIndex ,{ 'asserta', Body = {':-', _ProtoType, _B
 inner_defined_aim(NextBody, PrevIndex ,{ 'assertz', Body   }, Context, Index, TreeEts  ) when is_tuple(Body)->
       inner_defined_aim(NextBody, PrevIndex , { 'assert', Body   }, Context, Index, TreeEts   )
 ;
-inner_defined_aim(NextBody, PrevIndex ,{ 'assert', Body   }, Context, _Index, TreeEts  ) when is_tuple(Body)->     
+inner_defined_aim(_NextBody, PrevIndex ,{ 'assert', Body   }, Context, _Index, TreeEts  ) when is_tuple(Body)->     
       add_fact(Context, Body, last, TreeEts, ?SIMPLE_HBASE_ASSERT)     
 ;
-inner_defined_aim(NextBody, PrevIndex ,{ 'asserta', Body   }, Context, _Index, TreeEts  ) when is_tuple(Body)->
+inner_defined_aim(_NextBody, PrevIndex ,{ 'asserta', Body   }, Context, _Index, TreeEts  ) when is_tuple(Body)->
       add_fact(Context, Body, first, TreeEts, ?SIMPLE_HBASE_ASSERT)
 ;
-inner_defined_aim(NextBody, PrevIndex, {'inner_retract___', Body }, Context, _index, TreeEts)->
+inner_defined_aim(_NextBody, PrevIndex, {'inner_retract___', Body }, Context, _index, TreeEts)->
 %%only facts
 %%TODO rules
      delete_fact(TreeEts, Body, Context,?SIMPLE_HBASE_ASSERT),
      %%it's alway true cause this system predicat  must be used before call(X)
      {true, Context}
 ; 
-inner_defined_aim(NextBody, PrevIndex, Body = { 'meta', _FactName, _ParamName, Val }, Context, _Index, TreeEts  )->
+inner_defined_aim(_NextBody, PrevIndex, Body = { 'meta', _FactName, _ParamName, Val }, Context, _Index, TreeEts  )->
     NewBody = prolog_matching:bound_body(Body, Context),
     Res = fact_hbase:meta_info(NewBody,  TreeEts),     
     {MainRes ,NewContext} = prolog_matching:var_match(Res, Val, Context),
     {MainRes ,NewContext}
 ;
-inner_defined_aim(NextBody, PrevIndex ,{ 'functor', Body, Name, Count }, Context, _Index, _  )->
-      Res  =
-	  case Body of
-	      {Key}->  %means var
-		  case prolog_matching:find_var(Context, Body)  of
-		    nothing -> false;
-		    Some  when is_tuple( Some )->  %%means functor
-			   check_functor(Some, Name, Count, Context );
-		    _ -> false
-		 end;
-	      Some when is_tuple(Some)->
-		      check_functor(Some, Name, Count, Context ); 
-	      _->
-		  false
-	end,
-    {Res,Context}
+
+
+
+
+% (X,Y) it's almost like  = but in reversed order
+inner_defined_aim(_NextBody, PrevIndex, Body_ = { 'copy_term', X, Y }, Context, _Index, _  )->
+         prolog_matching:var_match( Y, X, Context)           
 ;
-inner_defined_aim(NextBody, PrevIndex, { 'arg', Count, Body, Value }, Context, _Index, _  )->
-	Res  =
-	  case Body of
-	      {Key}->  %means var
-		  case prolog_matching:find_var(Context, Body)  of
-		    nothing -> false;
-		    Some  when is_tuple( Some )->  %%means functor
-			   check_arg(Some, Count, Value, Context );
-		    _ -> false
-		 end;
-	      Some when is_tuple(Some)->
-		      check_arg(Some, Count, Value, Context ); 
-	      _->
-		  false
-	end,
-	{Res,Context}
-	
-    
-    
+inner_defined_aim(NextBody, PrevIndex ,Body_ = { 'functor', _SomeTerm, _SomeNameI, _SomeCountI }, Context, _Index, _  )->
+        Body = prolog_matching:bound_body( Body_, Context),
+        Name = erlang:element(3,Body ),
+        Count = erlang:element(4, Body ),
+        Term  = erlang:element(2, Body),
+        case catch   erlang:element(1, Term) of
+            {'EXIT', Reason}->
+                throw({type_exception, Reason});
+            SomeName->
+                SomeCount = erlang:size(Term) - 1,
+                prolog_matching:var_match({'functor', Name, Count }, {'functor', SomeName, SomeCount } ,Context)
+        end
+;
+inner_defined_aim(NextBody, PrevIndex, Body_  = {  'arg', _Count, _Body, _Value }, Context, _Index, _  )->
+        Body = prolog_matching:bound_body( Body_, Context),
+        Number = erlang:element(2, Body),
+        Term = erlang:element(3, Body),
+        Value = erlang:element(4, Body),
+        case catch erlang:element(Number + 1, Term  )  of
+	       {'EXIT', Reason}->  %means var
+                    throw({type_exception, Reason});                    
+	        Some ->
+		      prolog_matching:var_match(Some, Value, Context)
+	end
 ;
 inner_defined_aim(NextBody, PrevIndex ,{ atom, Body  }, Context, _Index, _  ) ->
 
@@ -588,12 +612,6 @@ inner_defined_aim(NextBody, PrevIndex ,{ integer, X  }, Context, _Index, _  ) ->
 	case Body of
 	      Body when is_integer(Body)->
 		  true;
-              {Key} ->
-		  case prolog_matching:find_var(Context, Body)  of
-		     nothing -> false;
-		     Some when is_integer(Some) -> true;
-		     _ ->false
-		  end;
 	      _ -> false
 	end,
     {Res, Context}   
@@ -605,12 +623,6 @@ inner_defined_aim(NextBody, PrevIndex ,{ 'list', X  }, Context, _Index, _  ) ->
 	case Body of
 	      Body when is_list(Body)->
 		  true;
-              {Key} ->
-		  case prolog_matching:find_var(Context, Body)  of
-		     nothing -> false;
-		     Some when is_list(Some) -> true;
-		     _ ->false
-		  end;
 	      _ -> false 
 	end,
      {Res, Context}     
@@ -624,16 +636,21 @@ inner_defined_aim(NextBody, PrevIndex ,{ atomic, X  }, Context, _Index, _  ) ->
 		  true;
 	      Body when is_number(Body)->
 		  true;	  
-              {Key} ->
-		  case prolog_matching:find_var(Context, Body)  of
-		     nothing -> false;
-		     Some when is_atom(Some) -> true;
-    		     Some when is_integer(Some) -> true;
-		     _ -> false
-		  end;
 	      _ -> false 
 	end,
       {Res, Context}      
+;
+inner_defined_aim(NextBody, PrevIndex ,{ 'number', X  }, Context, _Index, _  ) ->
+        Body = prolog_matching:bound_body( X, Context),
+        Res =
+        case Body of
+              Body when is_number(Body)->
+                  true;
+              _ -> false 
+        end,
+        {Res, Context}
+
+    
 ;
 inner_defined_aim(NextBody, PrevIndex ,{ 'float', X  }, Context, _Index, _  ) ->
         Body = prolog_matching:bound_body( X, Context),
@@ -641,29 +658,32 @@ inner_defined_aim(NextBody, PrevIndex ,{ 'float', X  }, Context, _Index, _  ) ->
 	case Body of
 	      Body when is_float(Body)->
 		  true;
-              {Key} ->
-		  case prolog_matching:find_var(Context, Body)  of
-		     nothing -> false;
-		     Some when is_float(Some) -> true;
-		     _ ->false
-		  end;
 	      _ -> false 
 	end,
 	{Res, Context}
 
     
 ;
+
+inner_defined_aim(NextBody, PrevIndex ,{ 'compound', X  }, Context, _Index, _  ) ->
+    Body = prolog_matching:bound_body( X, Context),
+    { case Body  of
+        Body_ when  is_number(Body_)->
+            false;
+        Body_ when  is_atom(Body_)->
+            false;    
+        {Body_} when is_atom(Body_)->
+            fallse;
+        _-> true
+      end, Context}  
+
+;
 inner_defined_aim(NextBody, PrevIndex ,{ 'var', X  }, Context, _Index, _  ) ->
         Body = prolog_matching:bound_body( X, Context),
         Res =
 	case Body of
 	  {Key} when is_atom(Key)->
-% 	        ?DEBUG("~p aim var is ~p~n",[{?MODULE,?LINE}, {Body,dict:to_list(Context) } ]),
-
-		case prolog_matching:find_var(Context, Body)  of
-		     nothing -> true;
-		     _ -> false
-		end;
+ 	       true;
 	  _ -> 
 	      false
 	end,
@@ -826,8 +846,7 @@ inner_defined_aim(NextBody, PrevIndex , Body = {'date', _Ini, _Typei, _Accumi },
 	      {false, Context};
 	  Var -> 
                  prolog_matching:var_match(Body, 
-                 {'date',In, Type, Var }
-                 , Context)
+                                    {'date',In, Type, Var }  , Context)
 	  
 	end,
        Res
@@ -911,6 +930,18 @@ inner_defined_aim(_NextBody, _PrevIndex , Body, _Context, _Index, TreeEts )->
     throw({'EXIT',non_exist, {Body,  TreeEts} } ).
 
 
+    
+    
+%%facts    
+
+
+aim(NextBody, PrevIndex , {'retract', {':-', Obj,'true' }  }, Context, Index, TreeEts, Parent) when is_tuple(Obj) ->
+  aim(NextBody, PrevIndex , {'retract', Obj }, Context, Index, TreeEts, Parent)
+;
+aim(NextBody, PrevIndex , {'retract', {':-', Obj, Body }  }, Context, Index, TreeEts, Parent) when is_tuple(Obj) ->
+%%% TODO retraction clause rules
+        true
+;
 aim(NextBody, PrevIndex , {'retract', Body }, Context, Index, TreeEts, Parent)->
        %%we make just to temp aims with two patterns 
          BodyBounded = prolog_matching:bound_body(Body, Context),
@@ -918,7 +949,7 @@ aim(NextBody, PrevIndex , {'retract', Body }, Context, Index, TreeEts, Parent)->
          #aim_record{ id = Index,
                       prototype = { retract,  BodyBounded },
                       temp_prototype = { retract, BodyBounded  }, 
-                      solutions = [ { retract, { {'_X_RETRACTING'} } , {',',{call,{'_X_RETRACTING'} }, {'inner_retract___', {'_X_RETRACTING'}  }   } } ],
+                      solutions = [ { retract, { {'_X_RETRACTING'} } , {',',{ 'call', {'_X_RETRACTING'} }, {'inner_retract___', {'_X_RETRACTING'}  }  } } ],
                       next = one,
                       prev_id = PrevIndex,
                       context = Context,
@@ -947,7 +978,9 @@ aim(NextBody, PrevIndex ,system_stat, Context, Index, TreeEts, Parent  ) ->
 aim(NextBody, PrevIndex ,fact_statistic, Context, Index, TreeEts, Parent  ) ->
         ?FACT_STAT(?STAT),%%TODO for web
         conv3( NextBody, Context, PrevIndex,  Index, TreeEts, Parent )
-;    
+;   
+
+
 aim(NextBody, PrevIndex,'!', Context, Index , TreeEts, Parent )->
          ?DEBUG("~p  parent cut  ~p", [{?MODULE,?LINE}, Parent ]),
          [AimRecord] = ets:lookup(TreeEts, Parent),  
@@ -956,6 +989,20 @@ aim(NextBody, PrevIndex,'!', Context, Index , TreeEts, Parent )->
          cut_all_solutions(TreeEts, PrevIndex, Parent ),
          %CUT all solution and current leap tell that there is a finish
          conv3( NextBody, Context, finish,  get_index(Index), TreeEts, Parent )
+;
+% it is 'not' !!!
+aim(NextBody, PrevIndex, {'\\+', X}, Context, Index , TreeEts, Parent )->
+      BodyBounded = prolog_matching:bound_body(X, Context),
+      ?DEV_DEBUG("~p bound aim  for \\+ from ~p ~n",[{?MODULE,?LINE}, {BodyBounded, Index, PrevIndex} ]),
+      case conv3(BodyBounded, Context, finish, Index, TreeEts, Parent) of
+            {true, NewLocalContext, NewPrev} ->
+                    ?DEV_DEBUG("~p return  true \\+ from ~p ~n",[{?MODULE,?LINE}, {BodyBounded, Index, PrevIndex} ]),
+
+                     next_aim(Parent, PrevIndex, TreeEts );
+             Res -> %%means false
+                    ?DEV_DEBUG("~p return false from ~p ~n",[{?MODULE,?LINE}, {BodyBounded, Res} ]),
+                     conv3( NextBody, Context, PrevIndex, Index, TreeEts, Parent )
+     end 
 ;
 aim(NextBody, PrevIndex, Body = {',', ProtoType, Second }, Context, Index, TreeEts, Parent)->
         case aim(Second, PrevIndex, ProtoType, Context, Index, TreeEts, Parent) of
@@ -989,6 +1036,54 @@ aim(NextBody, PrevIndex , Body = {';', {'->', Objection, FirstBody }, SecondBody
                                                  {',', '!', FirstBody } 
                                               } 
                                      }, {?LAMBDA, SecondBody }],
+                      next = one,
+                      prev_id = PrevIndex,
+                      context = Context,
+                      next_leap = NextBody,
+                      parent = Parent 
+                      }),                      
+         next_aim(Parent, Index, TreeEts ) 
+;
+aim(NextBody, PrevIndex ,  MainBody = {'clause', Head_, Body_ }, Context, Index, TreeEts, Parent)->
+        
+        
+         Head = prolog_matching:bound_body(Head_, Context),
+         Body = prolog_matching:bound_body(Body_, Context),
+         ?DEV_DEBUG("~p  make clause  ~p ~n",[{?MODULE,?LINE},  {Head, Body} ]),
+         Name = element(1, Head),%%from the syntax tree get name of fact
+         {TempSearch, _NewContext} = prolog_shell:make_temp_aim(MainBody),%% think about it
+
+         RulesTable = common:get_logical_name(TreeEts, ?RULES), 
+        
+         RulesList = ets:lookup(RulesTable, Name), 
+         
+         ?DEV_DEBUG("~p  possible clause  ~p ~n",[{?MODULE,?LINE}, RulesList ]),
+
+         Solutions = clause_aim_match(Head,  Body,  RulesList),
+         ?DEV_DEBUG("~p  temp clauses  ~p ~n",[{?MODULE,?LINE}, Solutions ]),
+
+         %%we make just to temp aims with two patterns 
+         ets:insert(TreeEts,
+         #aim_record{ id = Index,
+                      prototype = MainBody,
+                      temp_prototype = TempSearch, 
+                      solutions = Solutions,
+                      next = one,
+                      prev_id = PrevIndex,
+                      context = Context,
+                      next_leap = NextBody,
+                      parent = Parent 
+                      }),                      
+         next_aim(Parent, Index, TreeEts ) 
+;
+aim(NextBody, PrevIndex , Body = {'once', ProtoType }, Context, Index, TreeEts, Parent)->
+          BodyBounded = bound_aim(ProtoType, Context),
+       %%we make just to temp aims with two patterns 
+         ets:insert(TreeEts,
+         #aim_record{ id = Index,
+                      prototype = ?LAMBDA,
+                      temp_prototype = ?LAMBDA, 
+                      solutions = [ {?LAMBDA, {',', BodyBounded, '!' } } ],
                       next = one,
                       prev_id = PrevIndex,
                       context = Context,
@@ -1088,7 +1183,7 @@ hbase_user_defined_aim([], NextBody, PrevIndex, ProtoType, Context, Index, TreeE
          BoundProtoType = bound_aim(ProtoType, Context),
          {TempSearch, _NewContext} = prolog_shell:make_temp_aim(BoundProtoType),%% think about it
          HbasePid = fact_hbase:start_fact_process( BoundProtoType, TreeEts, self() ),
-          ets:insert(TreeEts,
+         ets:insert(TreeEts,
          #aim_record{ id = Index,
                       prototype = BoundProtoType,
                       temp_prototype = TempSearch, 
@@ -1175,6 +1270,29 @@ user_defined_aim(NextBody, PrevIndex, ProtoType, Context, Index, TreeEts, Parent
 
 
 -endif.
+
+
+clause_aim_match(Head, Body,  [])->
+     []   
+;
+clause_aim_match(Head,  Body,  RulesList)->
+     clause_aim_match(Head,  Body, RulesList , [] )   
+.
+
+clause_aim_match(_Head, _Body,  [], Acum )->
+        lists:reverse(Acum);
+clause_aim_match(Head, Body,  [ {Name, BodyRule} |RulesList], Acum )->
+        % [ {?LAMBDA, FirstBody }, {?LAMBDA, SecondBody }]
+       NewBody =  { clause, { Head, Body },  {',', {'=', Head, Name }, { '=', Body, BodyRule } } },
+       clause_aim_match(Head, Body, RulesList, [ NewBody |Acum ] )
+;
+clause_aim_match(Head,  Body,  [ {Name, ProtoType, BodyRule} |RulesList], Acum )->
+        NormalProtoType = list_to_tuple( [ Name|tuple_to_list(ProtoType) ] ),
+        NewBody = { clause, { Head, Body }, {',', {'=', Head, NormalProtoType }, { '=', Body, BodyRule } } },
+%        NewBody = { Name, ProtoType ,{ '=', Body, BodyRule } },
+       clause_aim_match(Head,  Body,  RulesList, [NewBody |Acum] )    
+.
+
 
 aim_match({ {false, _}, _ }, [], ProtoType, _ )->
     false

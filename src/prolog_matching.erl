@@ -282,7 +282,7 @@ match_common([Head1| VarList1], [Head2 | VarList2], Context)->
 
 
 
-is_var( { _Atom } )->
+is_var( { Atom } ) when is_atom(Atom)->
     true;    
 is_var(X)->
     X.
