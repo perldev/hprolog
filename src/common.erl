@@ -371,30 +371,41 @@ date_diff(First, Second, Type)->
 .
 
 time_difference({ {Year, Month, Day }, {Hour,Minute}  }, 
-                { {Year1, Month1, Day1 }, {Hour1, Minute1} }, 'day' )->
-    Date1 = {  {Year, Month, Day }, {Hour,Minute, 0 } }, 
-    Date2 = { {Year1, Month1, Day1 }, {Hour1, Minute1, 0 } },
+                Params = { {_Year1, _Month1, _Day1 }, {_Hour1, _Minute1, _Second1} }, Type )->
+                time_difference( { {Year, Month, Day }, {Hour,Minute, 0}  } , Params, Type)
+   
+;
+time_difference(Params = { {_Year, _Month, _Day }, {_Hour,_Minute, _Second}  }, 
+                         { {Year1, Month1, Day1 }, {Hour1, Minute1} }, Type )->
+                         
+               time_difference( Params , { {Year1, Month1, Day1 }, {Hour1, Minute1, 0} }, Type)          
+  
+;
+time_difference({ {Year, Month, Day }, {Hour,Minute}  }, 
+                         { {Year1, Month1, Day1 }, {Hour1, Minute1} }, Type )->
+                         
+               time_difference( { {Year, Month, Day }, {Hour,Minute, 0}  }, 
+                                { {Year1, Month1, Day1 }, {Hour1, Minute1, 0} }, Type)          
+  
+;
+time_difference(Date1 = { {Year, Month, Day }, {Hour,Minute, Second}  }, 
+                Date2 = { {Year1, Month1, Day1 }, {Hour1, Minute1, Second1} }, 'day' )->
     { Days, _Time} = calendar:time_difference(Date1, Date2),
     Days
 ;
-time_difference({ {Year, Month, Day }, {Hour,Minute}  }, 
-                { {Year1, Month1, Day1 }, {Hour1, Minute1} }, 'minute' )->
-    Date1 = {  {Year, Month, Day }, {Hour,Minute, 0 } }, 
-    Date2 = { {Year1, Month1, Day1 }, {Hour1, Minute1, 0 } },
+time_difference(Date1 = { {Year, Month, Day }, {Hour,Minute, Second}  }, 
+                Date2 = { {Year1, Month1, Day1 }, {Hour1, Minute1,Second1 } }, 'minute' )->
     { Days, { DHour, DMinute, _} } = calendar:time_difference(Date1, Date2),
     DHour*60 + DMinute + ( Days*24*60)
 ;
-time_difference({ {Year, Month, Day }, {Hour,Minute}  }, 
-                { {Year1, Month1, Day1 }, {Hour1, Minute1} }, 'hour' )->
-    Date1 = {  {Year, Month, Day }, {Hour,Minute, 0 } }, 
-    Date2 = { {Year1, Month1, Day1 }, {Hour1, Minute1, 0 } },
+time_difference(Date1 = { {Year, Month, Day }, {Hour,Minute, Second}  }, 
+                Date2 = { {Year1, Month1, Day1 }, {Hour1, Minute1, Second1} }, 'hour' )->
     { Days, { DHour, _DMinute, _} } = calendar:time_difference(Date1, Date2),
     DHour +  Days*24
 ;
-time_difference({ {Year, Month, Day }, {Hour,Minute}  }, 
-                { {Year1, Month1, Day1 }, {Hour1, Minute1} }, 'second' )->
-    Date1 = {  {Year, Month, Day }, {Hour,Minute, 0 } }, 
-    Date2 = { {Year1, Month1, Day1 }, {Hour1, Minute1, 0 } },
+time_difference(Date1 = { {Year, Month, Day }, {Hour,Minute, Second}  }, 
+                Date2 = { {Year1, Month1, Day1 }, {Hour1, Minute1, Second1} }, 'second' )->
+
     { Days, {DHour, DMinute, DSeconds} } = calendar:time_difference(Date1, Date2),
     DHour*3600 + DMinute*60 + ( Days* 86400) + DSeconds
 .
