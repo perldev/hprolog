@@ -584,8 +584,7 @@ fill_rule_tree( Rule, _Table )->
 .
 
 start_fact_process( Aim, TreeEts, ParentPid)->
-    %%TODO remove links
-   spawn_link( ?MODULE, fact_start_link, [ Aim, TreeEts, ParentPid] )
+    spawn( ?MODULE, fact_start_link, [ Aim, TreeEts, ParentPid] )
 .
 %%TODO add rest call to find all facts and rules 
 fact_start_link( Aim,  TreeEts, ParentPid )->
