@@ -1,10 +1,14 @@
 
 %%default count of pool to the thrift server
--define(DEFAULT_COUNT_THRIFT, 10).
+-define(DEFAULT_COUNT_THRIFT, 120).
 %% wheather using thrift
 -define(USE_THRIFT, 1).
-
+-define(SIMPLE_HBASE_ASSERT,1).%%1 or 0 
 -define(THRIFT_RECONNECT_TIMEOUT, 10000).
+%-define(DEV_BUILD,1). %%this uncommented line means that hbase driver will use avias
+-define(USE_HBASE,1).
+
+
 
 -define(DEFAULT_TIMEOUT, infinity).%%miliseconds
 -define(IO_SERVER, io).
@@ -13,19 +17,16 @@
 -define(META_INFO_BATCH, 3). %%for using as batch param for scanner meta info
 -define(AIM_COUNTER, aim_counter).
 
-%-define(DEV_BUILD,1). %%this uncommented line means that hbase driver will use avias
 
 -define(MAX_ETS_BUFFER_SIZE, 20000).
 
--define(USE_HBASE,1).
 -define(UPDATE_STAT_INTERVAL,120000).%%interval of updating meta stat of prolog statements
 
 
 
--define(SIMPLE_HBASE_ASSERT,1).
 
 -define(ENABLE_LOG,1).
--define(COMPILE_TRACE, 1).
+%-define(COMPILE_TRACE, 1).
 
 -define('DEV_DEBUG_MATCH'(Str, Pars ), true ).
 -define(ROOT, console_root).
@@ -63,7 +64,7 @@
 -define(LOGGING, 1).
 -define(SYNC_DEBUG, 1). %%for debug process's calls
 -define(SYNC_COUNT, 1). %%count
--define(LOG_APPLICATION,   application:start(log4erl), log4erl:conf(?LOG_CONF) ).
+-define(LOG_APPLICATION,   application:start(lager) ).
 
 -else.
 
@@ -129,14 +130,14 @@
 -endif.
 
 -ifdef(TIMER).
--define('TC'(Str, Pars ), log4erl:info(Str, Pars) ).
+-define('TC'(Str, Pars ), lager:warning(Str, Pars) ).
 -else.
 -define('TC'(Str, Pars ), true ).
 -endif.
 
 
 -ifdef(SYNC_DEBUG).
--define('WAIT'(Str, Pars ), log4erl:debug(Str, Pars) ).
+-define('WAIT'(Str, Pars ), lager:warning(Str, Pars) ).
 -else.
 -define('WAIT'(Str, Pars ), true ).
 -endif.
@@ -150,14 +151,14 @@
 
 -ifdef(SYNC_COUNT).
 
--define('COUNT'(Str, Pars ), log4erl:info(Str, Pars) ).
+-define('COUNT'(Str, Pars ), lager:warning(Str, Pars) ).
 -else.
 -define('COUNT'(Str, Pars ), true ).
 -endif.
 
 -ifdef(LOGGING).
 
--define('LOG'(Str, Pars ), log4erl:debug(Str, Pars) ).
+-define('LOG'(Str, Pars ), lager:info(Str, Pars) ).
 -else.
 -define('LOG'(Str, Pars ), true ).
 -endif.
@@ -165,14 +166,14 @@
 
 
 -ifdef(DEV_TEST).
--define('DEV_DEBUG'(Str, Pars ), log4erl:debug(Str, Pars) ).
+-define('DEV_DEBUG'(Str, Pars ), lager:debug(Str, Pars) ).
 -else.
 -define('DEV_DEBUG'(Str, Pars ), true ).
 -endif.
 
 -ifdef(TEST).
 
--define('DEBUG'(Str, Pars ), log4erl:debug(Str, Pars) ).
+-define('DEBUG'(Str, Pars ), lager:debug(Str, Pars) ).
 -else.
 -define('DEBUG'(Str, Pars ), true ).
 -endif.
@@ -204,7 +205,7 @@
 -define(SL_TIMER,60000). %minute
 % pay(Re,"75000.00",Currency,Date,From_okpo,To_okpo,From_account,To_account,FromName,ToName,FromMfo,ToMfo, Desc,Ip).
 
--define(LIMIT,100). %% LIMIT and GET_FACT_PACK must be equal 
+-define(LIMIT,5000). %% LIMIT and GET_FACT_PACK must be equal 
 -define(GET_FACT_PACK, 1). 
 %%TODO realize algorithm for return first element, but in background continue process of receiveing data from hbase
 %%for example we return first element...and save to the memory 1024 records and in next call return from memory
@@ -289,7 +290,11 @@
 'localtime',
 'date_diff',
 
+'once',
+'atom_length',
 
+'copy_term',
+'clause',
 'inner_retract___',
 'meta',
 'functor',
@@ -301,11 +306,13 @@
 'abolish',
 'integer',
 'list',
+'number',
 'atomic',
 'float',
 'var',
 'call',
 'nonvar',
+'compound',
 'assertz',
 'assert',
 'asserta',
@@ -333,7 +340,9 @@
 '>',
 '<',
 '=\\=',
-'=..'
+'=..',
+'\\+'
+
 ]
 
 ).
