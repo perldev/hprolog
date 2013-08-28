@@ -12,9 +12,17 @@
 
 start() -> start("").
 
+api_start_anon(Prefix, FileName)->
+    prolog:only_rules_create_inner(Prefix, FileName)
+        
+.
+
+
 api_start_anon(Prefix)->
     prolog:create_inner_structs(Prefix)
 .
+
+
 
 api_start(Prefix)->
     prolog:create_inner_structs(Prefix),
@@ -174,6 +182,7 @@ process_prove(Pid,   TempAim , Goal, StartTime)->
                   lists:foreach(fun shell_var_match/1, dict:to_list(NewLocalContext) ),
                   ?SYSTEM_STAT(tree_processes, {0,0,0}),
                   Count = ?GET_AIM_COUNT(tree_processes),
+                  
                   io:fwrite(" elapsed time ~p next solution ~p process varients ~p ~n", [ timer:now_diff(FinishTime, StartTime)*0.000001,Prev, Count] ),
                   Line = io:get_line(': '),
                   case string:chr(Line, $;) of
