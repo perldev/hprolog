@@ -1,13 +1,14 @@
 
 %%default count of pool to the thrift server
--define(DEFAULT_COUNT_THRIFT, 120).
+-define(DEFAULT_COUNT_THRIFT, 3).
 %% wheather using thrift
--define(USE_THRIFT, 0).
--define(SIMPLE_HBASE_ASSERT,1).%%1 or 0 
+-define(USE_THRIFT, 1).
+-define(SIMPLE_HBASE_ASSERT,0).%%1 or 0 
 -define(THRIFT_RECONNECT_TIMEOUT, 10000).
+-define(THRIFT_MAX_RECONNECT_COUNT, 10).
+-define(INTERVAL_INVOKE_SCANNER, 5000000). %microseconds
 %-define(DEV_BUILD,1). %%this uncommented line means that hbase driver will use avias
--define(USE_HBASE,1).
-
+%-define(USE_HBASE,1).
 
 
 -define(DEFAULT_TIMEOUT, infinity).%%miliseconds
@@ -25,8 +26,8 @@
 
 
 
--define(ENABLE_LOG,1).
-%-define(COMPILE_TRACE, 1).
+%-define(ENABLE_LOG,1).
+-define(COMPILE_TRACE, 1).
 
 -define('DEV_DEBUG_MATCH'(Str, Pars ), true ).
 -define(ROOT, console_root).
@@ -75,7 +76,7 @@
 -define(FACT_STAT(Ets), io:format("Facts  ~p ~n",[ ets:tab2list(Ets)  ]) ).
 
 -define(SYSTEM_STAT(Ets, Pointers), io:format("System ~p prolog ~p  pointers is ~p ~n",[ length(processes()), 
-                                                                                         ets:info(Ets,size), 
+                                                                                         ets:info(Ets, size), 
                                                                                          Pointers ]) ).
 
 
@@ -205,7 +206,7 @@
 -define(SL_TIMER,60000). %minute
 % pay(Re,"75000.00",Currency,Date,From_okpo,To_okpo,From_account,To_account,FromName,ToName,FromMfo,ToMfo, Desc,Ip).
 
--define(LIMIT,1). %% LIMIT and GET_FACT_PACK must be equal 
+-define(LIMIT,100). %% LIMIT and GET_FACT_PACK must be equal 
 -define(GET_FACT_PACK, 1). 
 %%TODO realize algorithm for return first element, but in background continue process of receiveing data from hbase
 %%for example we return first element...and save to the memory 1024 records and in next call return from memory
