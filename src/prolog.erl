@@ -963,8 +963,10 @@ inner_defined_aim(_NextBody, _PrevIndex , Body, _Context, _Index, TreeEts )->
 aim(NextBody, PrevIndex ,  MainBody , Context, Index, TreeEts, Parent)->
     aim(default, {NextBody, PrevIndex ,  MainBody , Context, Index, TreeEts, Parent }).
 
-
-    
+%  prolog:next_aim(Prev, TreeEts )
+next_aim(Prev, TreeEts)->
+   aim(next_aim, {Prev, TreeEts})
+.
     
     
 %%facts 
