@@ -97,13 +97,12 @@ server_loop(TreeEts, TraceOn) ->
 	    lists:foreach(fun(File)->
 			      case catch(prolog:compile(TreeEts, File)) of
 				  ok ->
-				      io:fwrite("Yes~n"),    
-				      server_loop(TreeEts, TraceOn);
+				      io:fwrite(atom_to_list(File) ++ " Yes~n");
 				  Error ->
-				      io:fwrite("Error: ~p~n", [Error]),
-				      server_loop(TreeEts, TraceOn)
+				      io:fwrite(atom_to_list(File) ++ " Error: ~p~n", [Error])
 			      end
-			    end, Files)
+			    end, Files),
+             server_loop(TreeEts, TraceOn)
 	 ;
 	 {ok, Goal = {':-',_,_ } } ->
 		io:fwrite("syntax error may be you want use assert ~p ~n",[Goal]),
