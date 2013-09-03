@@ -93,12 +93,13 @@ inner_change_namespace(true, Name, TreeEts)->
 .
 
 delete_structs(Prefix)->
-      ets:delete(common:get_logical_name(Prefix, ?META_WEIGHTS) ),
-      ets:delete(common:get_logical_name(Prefix, ?RULES) ),
-      ets:delete(common:get_logical_name(Prefix, ?DYNAMIC_STRUCTS)),
-      ets:delete(common:get_logical_name(Prefix, ?META) ),
-      ets:delete(common:get_logical_name(Prefix, ?META_LINKS) ),
-      ets:delete(common:get_logical_name(Prefix, ?HBASE_INDEX))
+      R1 = ( catch ets:delete(common:get_logical_name(Prefix, ?META_WEIGHTS) ) ),
+      R2 = ( catch ets:delete(common:get_logical_name(Prefix, ?RULES) ) ),
+      R3 = (catch ets:delete(common:get_logical_name(Prefix, ?DYNAMIC_STRUCTS)) ),
+      R4 = (catch ets:delete(common:get_logical_name(Prefix, ?META) ) ),
+      R5 = (catch ets:delete(common:get_logical_name(Prefix, ?META_LINKS) ) ),
+      R6 = (catch ets:delete(common:get_logical_name(Prefix, ?HBASE_INDEX)) ),
+      {R1,R2,R3,R4,R5,R6}
 .
 
 delete_inner_structs(Prefix)->
