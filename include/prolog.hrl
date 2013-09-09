@@ -283,6 +283,10 @@
 
 -define(BUILTIN_PREDICATES,
 [
+'date_sub',     
+'date_add',
+
+'id',
 'to_float',
 'to_integer',
 'to_list',
@@ -290,6 +294,7 @@
 'length',
 'localtime',
 'date_diff',
+
 
 'once',
 'atom_length',
