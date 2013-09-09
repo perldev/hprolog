@@ -12,15 +12,17 @@
 
 start() -> start("").
 
+
+
+api_start_anon(Prefix, {hier, Heir})->
+    prolog:create_inner_structs(Prefix, Heir)
+;
 api_start_anon(Prefix, FileName)->
     prolog:only_rules_create_inner(Prefix, FileName)
         
 .
 
 
-api_start_anon(Prefix)->
-    prolog:create_inner_structs(Prefix)
-.
 
 
 api_start(Prefix)->

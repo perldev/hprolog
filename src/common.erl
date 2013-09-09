@@ -4,9 +4,8 @@
 
 -export([console_write/2, web_console_write/2, console_write_unicode/2,
           web_console_read/1, web_console_writenl/2,
-         console_get_char/1, console_read/1, console_nl/1 ]).
+         console_get_char/1, console_read/1, console_nl/1,generate_id/0 ]).
 
-         
 return_count(TreeEts)->
 
     case catch ets:lookup(TreeEts, aim_counter) of
@@ -232,6 +231,13 @@ my_delete_element(Index, Index1, [Head|List], Result)->
 
 my_delete_element(_Index, _Index1, [ ], Result)->
   list_to_tuple( lists:reverse(Result) )
+.
+generate_id()->
+    {MSecs, Secs, MiSecs} = erlang:now(),
+    %this is not the perfect fast procedure but it work in thread cause this
+    % im do not want to rewrite it 
+    Res = lists:flatten( io_lib:format("~.10B~.10B~.10B",[ MSecs, Secs, MiSecs ]) ), %reference has only 14 symbols
+    list_to_integer(Res)
 .
 
 generate_ref()->
