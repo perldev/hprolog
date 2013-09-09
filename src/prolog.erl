@@ -114,9 +114,9 @@ delete_inner_structs(Prefix)->
 
 %for dynamic change cloud rules in web  console
 only_rules_create_inner(Prefix)->
-        Pid = erlang:whereis(converter_monitor), %%in result all ets tables will be transfered to converter_monitor
-        ets:new(common:get_logical_name(Prefix, ?DYNAMIC_STRUCTS),[named_table, set, public, { heir,Pid, some_data } ]),
-        ets:new(common:get_logical_name(Prefix, ?RULES),[named_table, bag, public, { heir,Pid, some_data }])
+        Pid = erlang:whereis(auth_demon), %%in result all ets tables will be transfered to auth demon
+        ets:new(common:get_logical_name(Prefix, ?DYNAMIC_STRUCTS),[named_table, set, public, { heir,Pid, Prefix } ]),
+        ets:new(common:get_logical_name(Prefix, ?RULES),[named_table, bag, public, { heir,Pid, Prefix}])
 .
 
 only_rules_create_inner(Prefix, FileName)->
@@ -136,9 +136,6 @@ only_rules_create_inner(Prefix, FileName)->
 only_rules_delete_inner(Prefix)->
         ets:delete_all_objects(common:get_logical_name(Prefix, ?RULES) ),
         ets:delete_all_objects(common:get_logical_name(Prefix, ?DYNAMIC_STRUCTS))
-
-        
-
 .
 
 % Set a process as heir. The heir will inherit the table if the owner terminates. The message {'ETS-TRANSFER',tid(),FromPid,HeirData} will
@@ -146,15 +143,15 @@ only_rules_delete_inner(Prefix)->
 
 create_inner_structs(Prefix)->
     Pid = erlang:whereis(converter_monitor), %%in result all ets tables will be transfered to converter_monitor
-    ets:new(common:get_logical_name(Prefix, ?DYNAMIC_STRUCTS),[named_table, set, public, { heir,Pid, some_data } ]),
+    ets:new(common:get_logical_name(Prefix, ?DYNAMIC_STRUCTS),[named_table, set, public, { heir,Pid, Prefix } ]),
     %TODO remove this
     put(?DYNAMIC_STRUCTS, common:get_logical_name(Prefix, ?DYNAMIC_STRUCTS) ),
-    ets:new(common:get_logical_name(Prefix, ?META_WEIGHTS),[named_table, set, public, { heir,Pid, some_data }] ),
-    ets:new(common:get_logical_name(Prefix, ?META),[named_table, set, public, { heir,Pid, some_data }]),
-    ets:new(common:get_logical_name(Prefix, ?RULES),[named_table, bag, public, { heir,Pid, some_data }]),
-    ets:new(common:get_logical_name(Prefix, ?META_LINKS),[named_table, bag, public, { heir,Pid, some_data }]),
+    ets:new(common:get_logical_name(Prefix, ?META_WEIGHTS),[named_table, set, public, { heir,Pid, Prefix }] ),
+    ets:new(common:get_logical_name(Prefix, ?META),[named_table, set, public, { heir,Pid, Prefix }]),
+    ets:new(common:get_logical_name(Prefix, ?RULES),[named_table, bag, public, { heir,Pid, Prefix }]),
+    ets:new(common:get_logical_name(Prefix, ?META_LINKS),[named_table, bag, public, { heir,Pid, Prefix }]),
     %the hbase database is for everything
-    ets:new(common:get_logical_name(Prefix, ?HBASE_INDEX), [named_table, bag, public, { heir,Pid, some_data }])
+    ets:new(common:get_logical_name(Prefix, ?HBASE_INDEX), [named_table, bag, public, { heir,Pid, Prefix }])
     %%statistic is common
 .
 
@@ -857,6 +854,11 @@ inner_defined_aim(NextBody, PrevIndex , Body = {'date_diff', _First, _Second, _T
          Res->
             prolog_matching:var_match(Body, {'date_diff', First, Second, Type, Res }, Context) 
       end
+;
+inner_defined_aim(NextBody, PrevIndex , Body = {'id', _In },  Context, Index, TreeEts)->
+      ID = common:generate_id(),
+      prolog_matching:var_match(Body, {'id', ID}, Context)       
+      
 ;
 inner_defined_aim(NextBody, PrevIndex , Body = {'localtime', _In },  Context, Index, TreeEts)->
       
