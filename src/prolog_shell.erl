@@ -14,7 +14,7 @@ start() -> start("").
 
 
 
-api_start_anon(Prefix, {hier, Heir})->
+api_start_anon(Prefix, {heir, Heir})->
     prolog:create_inner_structs(Prefix, Heir)
 ;
 api_start_anon(Prefix, FileName)->
