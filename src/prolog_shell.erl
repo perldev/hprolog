@@ -23,7 +23,6 @@ api_start_anon(Prefix)->
 .
 
 
-
 api_start(Prefix)->
     prolog:create_inner_structs(Prefix),
    ?INCLUDE_HBASE( Prefix )
@@ -258,28 +257,63 @@ make_temp_complex_aim( Goal,  Context )->
     NewRule = erlang:list_to_tuple( [ Name | tuple_to_list( NewGoal ) ] ),
     {NewRule, NewContext }
 .
+
+get_hbase_meta_code_html(Prefix)->
+
+        %          add_new_rule(Tree = { ':-' ,ProtoType, BodyRule}, Pos )->
+%          ?DEBUG("~p new rule to hbase  ~p ~n",[ {?MODULE,?LINE}, Tree ] ),
+%          [ Name | _ProtoType ] = tuple_to_list(ProtoType),
+            %%if non hbase it can be non existed
+           case  catch ets:tab2list( common:get_logical_name(Prefix, ?META) ) of        
+            {'EXIT', _ }-> <<"">>;
+            Meta-> lists:foldl(fun( {Name,Count,_Hash}, In  )->
+                                ?DEBUG(" meta fact  ~p~n", [{Name,Count}]),
+
+                                LName = atom_to_list(Name),
+                                LCount = integer_to_list(Count),
+                                V2 = list_to_binary("<strong>%"++LName++ "</strong> arity  - "++ LCount ++ ". <br/>") ,
+                                <<In/binary, V2/binary>>
+                        end, <<>>, Meta  )
+           end
+            
+
+.
+
+get_hbase_meta_code(Prefix)->
+
+        %          add_new_rule(Tree = { ':-' ,ProtoType, BodyRule}, Pos )->
+%          ?DEBUG("~p new rule to hbase  ~p ~n",[ {?MODULE,?LINE}, Tree ] ),
+%          [ Name | _ProtoType ] = tuple_to_list(ProtoType),
+            %%if non hbase it can be non existed
+            case catch
+                ets:tab2list( common:get_logical_name(Prefix, ?META) ) of
+            {'EXIT', _ }-> <<"">>;
+            Meta ->
+                lists:foldl(fun( {Name,Count,_Hash}, In  )->
+                                ?DEBUG(" meta fact  ~p\n", [{Name,Count}]),
+
+                                LName = atom_to_list(Name),
+                                LCount = integer_to_list(Count),
+                                V2 = list_to_binary("% "++LName++ " arity  - "++ LCount ++ ". \n") ,
+                                <<In/binary, V2/binary>>
+                        end, <<>>, Meta  )
+            end
+            
+
+.
+
 % -record(tree, {operator, prototype, body } ).
 get_code_memory(Prefix)->
 	   Rules = ets:tab2list(common:get_logical_name(Prefix, ?RULES) ),
-	   Meta = ets:tab2list( common:get_logical_name(Prefix, ?META) ),
-% 	   add_new_rule(Tree = { ':-' ,ProtoType, BodyRule}, Pos )->
-% 	   ?DEBUG("~p new rule to hbase  ~p ~n",[ {?MODULE,?LINE}, Tree ] ),
-%          [ Name | _ProtoType ] = tuple_to_list(ProtoType),
-
-	     MetaCode = lists:foldl(fun( {Name,Count,_Hash}, In  )->
-				?DEBUG(" meta fact  ~p\n", [{Name,Count}]),
-
-				LName = atom_to_list(Name),
-				LCount = integer_to_list(Count),
-				V2 = list_to_binary("% "++LName++ " arity  - "++ LCount ++ ". \n") ,
-				<<In/binary, V2/binary>>
-			end, <<>>, Meta  ),
+	   MetaCode = get_hbase_meta_code(Prefix),
 	   RulesCode = lists:foldl(fun process_inner/2, <<>> , Rules  ),
 	   FormatedCode1 = binary:replace(RulesCode,[<<" , ">>],<<"   ,        \n">>, [ global ] ),
 	   FormatedCode = binary:replace(FormatedCode1,[<<":-">>],<<" :-\n">>, [ global ] ),
 	   ResBin = << "\n", MetaCode/binary,FormatedCode/binary >>,
 	   binary_to_list(ResBin).
 
+	   
+	   
 process_inner({Name, ProtoType ,Body }, In)->
 
                                 RestoreTree1 =  list_to_tuple( 
@@ -301,15 +335,7 @@ process_inner({Name, Body }, In)->
 	
 get_code_memory_html(Prefix)->
 	   Rules = ets:tab2list(common:get_logical_name(Prefix, ?RULES) ),
-           Meta = ets:tab2list( common:get_logical_name(Prefix, ?META) ),        
-	   MetaCode = lists:foldl(fun( {Name,Count,_Hash}, In  )->
-				?DEBUG(" meta fact  ~p~n", [{Name,Count}]),
-
-				LName = atom_to_list(Name),
-				LCount = integer_to_list(Count),
-				V2 = list_to_binary("<strong>%"++LName++ "</strong> arity  - "++ LCount ++ ". <br/>") ,
-				<<In/binary, V2/binary>>
-			end, <<>>, Meta  ),
+           MetaCode = get_hbase_meta_code_html(Prefix),
 
 	
 	    RulesCode = lists:foldl(fun process_inner_html/2, <<>> , Rules  ),
