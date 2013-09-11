@@ -4,7 +4,7 @@
 
 -export([console_write/2, web_console_write/2, console_write_unicode/2,
           web_console_read/1, web_console_writenl/2,
-         console_get_char/1, console_read/1, console_nl/1,generate_id/0 ]).
+         console_get_char/1, console_read/1, console_nl/1,generate_id/0, get_logical_name/1 ]).
 
 return_count(TreeEts)->
 
@@ -36,7 +36,7 @@ console_write(_, X)->
        io:format("~p",[X]).
       
 console_write_unicode(_,X)->
-     io:format("~ts",[unicode:characters_to_list(X)]).
+     io:format("~ts",[unicode:characters_to_list( list_to_binary(X) )]).
       
 console_writenl(_, X)->      
     io:format("~p~n",[X]).
@@ -52,7 +52,8 @@ web_console_read_str(TreeEts)->
         Parent ! {result, read, erlang:self() },
         receive 
              {read, List }->
-                  inner_to_list(List)
+%                   io:format("~p read from web ~p",[{?MODULE,?LINE},List ]),
+                  list_to_binary(List)
         end
 
 .
@@ -63,7 +64,7 @@ web_console_read(TreeEts)->
 	Parent ! {result, read, erlang:self() },
 	receive 
 	     {read, List }->
-		  Term = inner_to_list(List),
+		  Term = list_to_binary(List),
 % 		  (catch 
 		  parse_as_term(Term) 
 % 		  )
@@ -199,6 +200,11 @@ inner_to_atom(E) when is_float(E)->
 
 get_namespace_name(NameSpace, RealFactName)->
     lists:sublist(RealFactName, length(NameSpace)+1, length( RealFactName )- length(NameSpace) )
+.
+
+get_logical_name(Prefix)->
+    [{system_record, _, RealPrefix}] =  ets:lookup(Prefix, ?PREFIX),
+    RealPrefix
 .
 
 get_logical_name(Prefix, Name) when is_list(Name), is_list(Prefix) ->

@@ -121,13 +121,13 @@ only_rules_create_inner(Prefix)->
 
 only_rules_create_inner(Prefix, FileName)->
      Pid = erlang:whereis(converter_monitor), %%in result all ets tables will be transfered to converter_monitor
-     ets:new(common:get_logical_name(Prefix, ?DYNAMIC_STRUCTS),[named_table, set, public, { heir,Pid, some_data } ]),
+     ets:new(common:get_logical_name(Prefix, ?DYNAMIC_STRUCTS),[named_table, set, public, { heir,Pid, Prefix } ]),
      case catch ets:tab2file(FileName) of
             {ok, Ets } ->
-                ets:setopts(Ets, [ {heir, Pid, some_data}]),
+                ets:setopts(Ets, [ {heir, Pid, Prefix}]),
                 Ets;
             _->
-                ets:new(common:get_logical_name(Prefix, ?RULES),[named_table, bag, public, { heir,Pid, some_data }])
+                ets:new(common:get_logical_name(Prefix, ?RULES),[named_table, bag, public, { heir,Pid, Prefix }])
     end
 
 .
@@ -786,8 +786,8 @@ inner_defined_aim(NextBody, PrevIndex ,Body = {read, X }, Context, _Index, TreeE
 	{ ok, Term } ->
 	      Res = prolog_matching:var_match( Term, X, Context ),
 	      Res;
-	_ ->
-	    ?WRITELN(TreeEts, "i can parse input"),
+	Res ->
+	      ?WRITELN(TreeEts, lists:flatten(io_lib:format("i can parse input ~p",[Res] ) ) ),
 	      {false, Context}
  
  end
@@ -795,14 +795,14 @@ inner_defined_aim(NextBody, PrevIndex ,Body = {read, X }, Context, _Index, TreeE
 inner_defined_aim(NextBody, PrevIndex ,Body = {read_str, X }, Context, _Index, TreeEts)->
     TempX = ?READ_STR(TreeEts), %%read prolog term
     case TempX of
-        { ok, Term } ->
-              Res = prolog_matching:var_match( Term, X, Context ),
+      {'EXIT', Res} ->
+            ?WRITELN(TreeEts, lists:flatten(io_lib:format("i can parse input ~p",[Res] ) ) ),
+             {false, Context};
+       _ ->
+              Res = prolog_matching:var_match( TempX, X, Context ),
               Res;
-        _ ->
-            ?WRITELN(TreeEts, "i can parse input"),
-             {false, Context}
  
- end
+    end
 ;
 
 
@@ -1434,7 +1434,8 @@ aim(hbase_user_defined_aim,{RuleList, NextBody, PrevIndex, ProtoType, Context, I
          %%pattern matching like one aim
          ?DEBUG("~p user defined aim ~p ~n",[{?MODULE,?LINE}, { BoundProtoType, TempSearch,  NextBody } ]),
          converter_monitor:stat('search',  
-                                 common:get_logical_name(TreeEts, erlang:element(1,ProtoType) ),
+                                 common:get_logical_name( TreeEts ),
+                                 erlang:element(1,ProtoType),
                                  ProtoType, true ),
          
          ets:insert(TreeEts,
