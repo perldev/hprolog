@@ -800,7 +800,7 @@ inner_defined_aim(NextBody, PrevIndex ,Body = {read_str, X }, Context, _Index, T
              {false, Context};
        _ ->
               Res = prolog_matching:var_match( TempX, X, Context ),
-              Res;
+              Res
  
     end
 ;
