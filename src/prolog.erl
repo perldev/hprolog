@@ -1064,7 +1064,29 @@ aim(process_next, { {true, NewContext, true, Tail}, T, TreeEts, Parent })->
         ?TRACE2(T#aim_record.id, TreeEts, BoundProtoType, NewLocalContext),
          aim(conv3 ,{ T#aim_record.next_leap , NewLocalContext, T#aim_record.id, NewIndex, TreeEts, Parent })       
 ;
+
+%%AVOID this!!!! a lot of cases
+aim(process_next,{ { true, NewContext, NextBody, Tail }, T=#aim_record{prototype=?LAMBDA}, TreeEts, Parent })->
+         ?DEBUG("~p matching is rule ~p ~n",[{?MODULE,?LINE}, T ]),
+         NewIndex = get_index(T#aim_record.id), % now() ,%T#aim_record.id + 1,         
+%          ?DEBUG("~p process RULE ~p ~n",[{?MODULE,?LINE},  {dict:to_list(NewContext), NextBody} ]),
+         %%save another pattterns
+         ets:insert(TreeEts, T#aim_record{solutions = Tail, next = one}),
+         ?TRACE(T#aim_record.id, TreeEts, T#aim_record.temp_prototype, T#aim_record.context),
+         
+         case  aim(conv3 ,{ NextBody, NewContext, finish, NewIndex, TreeEts, Parent } ) of 
+                {true, ThatLocalContext, Prev} ->
+                        aim( next_in_current_leap, {T, TreeEts,ThatLocalContext, Prev, Tail, Parent} );
+                Res ->  %%means false 
+                        ?DEBUG("~p return false from ~p ~n",[{?MODULE,?LINE}, NextBody ]),
+                        ?TRACE2(T#aim_record.id, TreeEts, {T#aim_record.temp_prototype, Res }, T#aim_record.context ),
+                        Res
+                
+         end
+;
 %%TODO REMOVE aim(conv3 ,{ NextBody, NewContext, finish, NewIndex, TreeEts, T#aim_record.id } )
+
+
 aim(process_next,{ { true, NewContext, NextBody, Tail }, T, TreeEts, Parent })->
          ?DEBUG("~p matching is rule ~p ~n",[{?MODULE,?LINE}, T ]),
          NewIndex = get_index(T#aim_record.id), % now() ,%T#aim_record.id + 1,         
@@ -1213,7 +1235,7 @@ aim(default, {NextBody, PrevIndex ,fact_statistic, Context, Index, TreeEts, Pare
 aim(default, {NextBody, PrevIndex,'!', Context, Index , TreeEts, Parent })->
          ?DEBUG("~p  parent cut  ~p", [{?MODULE,?LINE}, Parent ]),
          [AimRecord] = ets:lookup(TreeEts, Parent),  
-         io:format("~p  start cuting tree ~p begin from   ~p ~n~n", [{?MODULE,?LINE},ets:tab2list(TreeEts),  AimRecord ]),  
+%          ?DEV_DEBUG("~p  start cuting tree ~p begin from   ~p ~n~n", [{?MODULE,?LINE},ets:tab2list(TreeEts),  AimRecord ]),  
          %%
          ets:insert(TreeEts, AimRecord#aim_record{next = one, solutions=[] } ), 
          cut_all_solutions(TreeEts, PrevIndex, Parent ),
