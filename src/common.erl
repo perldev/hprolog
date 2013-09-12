@@ -424,12 +424,12 @@ time_difference(Date1 = { {Year, Month, Day }, {Hour,Minute, Second}  },
 
 get_date()->
     Date = default_date(),
-    { {Year,Month,Day}, {Hour,Min} } = Date,
+    { {Year,Month,Day}, {Hour,Min, Seconds} } = Date,
     lists:concat( 
         [ int2month(Month)," ",
           fill_null_integer2list(Day)," ",
           integer_to_list(Year)," ",
-          fill_null_integer2list(Hour),":",fill_null_integer2list(Min)]
+          fill_null_integer2list(Hour),":",fill_null_integer2list(Min),":",fill_null_integer2list(Seconds)]
         )
      
 
@@ -476,8 +476,8 @@ get_date_params(Date)->
    { { list_to_integer(Year), list_to_integer(Month),list_to_integer(Day) }, {list_to_integer(Hour),list_to_integer(Minute)} }
 .
 default_date()->
-      {{Year,Month,Day},{Hour,Min,_}} = calendar:local_time(),
-      CreateTime={ {Year,Month,Day},{Hour,Min} },
+      {{Year,Month,Day},{Hour,Min, Seconds}} = calendar:local_time(),
+      CreateTime={ {Year,Month,Day},{Hour,Min, Seconds} },
       CreateTime
 .
 
