@@ -52,6 +52,7 @@ clean_tree(TreeEts)->
 clean_tree(TreeEts)->
              ets:foldl(fun(Elem, Acum)->
  			 case Elem of
+                            {system_record, _, _, _}-> Acum;
                             {system_record, _, _}-> Acum;
                             T = #aim_record{} ->
                                 ets:delete(TreeEts, T), Acum
@@ -910,10 +911,24 @@ inner_defined_aim(NextBody, PrevIndex ,{ 'abolish', Body  }, Context, _Index, Tr
 % L =.. [ F | Args ],
 inner_defined_aim(NextBody, PrevIndex ,{ '=..', First, Second }, Context, _Index, _TreeEts  )->
     BoundFirst = prolog_matching:bound_body(First, Context),
-    ToTerm = tuple_to_list(BoundFirst),
-    prolog_matching:var_match(Second, ToTerm, Context)
+    BoundSecond = prolog_matching:bound_body(Second, Context),
+    case prolog_matching:is_var(BoundFirst)  of
+        true ->  
+                ToTerm = list_to_tuple(BoundSecond),
+                {true, prolog_matching:store_var( { First, ToTerm }, Context ) };
+        _ ->  case   prolog_matching:is_var(BoundSecond ) of
+                    true->
+                          ToTerm = tuple_to_list(BoundFirst),
+                          {true, prolog_matching:store_var( { Second, ToTerm }, Context ) };
+                    _->
+                         ToTerm = tuple_to_list(BoundFirst),
+                         prolog_matching:var_match(ToTerm, BoundSecond, Context)
+
+              end        
+    end;    
+    
+%     ToTerm = tuple_to_list(BoundFirst),
    
-;
 inner_defined_aim(NextBody, PrevIndex ,{ '=:=', First, Second }, Context, _Index, _TreeEts  )->
     One = arithmetic_process(First, Context),
     Two = arithmetic_process(Second, Context),
