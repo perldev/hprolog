@@ -874,8 +874,6 @@ inner_defined_aim(NextBody, PrevIndex , Body = {'id', _In },  Context, Index, Tr
       
 ;
 inner_defined_aim(NextBody, PrevIndex , Body = {'localtime', _In },  Context, Index, TreeEts)->
-      
-
       Date = common:get_date(),
       prolog_matching:var_match(Body, {'localtime', Date}, Context)       
 ;
@@ -910,22 +908,25 @@ inner_defined_aim(NextBody, PrevIndex ,{ 'abolish', Body  }, Context, _Index, Tr
 ;
 % L =.. [ F | Args ],
 inner_defined_aim(NextBody, PrevIndex ,{ '=..', First, Second }, Context, _Index, _TreeEts  )->
+
     BoundFirst = prolog_matching:bound_body(First, Context),
     BoundSecond = prolog_matching:bound_body(Second, Context),
+    ?DEV_DEBUG("~p =.. ~p ~n   ",[{?MODULE,?LINE}, {BoundFirst, BoundSecond} ]),
     case prolog_matching:is_var(BoundFirst)  of
         true ->  
                 ToTerm = list_to_tuple(BoundSecond),
-                {true, prolog_matching:store_var( { First, ToTerm }, Context ) };
+                {true, prolog_matching:store_var( { BoundFirst, ToTerm }, Context ) };
         _ ->  case   prolog_matching:is_var(BoundSecond ) of
                     true->
                           ToTerm = tuple_to_list(BoundFirst),
-                          {true, prolog_matching:store_var( { Second, ToTerm }, Context ) };
+                          {true, prolog_matching:store_var( { BoundSecond, ToTerm }, Context ) };
                     _->
                          ToTerm = tuple_to_list(BoundFirst),
                          prolog_matching:var_match(ToTerm, BoundSecond, Context)
 
               end        
-    end;    
+    end
+;
     
 %     ToTerm = tuple_to_list(BoundFirst),
    
