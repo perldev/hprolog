@@ -529,12 +529,24 @@ get_date(In, minute)->
 get_date(In, second)->
   Params = date_params(In),
   Time = lists:nth(4, Params),
-  minute(Time)
+  second(Time)
 ;
 get_date(_In, _)->
   false.
 
-minute([_H1,_H2,$:,M1,M2])->
+second([_H1,_H2,$:,_M1,_M2,$:,S1,S2])->
+     {Out,_} = string:to_integer([S1,S2]),
+     case is_integer(Out) of
+          true-> Out;
+          _ ->false
+    end
+    
+;
+second(_)->
+    false
+.  
+  
+minute([_H1,_H2,$:,M1,M2|Tail])->
      {Out,_} = string:to_integer([M1,M2]),
      case is_integer(Out) of
 	  true-> Out;
@@ -546,14 +558,13 @@ minute(_)->
     
     false
 .
-hour([H1,H2,$:,_M1,_M2])->
+hour([H1,H2,$:|Tail])->
       {Out,_} = string:to_integer([H1,H2]),
      case is_integer(Out) of
-	  true-> Out;
-	  _ ->false
-    end
+          true-> Out;
+          _ ->false
+    end;
     
-;
 hour(_)->
     false
 .
