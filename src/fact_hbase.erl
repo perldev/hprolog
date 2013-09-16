@@ -556,7 +556,11 @@ process_hbase_rule(Elem,  Table)->
       [ [ _Column, _TimeStamp, {<<"$">>, Code64 } ] ] = Columns,
       Code = base64:decode(Code64),
       ?DEBUG("~p find rule  ~p ~n",[ {?MODULE,?LINE}, Code ] ),
-      CodeList = binary:split(Code, [<<".">>],[global]),
+
+      NewBinary = binary:replace(Code,[<<"=..">>], <<"#%=#">>, [ global ] ),
+      CodeList = binary:split(NewBinary, [<<".">>],[global]),
+
+      
       lists:foldl(fun compile_patterns/2,  Table,  CodeList)
 .
 
@@ -565,7 +569,8 @@ compile_patterns(<<>>,  Table)->
 
 ;
 compile_patterns( OnePattern,  Table )->
-      HackNormalPattern =  <<OnePattern/binary, " . ">>,
+      NewBinary = binary:replace(OnePattern,[<<"#%=#">> ], <<"=..">>, [ global ] ),
+      HackNormalPattern =  <<NewBinary/binary, " . ">>,
       ?DEBUG("~p begin process one pattern   ~p ~n",[ {?MODULE,?LINE}, HackNormalPattern ] ),
      {ok, Terms , L1} = erlog_scan:string( unicode:characters_to_list(HackNormalPattern) ),
      Res =  erlog_parse:term(Terms),
