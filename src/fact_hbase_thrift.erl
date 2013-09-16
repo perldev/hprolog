@@ -13,7 +13,7 @@
          test_get_regions/0,
          generate_scanner/5,
          process_data/6, 
-         flash_stat/2,
+         flash_stat/3,
          thrift_mappper_low/3,
          create_filter4all_values/3,
          del_key/4,
@@ -339,7 +339,9 @@ check_buffer(EtsBuffer, EtsStat, Mappers)->
             false ->
                 do_nothing
        end,
+       
        PrevIterSize = ets:lookup(EtsStat, prev_iter_size),
+       
        ets:delete(EtsStat, prev_iter_size),
        ets:insert(EtsStat, {prev_iter_size, Count }),
        io:format("~p prev size of buffer ~p ~n",[ {?MODULE,?LINE}, { PrevIterSize, Count } ]),
@@ -355,14 +357,18 @@ check_buffer(EtsBuffer, EtsStat, Mappers)->
                 do_nothing;
              Now ->
                 Decide = timer:now_diff(Now1, Now) > ?INTERVAL_INVOKE_SCANNER,
-                io:format("~p  im decide to work  ~p ~n",[ {?MODULE,?LINE}, Decide ]),
-                case Decide  of
-                     true ->
+                io:format("~p  im decide to work  ~p ~n",[ {?MODULE,?LINE}, {Decide, Count} ]),
+                case {Decide, Count}  of
+                     {true,_} ->
                             lists:foreach(fun({_, Pid})->  
                                                             Pid ! continue_ping   %%%TODO WARNING process could be dead                                                 
                                           end, Mappers );
-                     false->
-                            do_nothing
+                     {false, 0 }->
+                             lists:foreach(fun({_, Pid})->  
+                                                            Pid ! continue_ping   %%%TODO WARNING process could be dead                                                 
+                                          end, Mappers );
+                     _->
+                        do_nothing
                 end
      end
 %        case PrevIterSize of
@@ -453,7 +459,10 @@ process_loop_hbase(start,   ProtoType,  State )->
         receive 
             %%as we got first result we can continue the work
             {result, ack} ->
-                  process_loop_hbase(normal,  ProtoType, State);
+                  io:format("~p ack signal  ~n", [{?MODULE,?LINE } ] ),
+                  process_loop_hbase(normal,  
+                                     ProtoType,
+                                     State#mapper_state{ets_buffer_size = ets:info(State#mapper_state.ets_buffer, size)  });
             %%if mappper have sent finish it will close the connection by it self
             finish ->
                   finish_loop_hbase(State),
@@ -527,7 +536,8 @@ process_loop_hbase(normal ,  ProtoType, State = #mapper_state{ets_buffer_size = 
 process_loop_hbase(normal ,  ProtoType, State)->
  ?WAIT("~p GOT  wait thrift  hbase ~p ~n",[{?MODULE,?LINE}, ProtoType ]),
   receive 
-            {PidReciverResult ,get_pack_of_facts} ->                  
+            {PidReciverResult ,get_pack_of_facts} ->
+                    
                    PidReciverResult !  get_buffer_value(State),
                    process_loop_hbase( normal, ProtoType,  State#mapper_state{ets_buffer_size = ets:info(State#mapper_state.ets_buffer, size)  } );
             {'EXIT', From, normal} -> %%all except of normal
@@ -555,6 +565,8 @@ process_loop_hbase(normal ,  ProtoType, State)->
                   exit(finished);
             {result, ack}->
                   %TODO try to avoid this operation
+                  io:format("~p ack signal  ~n", [{?MODULE,?LINE } ] ),
+
                   process_loop_hbase( normal,  ProtoType, State);
             {finish, Pid}->
                   Pids =  State#mapper_state.pids, 
@@ -646,7 +658,7 @@ test()->
     start_process_loop_hbase(Name, ProtoType, "")
 .
 
-flash_stat(Ets, EtsBuffer)->
+flash_stat(Pid, Ets, EtsBuffer)->
     List = ets:lookup(Ets, count_processed),
     Value = lists:foldl(fun({_, Val}, Acum)->
                 Acum + Val 
@@ -660,7 +672,8 @@ flash_stat(Ets, EtsBuffer)->
     Workers =  ets:lookup(Ets, workers) ,
     WorkersAll =  ets:lookup(Ets, all_workers_launched) ,
     io:format("working mappers ~p launched mappers ever ~n  ~p  ~n reducers ~p now ~n ~n",[ Workers, WorkersAll, WorkSize ]),
-    
+    io:format("reducer state ~p ~n",[ process_info(Pid) ]),
+
     ets:delete(Ets, count_processed_all),
     ets:insert(Ets, {count_processed_all, Value+Value1 }),
     ets:delete(Ets, count_processed),
@@ -716,9 +729,9 @@ start_process_loop_hbase(Name, ProtoType, TreeEts)->
         
         Regions = [ {"hd-test-2.ceb.loc","",""}],
         {Pids, _ } =  lists:mapfoldl(fun thrift_mappper/2, { EtsStat, EtsBuffer,Table, ProtoType}, Regions ),
-        timer:apply_interval(1000, fact_hbase_thrift, flash_stat,[ EtsStat, EtsBuffer ]),
+        timer:apply_interval(1000, fact_hbase_thrift, flash_stat,[self(), EtsStat, EtsBuffer ]),
         %%TODO add continue_ping to 
-        ?DEBUG("~p starting listener  ALL for thrift connections ~n", [{?MODULE,?LINE}] ),
+        ?DEBUG("~p starting listener  ALL for thrift connections ~p~n", [{?MODULE,?LINE}, self()] ),
         process_loop_hbase(start,   ProtoType, #mapper_state{pids = Pids, ets_buffer = EtsBuffer, ets_stat = EtsStat } )
 
 .

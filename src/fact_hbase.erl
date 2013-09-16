@@ -592,8 +592,8 @@ fact_start_link( Aim,  TreeEts, ParentPid )->
       ?DEBUG("~p begin find in facts ~p ~n",[{?MODULE,?LINE},  Aim ]),
       Name = element(1,Aim),%%from the syntax tree get name of fact
       ?WAIT("~p regis wait in fact ~p ~n",[{?MODULE,?LINE},{ Name, Aim } ]),
-      RealName = common:get_logical_name( TreeEts, Name),
-      converter_monitor:stat('search',  RealName , Aim, true ),
+      NameSpace = common:get_logical_name( TreeEts),
+      converter_monitor:stat('search', Name, NameSpace , Aim, true ),
       case check_exist_facts( Name, TreeEts) of %%and try to find in hbase
                     true-> 
                         fact_start_link_hbase(Aim,  TreeEts, ParentPid);
@@ -711,8 +711,9 @@ process_key_data(Meta)->
 
 %%TODO gather mistakey of key invalid
 process_indexed_hbase(Table, ProtoType, {hbase,Reason}, TreeEts)->
-    
-    converter_monitor:stat('search',  Table , ProtoType, false ),
+
+    NameSpace = common:get_logical_name( TreeEts ),
+%     converter_monitor:stat('search_index',  Table , NameSpace, ProtoType, false ),
     receive
         {PidReciverResult, get_pack_of_facts}->
             PidReciverResult !  {hbase,Reason};
@@ -798,7 +799,7 @@ hbase_get_key(ProtoType, Table, Family, Key, 0)->
 			    ?DEBUG("~p  got  key   return ~p ~n  ~p  ~n",
 				    [{?MODULE,?LINE},
 				    {ProtoType, Table, Family, Key}, Res ]),
-                            converter_monitor:stat('search',  Table , ProtoType, false ),
+%                             converter_monitor:stat('search_index',  Table , ProtoType, false ),
                             {hbase_exception, Res}        
 	end
 .
@@ -951,7 +952,7 @@ get_facts( Pid )-> %%in this will not work method of cutting logic results
 
 
 call(Pid,  Atom )->
-    ?DEBUG("~p call to hbase reducer  ~n",[{?MODULE,?LINE} ]),
+    ?DEBUG("~p call to hbase reducer  ~p ~n",[{?MODULE,?LINE},{Pid,Atom} ]),
     Pid !   { self(), Atom } ,
     ?WAIT("~p regis  wait in  inner fact call  ~p ~n",[{?MODULE,?LINE},{Atom, Pid} ]),
     receive 
@@ -1170,14 +1171,17 @@ add_new_fact([ Name | ProtoType ] , Pos, TreeEts,  1)->
 	  ?DEBUG("~p new fact there ~p ~n",[{?MODULE,?LINE}, [ Name | ProtoType ]  ]),
 	  CountParams = length(ProtoType),
 	  RealName = common:get_logical_name(TreeEts, Name),
-	  converter_monitor:stat(try_add,  RealName , ProtoType, true ),
+          NameSpace = common:get_logical_name(TreeEts),
+
+	  converter_monitor:stat(try_add, Name,  NameSpace , ProtoType, true ),
 	  %TODO catch a lot exceptions
 	  case check_params_facts( Name, TreeEts ) of
 	      {CountParams, _HashFunction } ->
 		  Params = prototype_to_list(ProtoType),
 		  index_work_add(Name, Params, TreeEts),%%TODO spawn this
 		  Res = store_new_fact(RealName, Params ),
-		  Res;  
+                  converter_monitor:stat(add, Name , NameSpace , ProtoType, Res ),
+ 		  Res;  
 	      {CountParams1, _HashFunction } ->
 		  ?DEBUG("~p params have not matched with exists~p",[{?MODULE,?LINE}, {CountParams1,CountParams } ]),
 		  false
@@ -1201,6 +1205,7 @@ add_new_fact([ Name | ProtoType ] , Pos, TreeEts,  1)->
 					  ],
 					  "stat"  ),
 		  Res = store_new_fact(RealName , prototype_to_list(ProtoType) ),
+                  converter_monitor:stat(add, Name , NameSpace , ProtoType, Res ),
 		  Res
 	  end
 ;
@@ -1241,11 +1246,9 @@ put_key_body(Name, Key, Body )->
                                 [ {sync, true}, {headers_as_is, true } ] ) of
 			 { ok, { {_NewVersion, 200, _NewReasonPhrase}, _NewHeaders, Text1 } } ->
 			    	?DEBUG("~p process data with ~n ~p ~n~n~n",[{?MODULE,?LINE}, {Text1} ] ),
-			    	converter_monitor:stat(add_index,  Name , Body, true ), 
 				true;
                         Res ->
                             ?WAIT("~p got from hbase ~p ~n",[?LINE,{Res,Name,Body }]),
-                            converter_monitor:stat(add_index,  Name , Body, false ),      
                             throw({hbase_exception, Res })
 
 	    end
@@ -1253,7 +1256,9 @@ put_key_body(Name, Key, Body )->
 
 .
 
-hbase_add_index(IndexTable, Type, Params)->
+
+%TODO  move to thrift
+hbase_add_index(IndexTable, NameSpace,  Type, Params)->
       Keys =  string:tokens(Type, ","),
       KeyList = lists:map(fun(E)->
 		      Index = list_to_integer(E),
@@ -1265,12 +1270,14 @@ hbase_add_index(IndexTable, Type, Params)->
       MD5Key = generate_key( Params ),
       ?DEBUG("~p process delete index ~p",[{?MODULE,?LINE}, {Key,KeyList }  ]),
       MakeCellSet = make_cell_set( [ MD5Key ] ),
-      converter_monitor:stat(try_add_index,  IndexTable , { Type,MD5Key, Key }, true ),
+      converter_monitor:stat(try_add_index, IndexTable, NameSpace, { Type,MD5Key, Key }, true ),
       Res = put_key_body(IndexTable, Key, MakeCellSet),
+      converter_monitor:stat(add_index, IndexTable, NameSpace , { Type,MD5Key, Key }, Res ), 
+      
       Res
 .
-
-hbase_del_index(IndexTable, Type, Params)->
+%%%TODO IT'S WRONG!!!!
+hbase_del_index(IndexTable, NameSpace, Type, Params)->
       Keys =  string:tokens(Type, ","),
       KeyList = lists:map(fun(E)->
 		      Index = list_to_integer(E),
@@ -1280,14 +1287,14 @@ hbase_del_index(IndexTable, Type, Params)->
 		 ),
       Key = generate_key( KeyList ),
       ?DEBUG("~p process delete index ~p",[{?MODULE,?LINE}, {Key,KeyList }  ]),
-      converter_monitor:stat(try_del_index,  IndexTable , { Type, Key }, true ),
+      converter_monitor:stat(try_del_index,  IndexTable , NameSpace, { Type, Key }, true ),
       case catch  del_key(Key, IndexTable ) of
         {hbase_exception, Res }->   
-            converter_monitor:stat(del_index,  IndexTable , { Type, Key }, false ),
+            converter_monitor:stat(del_index,  IndexTable, NameSpace,  { Type, Key }, false ),
             true
         ;    
         Res ->
-            converter_monitor:stat(del_index,  IndexTable , { Type, Key }, true ),
+            converter_monitor:stat(del_index,  IndexTable, NameSpace, { Type, Key }, true ),
             Res
      end
         
@@ -1296,11 +1303,13 @@ hbase_del_index(IndexTable, Type, Params)->
 index_work_add(Name, Params, TreeEts)->
      Key = generate_key( Params ),
      Table = common:get_logical_name( TreeEts, ?HBASE_INDEX),
+     NameSpace = common:get_logical_name( TreeEts),
+
      case  ets:lookup( Table, Name) of
 	   [] -> [];
 	   List ->
 		  lists:foreach(fun({_InKey, IndexTable, KeyName})->
-					hbase_add_index(IndexTable, KeyName, Params)
+					hbase_add_index(IndexTable, NameSpace,  KeyName, Params)
 				 end, List)
     end
 .
@@ -1311,11 +1320,12 @@ index_work_del(Name,  Params, TreeEts) when is_tuple(Params)->
 index_work_del(Name, Params, TreeEts)->
      Key = generate_key( Params ),
      RealName = common:get_logical_name(TreeEts, ?HBASE_INDEX),
+     NameSpace = common:get_logical_name(TreeEts),
      case  ets:lookup(RealName, Name) of
 	   [] -> [];
 	   List ->
 		  lists:foreach(fun({_InKey, IndexTable, KeyName})->
-				      hbase_del_index(IndexTable, KeyName, Params  )
+				      hbase_del_index(IndexTable,NameSpace,  KeyName, Params  )
 		  end, List)   
      end
 
@@ -1397,11 +1407,12 @@ del_fact(B, TreeEts,  1)->
       Name = erlang:element(1,B),
 
       RealName = common:get_logical_name(TreeEts, Name),
+      NameSpace  = common:get_logical_name(TreeEts),
       
       ProtoType = common:my_delete_element(1,B),
       ?DEBUG("~p delete stat ~p",[{?MODULE,?LINE}, RealName ]),
 
-      converter_monitor:stat(try_del,  RealName , ProtoType, true ),
+      converter_monitor:stat(try_del, Name,  NameSpace , ProtoType, true ),
       ?DEBUG("~p delete index ~p",[{?MODULE,?LINE}, RealName ]),
 
        index_work_del(Name, ProtoType, TreeEts),
@@ -1409,11 +1420,11 @@ del_fact(B, TreeEts,  1)->
 
         case catch  del_key( generate_key(ProtoType), RealName) of
         {hbase_exception, Res }->   
-            converter_monitor:stat(del,  RealName , ProtoType, false ),
+            converter_monitor:stat(del, Name,  NameSpace , ProtoType, false ),
             throw({hbase_exception, Res })
         ;    
         Res ->
-            converter_monitor:stat(del,  RealName , ProtoType, true ),
+            converter_monitor:stat(del, Name,  NameSpace , ProtoType, true ),
             Res
         end     
 ;
@@ -1428,9 +1439,11 @@ delete_all_fact(Name, TreeEts )->
 delete_all_fact(Name, TreeEts, 0 )->
     true;
 delete_all_fact(Name, TreeEts, 1 )->
+    NameSpace = common:get_logical_name(TreeEts),
+
     RealName = common:get_logical_name(TreeEts, Name),
     MetaTable = common:get_logical_name(TreeEts, ?META_FACTS),
-    converter_monitor:stat(try_abolish,  RealName , {}, true ),
+    converter_monitor:stat(try_abolish,  Name ,NameSpace, {}, true ),
     TableNameIndex = common:get_logical_name(TreeEts, ?HBASE_INDEX),
     ListIndex = ets:lookup(TableNameIndex, Name),
     TableListIndex = lists:map(  fun({_Name, TableIndex, _})->
@@ -1439,11 +1452,11 @@ delete_all_fact(Name, TreeEts, 1 )->
     Table2Delete =  [RealName| TableListIndex],
     case catch lists:foreach( fun delete_table/1, Table2Delete) of
          ok ->
-                converter_monitor:stat(abolish,  RealName , {}, true ),
+                converter_monitor:stat(abolish,  Name ,NameSpace, {}, true ),
                 del_key(Name, MetaTable );
          Exception ->
                 del_key(Name, MetaTable ),
-                converter_monitor:stat(abolish,  RealName , {}, false ),
+                converter_monitor:stat(abolish,  Name ,NameSpace, {}, false ),
                 throw(Exception)
          
     end    
@@ -1742,11 +1755,9 @@ store_new_fact(LTableName, LProtoType, 0)->
                                 [ {sync, true}, {headers_as_is, true } ] ) of
 			 { ok, { {_NewVersion, 200, _NewReasonPhrase}, _NewHeaders, Text1 } } ->
 			    	?DEBUG("~p process data with ~n ~p ~n~n~n",[{?MODULE,?LINE}, Text1 ] ),
-                                converter_monitor:stat(add,  LTableName , LProtoType, true ),
 				true;
                         Res ->
                             ?WAIT("~p got from hbase ~p ~n",[?LINE,{Res,LTableName, LProtoType }]),
-                             converter_monitor:stat(add,  LTableName , LProtoType, false ),
                              throw({hbase_exception, Res })
 
 	    end
