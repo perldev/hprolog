@@ -2,7 +2,7 @@
 -behaviour(gen_server).
 
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2, terminate/2, code_change/3]).
--export([start_link/0,start_link/1, stop/0, status/0,stat/4,statistic/0, regis_timer_restart/1, regis/2 ,regis/1, kill_process_after/1 ]).
+-export([start_link/0,start_link/1, stop/0, status/0,stat/5,statistic/0, regis_timer_restart/1, regis/2 ,regis/1, kill_process_after/1 ]).
 -export([stop_converter/0, start_converter/0, start_statistic/0, update_hbase_stat/1, check_run/0, find_shortes/2,process_stat/2]).
 
 
@@ -135,7 +135,7 @@ status()->
       List = ets:tab2list( process_information ),List.
 
 statistic()->
-    ListType = ets:foldl(fun( {  { Type, Name }  , {true, TrueCount, false, FalseCount } }, In )->
+    ListType = ets:foldl(fun( {  { Type, Name, NameSpace }  , true, TrueCount, false, FalseCount  }, In )->
 		  NewVal = [ { Type, [   [ { Name, TrueCount } ], [ {Name, FalseCount } ]  ]  }  ],
 		  [NewVal | In]
 		  end, [], ?STAT),
@@ -166,10 +166,10 @@ start_converter()->
 -ifdef(USE_HBASE).
 
 update_hbase_stat(Fun)->
-      NameSpaces = fact_hbase:get_list_namespaces(),
+%       NameSpaces = fact_hbase:get_list_namespaces(),
       Stat = ets:tab2list(?STAT),
-      ?LOG("~p update  stat of hbase   ~p~n",[{?MODULE,?LINE}, {NameSpaces, Stat} ]),
-      lists:foldl(fun process_stat/2, {NameSpaces, Fun}, Stat  ),	 
+      ?LOG("~p update  stat of hbase   ~p~n",[{?MODULE,?LINE},  Stat ]),
+      lists:foldl(fun process_stat/2,  Fun, Stat  ),	 
       ets:delete_all_objects(?STAT).
       
 -else.
@@ -194,7 +194,7 @@ find_shortes(LongName, Prefixes) ->
                                                   Prefix
                                       end
                              end, "" , Prefixes ),
-    Name = common:get_namespace_name(NameSpace, LongName),                   
+     Name = common:get_namespace_name(NameSpace, LongName),                   
     { Name, common:get_logical_name(NameSpace, ?META_FACTS) }
 .
       
@@ -210,11 +210,37 @@ find_shortes(LongName, Prefixes) ->
 
 
 %%%VERY IMPORTANT PART!!!!
-process_stat({ {add, RealFactName }, {_, TrueCount,_, _FalseCount }  }, Acum)->
-          { Namespaces, LogFun } = Acum,
+process_stat({ {Some, Name, NameSpace }, V1, TrueCount, V2, FalseCount   }, LogFun) when is_atom(Name)->
+
+    process_stat({ {Some, atom_to_list(Name), NameSpace }, V1, TrueCount,V2, FalseCount   }, LogFun)
+;
+process_stat({ {del, Name, NameSpace }, _, TrueCount,_, _FalseCount   }, LogFun)->
+          
+          %HACK replace it
+           MetaTable = get_meta_table(NameSpace),
+          LogFun("~p save count to stat hbase ~p to ~p ~n",[{?MODULE,?LINE}, {Name, NameSpace, TrueCount},{Name, NameSpace, MetaTable} ]),
+          case catch fact_hbase:hbase_low_get_key(MetaTable,  Name, "stat", "facts_count") of
+                        {hbase_exception, not_found} -> 
+                            LogFun("~p key not found  ~p ~n",[{?MODULE,?LINE}, {facts_count ,Name, MetaTable} ]);
+                        {hbase_exception, Res }->   
+                            LogFun("~p hbase exception   ~p ~n",[{?MODULE,?LINE}, { Name, MetaTable, Res} ]);
+                        Res ->
+                           PreVal = common:inner_to_int( Res ),
+                           LogFun("~p prev count ~p ~n",[{?MODULE,?LINE}, {Name, MetaTable, PreVal} ]),
+                           NewCount = integer_to_list( PreVal - TrueCount ),
+                           LogFun("~p new count ~p ~n",[{?MODULE,?LINE}, {Name, MetaTable, NewCount} ]),
+                           fact_hbase:hbase_low_put_key(MetaTable, Name, "stat", "facts_count", NewCount )
+          end,
+          LogFun
+         
+          
+          
+;
+process_stat({ {add, Name, NameSpace }, _, TrueCount,_, _FalseCount   }, LogFun)->
+          
 	  %HACK replace it
-	  {Name, MetaTable} = find_shortes(RealFactName, Namespaces),
-	  LogFun("~p save count to stat hbase ~p to ~p ~n",[{?MODULE,?LINE}, {RealFactName, TrueCount},{Name, MetaTable} ]),
+	   MetaTable = get_meta_table(NameSpace),
+	  LogFun("~p save count to stat hbase ~p to ~p ~n",[{?MODULE,?LINE}, {Name, NameSpace, TrueCount},{Name, NameSpace, MetaTable} ]),
 	  case catch fact_hbase:hbase_low_get_key(MetaTable,  Name, "stat", "facts_count") of
                         {hbase_exception, not_found} -> 
                             LogFun("~p key not found  ~p ~n",[{?MODULE,?LINE}, {facts_count ,Name, MetaTable} ]),
@@ -224,19 +250,20 @@ process_stat({ {add, RealFactName }, {_, TrueCount,_, _FalseCount }  }, Acum)->
                             LogFun("~p hbase exception   ~p ~n",[{?MODULE,?LINE}, { Name, MetaTable, Res} ]);
                         Res ->
                            PreVal = common:inner_to_int( Res ),
-                           LogFun("~p new count ~p ~n",[{?MODULE,?LINE}, {Name, MetaTable, PreVal} ]),
+                           LogFun("~p prev count ~p ~n",[{?MODULE,?LINE}, {Name, MetaTable, PreVal} ]),
                            NewCount = integer_to_list( PreVal + TrueCount ),
+                           LogFun("~p new count ~p ~n",[{?MODULE,?LINE}, {Name, MetaTable, NewCount} ]),
                            fact_hbase:hbase_low_put_key(MetaTable, Name, "stat", "facts_count", NewCount )
           end,
-          Acum
+          LogFun
 	 
 	  
 	  
 ;
-process_stat({ {'search', RealFactName }, {_, TrueCount,_, _FalseCount }  }, Acum )->
-          { Namespaces, LogFun } = Acum,
-	  { Name, MetaTable } = find_shortes(RealFactName, Namespaces),
-  	  LogFun("~p save count to stat hbase ~p to ~p ~n",[{?MODULE,?LINE}, {RealFactName, TrueCount}, {Name, MetaTable} ]),
+process_stat({ {'search', Name, NameSpace }, _, TrueCount,_, _FalseCount   }, LogFun )->
+	  MetaTable  = get_meta_table(NameSpace),
+  	  LogFun("~p save count to stat hbase ~p to ~p ~n",[{?MODULE,?LINE}, {Name, NameSpace, TrueCount},
+                                                            {Name, NameSpace, MetaTable} ]),
           case catch fact_hbase:hbase_low_get_key(MetaTable,  Name, "stat", "facts_reqs") of
                         {hbase_exception, not_found} -> 
                             LogFun("~p key not found  ~p ~n",[{?MODULE,?LINE}, {fact_reqs, Name, MetaTable} ]),
@@ -246,46 +273,87 @@ process_stat({ {'search', RealFactName }, {_, TrueCount,_, _FalseCount }  }, Acu
                                 LogFun("~p hbase exception   ~p ~n",[{?MODULE,?LINE}, { Name, MetaTable, Res} ]);
                         Res ->
                                 PreVal = common:inner_to_int( Res ),
-                                LogFun("~p new count ~p ~n",[{?MODULE,?LINE}, {Name, MetaTable, PreVal} ]),
+                                LogFun("~p prev count ~p ~n",[{?MODULE,?LINE}, {Name, MetaTable, PreVal} ]),
                                 NewCount = integer_to_list( PreVal + TrueCount ),
+                                LogFun("~p new count ~p ~n",[{?MODULE,?LINE}, {Name, MetaTable, NewCount} ]),
+
                                 fact_hbase:hbase_low_put_key(MetaTable, Name, "stat", "facts_reqs", NewCount )
           end,
-          Acum
+          LogFun
 ;
-process_stat(Nothing, Acum )->
-         { Namespaces, LogFun } = Acum,
+process_stat(Nothing, LogFun )->
+      
 	 LogFun("~p dont logging this ~p  ~n",[{?MODULE,?LINE}, Nothing]),
-	 Acum
+	 LogFun
 .
 
+get_meta_table(NameSpace) when is_atom(NameSpace)->
+   get_meta_table(atom_to_list(NameSpace) )
+;
+get_meta_table(NameSpace)->
+        NameSpace++?META_FACTS
+.
 
 
 	
    
 %%prototype do not use     
-stat(Type, Name,  _ProtoType, Res)->
-    Key  =  { Type, Name },
+stat(Type, Name, NameSpace,  _ProtoType, true)->
+    Key  =  { Type, Name, NameSpace },
      ?LOG("~p stat  ~p  ~n",[{?MODULE,?LINE}, Key]),
-    case ets:lookup(?STAT, { Type, Name }) of
-	[ {Key, {true, TrueCount, false, FalseCount  }} ]->
-		case Res of
-		    true->
-			ets:insert(?STAT, { Key, {true, TrueCount+1, false, FalseCount }  } );
-		    false->
-			ets:insert(?STAT, { Key, {true, TrueCount, false, FalseCount+1 }   })
-		end;
-	      
-	[  ]->
-		case Res of
-		    true->
-			ets:insert(?STAT, { Key, {true, 1, false, 0 } }  );
-		    false->
-			ets:insert(?STAT ,{Key, {true, 0, false, 1 } }  )
-		end
-		
-	end
-
-
-    
+     case catch ets:update_counter(?STAT, Key, {3, 1}) of
+        {'EXIT', Desc}->
+            ets:insert(?STAT ,{Key, true, 0, false, 1  }  );
+         _->
+            ?LOG("~p update  stat  ~p  ~n",[{?MODULE,?LINE}, Key])
+     end    
+            
+            
+%     case ets:lookup(?STAT, { Type, Name }) of
+%         [ {Key, {true, TrueCount, false, FalseCount  }} ]->
+%                 case Res of
+%                     true->
+%                         ets:insert(?STAT, { Key, {true, TrueCount+1, false, FalseCount }  } );
+%                     false->
+%                         ets:insert(?STAT, { Key, {true, TrueCount, false, FalseCount+1 }   })
+%                 end;
+%         [  ]->
+%                 case Res of
+%                     true->
+%                         ets:insert(?STAT, { Key, {true, 1, false, 0 } }  );
+%                     false->
+%                         ets:insert(?STAT ,{Key, {true, 0, false, 1 } }  )
+%                 end
+%                 
+%         end    
+;
+stat(Type, Name, NameSpace,  _ProtoType, false)->
+    Key  =  { Type, Name, NameSpace },
+     ?LOG("~p stat  ~p  ~n",[{?MODULE,?LINE}, Key]),
+     case catch ets:update_counter(?STAT, Key, {5, 1}) of
+        {'EXIT', Desc}->
+            ets:insert(?STAT ,{Key, true, 0, false, 1  }  );
+        _->
+            ?LOG("~p update  stat  ~p  ~n",[{?MODULE,?LINE}, Key])
+     end
+%     case ets:lookup(?STAT, { Type, Name }) of
+% 	[ {Key, {true, TrueCount, false, FalseCount  }} ]->
+% 		case Res of
+% 		    true->
+% 			ets:insert(?STAT, { Key, true, TrueCount+1, false, FalseCount   } );
+% 		    false->
+% 			ets:insert(?STAT, { Key, {true, TrueCount, false, FalseCount+1 }   })
+% 		end;
+% 	[  ]->
+% 		case Res of
+% 		    true->
+% 			ets:insert(?STAT, { Key, {true, 1, false, 0 } }  );
+% 		    false->
+% 			ets:insert(?STAT ,{Key, {true, 0, false, 1 } }  )
+% 		end
+% 		
+% 	end    
 .
+% ets:update_counter(Tab, Key, UpdateOp)
+
     
