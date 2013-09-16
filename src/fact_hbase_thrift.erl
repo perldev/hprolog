@@ -540,8 +540,12 @@ process_loop_hbase(normal ,  ProtoType, State)->
                     
                    PidReciverResult !  get_buffer_value(State),
                    process_loop_hbase( normal, ProtoType,  State#mapper_state{ets_buffer_size = ets:info(State#mapper_state.ets_buffer, size)  } );
-            {'EXIT', From, normal} -> %%all except of normal
-                 process_loop_hbase(start,   ProtoType,  State );
+            {'EXIT', From, normal} -> %%all except of normal it's strange that a recieve this signal
+                  ?WAIT("~p GOT  got exit from ~p  delete it from pids array~n",[{?MODULE,?LINE}, From ]), 
+                   NewPids = lists:keydelete(From, 1,  State#mapper_state.pids),
+                   process_loop_hbase( normal, 
+                                      ProtoType,  
+                                      State#mapper_state{ets_buffer_size = ets:info(State#mapper_state.ets_buffer, size), pids=NewPids  } );
             {'EXIT', From, Reason} ->
                   io:format("~p GOT  exit in fact hbase ~p ~n",[{?MODULE,?LINE}, ProtoType ]),
                   io:format("~p got exit signal  ~p ~n",[{?MODULE,?LINE}, {From, Reason} ]),
