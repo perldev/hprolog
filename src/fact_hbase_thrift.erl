@@ -948,7 +948,7 @@ process_tCell(Key, { ColumnsData, Record, [Head|ProtoType],  Context, true })->
                             ;
                         %%CAUSE there filter logic must work    
                        _Some-> %%process all items in prototype to the unicode binary
-                            {Head, true, Context}                
+                            {Value, true, Context}                
                          
                     end    
 %                   unicode:characters_to_list(Value)
