@@ -206,7 +206,7 @@ low_get_key(Table, Key, Family,  SecondKey)->
         case catch thrift_client:call(Connection, get, [ Table, Key, Family ++ ":" ++ SecondKey, dict:new() ] ) of
         { NewState, {ok, []} } -> 
                     thrift_connection_pool:return({Key, NewState}),
-                    [];
+                     {hbase_exception, not_found};
         { NewState, {ok, Data} } ->
                 ?DEBUG("~p fetch : data ~p in ~p  ~n", [{?MODULE,?LINE}, Data,  timer:now_diff(now(), Time ) ]),
                 thrift_connection_pool:return({KeyC, NewState}),
@@ -236,7 +236,7 @@ get_key_custom( Table, Family, Key, FunProcess)->
         case catch thrift_client:call(Connection, getRowWithColumns, [ Table, Key, [Family], dict:new() ] ) of
             { NewState, {ok, []}  } -> 
                         thrift_connection_pool:return({KeyC, NewState}),
-                        [];
+                        {hbase_exception, not_found};
             { NewState, {ok, Data} } ->
                     ?DEBUG("~p fetch : data ~p in ~p  ~n", [{?MODULE,?LINE}, Data,  timer:now_diff(now(), Time ) ]),
                     thrift_connection_pool:return({KeyC, NewState}),
@@ -258,7 +258,7 @@ get_key(ProtoType, Table, Family, Key)->
         case catch thrift_client:call(Connection, getRowWithColumns, [ Table, Key, [Family], dict:new() ] ) of
         { NewState, [] } -> 
                     thrift_connection_pool:return({KeyC, NewState}),
-                    [];
+                    {hbase_exception, not_found};
         { NewState, {ok, Data} } ->
                 ?DEBUG("~p fetch : data ~p in ~p  ~n", [{?MODULE,?LINE}, Data,  timer:now_diff(now(), Time ) ]),
                 thrift_connection_pool:return({KeyC, NewState}),
