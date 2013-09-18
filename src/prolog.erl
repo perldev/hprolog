@@ -1472,8 +1472,8 @@ aim(hbase_user_defined_aim,{RuleList, NextBody, PrevIndex, ProtoType, Context, I
          %%pattern matching like one aim
          ?DEBUG("~p user defined aim ~p ~n",[{?MODULE,?LINE}, { BoundProtoType, TempSearch,  NextBody } ]),
          converter_monitor:stat('search',  
-                                 common:get_logical_name( TreeEts ),
                                  erlang:element(1,ProtoType),
+                                 common:get_logical_name( TreeEts ),
                                  ProtoType, true ),
          
          ets:insert(TreeEts,
