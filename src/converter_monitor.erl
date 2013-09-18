@@ -168,7 +168,7 @@ start_converter()->
 update_hbase_stat(Fun)->
 %       NameSpaces = fact_hbase:get_list_namespaces(),
       Stat = ets:tab2list(?STAT),
-      ?LOG("~p update  stat of hbase   ~p~n",[{?MODULE,?LINE},  Stat ]),
+      Fun("~p update  stat of hbase   ~p~n",[{?MODULE,?LINE},  Stat ]),
       lists:foldl(fun process_stat/2,  Fun, Stat  ),	 
       ets:delete_all_objects(?STAT).
       
@@ -236,7 +236,7 @@ process_stat({ {del, Name, NameSpace }, _, TrueCount,_, _FalseCount   }, LogFun)
           
           
 ;
-process_stat({ {add, Name, NameSpace }, _, TrueCount,_, _FalseCount   }, LogFun)->
+process_stat({ {add,  Name,  NameSpace }, _, TrueCount,_, _FalseCount   }, LogFun)->
           
 	  %HACK replace it
 	   MetaTable = get_meta_table(NameSpace),
@@ -309,23 +309,7 @@ stat(Type, Name, NameSpace,  _ProtoType, true)->
      end    
             
             
-%     case ets:lookup(?STAT, { Type, Name }) of
-%         [ {Key, {true, TrueCount, false, FalseCount  }} ]->
-%                 case Res of
-%                     true->
-%                         ets:insert(?STAT, { Key, {true, TrueCount+1, false, FalseCount }  } );
-%                     false->
-%                         ets:insert(?STAT, { Key, {true, TrueCount, false, FalseCount+1 }   })
-%                 end;
-%         [  ]->
-%                 case Res of
-%                     true->
-%                         ets:insert(?STAT, { Key, {true, 1, false, 0 } }  );
-%                     false->
-%                         ets:insert(?STAT ,{Key, {true, 0, false, 1 } }  )
-%                 end
-%                 
-%         end    
+
 ;
 stat(Type, Name, NameSpace,  _ProtoType, false)->
     Key  =  { Type, Name, NameSpace },
@@ -336,23 +320,7 @@ stat(Type, Name, NameSpace,  _ProtoType, false)->
         _->
             ?LOG("~p update  stat  ~p  ~n",[{?MODULE,?LINE}, Key])
      end
-%     case ets:lookup(?STAT, { Type, Name }) of
-% 	[ {Key, {true, TrueCount, false, FalseCount  }} ]->
-% 		case Res of
-% 		    true->
-% 			ets:insert(?STAT, { Key, true, TrueCount+1, false, FalseCount   } );
-% 		    false->
-% 			ets:insert(?STAT, { Key, {true, TrueCount, false, FalseCount+1 }   })
-% 		end;
-% 	[  ]->
-% 		case Res of
-% 		    true->
-% 			ets:insert(?STAT, { Key, {true, 1, false, 0 } }  );
-% 		    false->
-% 			ets:insert(?STAT ,{Key, {true, 0, false, 1 } }  )
-% 		end
-% 		
-% 	end    
+
 .
 % ets:update_counter(Tab, Key, UpdateOp)
 
