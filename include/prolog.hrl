@@ -1,20 +1,51 @@
 
 %%default count of pool to the thrift server
--define(DEFAULT_COUNT_THRIFT, 3).
+-define(DEFAULT_COUNT_THRIFT, 30).
 %% wheather using thrift
 -define(USE_THRIFT, 1).
--define(SIMPLE_HBASE_ASSERT,0).%%1 or 0 
+-define(SIMPLE_HBASE_ASSERT,1).%%1 or 0 
 -define(THRIFT_RECONNECT_TIMEOUT, 10000).
 -define(THRIFT_MAX_RECONNECT_COUNT, 10).
--define(INTERVAL_INVOKE_SCANNER, 5000000). %microseconds
+-define(INTERVAL_INVOKE_SCANNER, 2000000). %microseconds
 %-define(DEV_BUILD,1). %%this uncommented line means that hbase driver will use avias
-%-define(USE_HBASE,1).
+-define(USE_HBASE,1).
 
 
--define(DEFAULT_TIMEOUT, infinity).%%miliseconds
+%%for connect prolog with web console
+-define(WEB,1).
+
+-define('WRITE_UNICODE'(Parent,X), common:console_write_unicode(Parent, X) ).
+
+-ifdef(WEB).
+
+-define('WRITE'(Parent,X), common:web_console_write(Parent, X)  ).
+-define('WRITELN'(Parent,X), common:web_console_writenl(Parent, X) ).
+-define(GET_CHAR(Parent),  common:web_console_get_char(Parent) ).
+-define(NL(Parent),common:web_console_nl(Parent) ).   
+
+-define(READ(Parent), common:web_console_read(Parent) ).
+-define(READ_STR(Parent), common:web_console_read_str(Parent) ).
+
+-else.
+-define('WRITE'(Parent,X), common:console_write(Parent, X)  ).
+-define('WRITELN'(Parent,X), common:console_writenl(Parent, X) ).
+-define(GET_CHAR(Parent),  common:console_get_char(Parent) ).
+
+-define(READ(Parent), common:console_read(Parent) ).
+-define(READ_STR(Parent), common:console_read_str(Parent) ).
+
+
+
+-define(NL(Parent),common:console_nl(Parent) ).     
+       
+-endif.
+
+
+
+-define(DEFAULT_TIMEOUT, 10000).%%miliseconds
 -define(IO_SERVER, io).
 %%miliseconds
--define(FATAL_WAIT_TIME,infinity).% 60000).
+-define(FATAL_WAIT_TIME,10000).% 60000).
 -define(META_INFO_BATCH, 3). %%for using as batch param for scanner meta info
 -define(AIM_COUNTER, aim_counter).
 
@@ -26,7 +57,7 @@
 
 
 
-%-define(ENABLE_LOG,1).
+-define(ENABLE_LOG,1).
 -define(COMPILE_TRACE, 1).
 
 -define('DEV_DEBUG_MATCH'(Str, Pars ), true ).
@@ -87,33 +118,7 @@
 -define(LOCAL, 1).
 -define(LOG_CONF,"log.conf").
 
-%-define(WEB,1).
 
--define('WRITE_UNICODE'(Parent,X), common:console_write_unicode(Parent, X) ).
-
--ifdef(WEB).
-
--define('WRITE'(Parent,X), common:web_console_write(Parent, X)  ).
--define('WRITELN'(Parent,X), common:web_console_writenl(Parent, X) ).
--define(GET_CHAR(Parent),  common:web_console_get_char(Parent) ).
--define(NL(Parent),common:web_console_nl(Parent) ).   
-
--define(READ(Parent), common:web_console_read(Parent) ).
--define(READ_STR(Parent), common:web_console_read_str(Parent) ).
-
--else.
--define('WRITE'(Parent,X), common:console_write(Parent, X)  ).
--define('WRITELN'(Parent,X), common:console_writenl(Parent, X) ).
--define(GET_CHAR(Parent),  common:console_get_char(Parent) ).
-
--define(READ(Parent), common:console_read(Parent) ).
--define(READ_STR(Parent), common:console_read_str(Parent) ).
-
-
-
--define(NL(Parent),common:console_nl(Parent) ).     
-       
--endif.
 
 -ifdef( COMPILE_TRACE).
 -define( 'TRACE'(I, Tree,  Body, Context),  prolog_trace:trace(I, Tree,  Body, Context) ).
