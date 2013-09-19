@@ -225,8 +225,8 @@ process_stat({ {del, Name, NameSpace }, _, TrueCount,_, _FalseCount   }, LogFun)
                         {hbase_exception, Res }->   
                             LogFun("~p hbase exception   ~p ~n",[{?MODULE,?LINE}, { Name, MetaTable, Res} ]);
                         Res ->
+                           LogFun("~p prev count ~p ~n",[{?MODULE,?LINE}, {Name, MetaTable, Res} ]),
                            PreVal = common:inner_to_int( Res ),
-                           LogFun("~p prev count ~p ~n",[{?MODULE,?LINE}, {Name, MetaTable, PreVal} ]),
                            NewCount = integer_to_list( PreVal - TrueCount ),
                            LogFun("~p new count ~p ~n",[{?MODULE,?LINE}, {Name, MetaTable, NewCount} ]),
                            fact_hbase:hbase_low_put_key(MetaTable, Name, "stat", "facts_count", NewCount )
@@ -249,8 +249,8 @@ process_stat({ {add,  Name,  NameSpace }, _, TrueCount,_, _FalseCount   }, LogFu
                         {hbase_exception, Res }->   
                             LogFun("~p hbase exception   ~p ~n",[{?MODULE,?LINE}, { Name, MetaTable, Res} ]);
                         Res ->
+                           LogFun("~p prev count ~p ~n",[{?MODULE,?LINE}, {Name, MetaTable, Res} ]),
                            PreVal = common:inner_to_int( Res ),
-                           LogFun("~p prev count ~p ~n",[{?MODULE,?LINE}, {Name, MetaTable, PreVal} ]),
                            NewCount = integer_to_list( PreVal + TrueCount ),
                            LogFun("~p new count ~p ~n",[{?MODULE,?LINE}, {Name, MetaTable, NewCount} ]),
                            fact_hbase:hbase_low_put_key(MetaTable, Name, "stat", "facts_count", NewCount )
@@ -272,8 +272,9 @@ process_stat({ {'search', Name, NameSpace }, _, TrueCount,_, _FalseCount   }, Lo
                         {hbase_exception, Res }->
                                 LogFun("~p hbase exception   ~p ~n",[{?MODULE,?LINE}, { Name, MetaTable, Res} ]);
                         Res ->
+                               LogFun("~p prev count ~p ~n",[{?MODULE,?LINE}, {Name, MetaTable, Res} ]),
+
                                 PreVal = common:inner_to_int( Res ),
-                                LogFun("~p prev count ~p ~n",[{?MODULE,?LINE}, {Name, MetaTable, PreVal} ]),
                                 NewCount = integer_to_list( PreVal + TrueCount ),
                                 LogFun("~p new count ~p ~n",[{?MODULE,?LINE}, {Name, MetaTable, NewCount} ]),
 
