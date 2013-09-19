@@ -714,8 +714,19 @@ process_key_data(Meta)->
 .
 
 
-%%TODO gather mistakey of key invalid
-process_indexed_hbase(Table, ProtoType, {hbase,Reason}, TreeEts)->
+%%TODO gather mistake of key invalid
+process_indexed_hbase(Table, ProtoType, {hbase, not_found}, TreeEts)->
+
+    NameSpace = common:get_logical_name( TreeEts ),
+%     converter_monitor:stat('search_index',  Table , NameSpace, ProtoType, false ),
+    receive
+        {PidReciverResult, get_pack_of_facts}->
+            PidReciverResult !  [];
+         Some ->     
+            ?LOG("~p got unexpected ~p ~n",[{?MODULE,?LINE}, Some ])
+    end    
+;
+process_indexed_hbase(Table, ProtoType, {hbase, Reason}, TreeEts)->
 
     NameSpace = common:get_logical_name( TreeEts ),
 %     converter_monitor:stat('search_index',  Table , NameSpace, ProtoType, false ),
@@ -727,6 +738,7 @@ process_indexed_hbase(Table, ProtoType, {hbase,Reason}, TreeEts)->
             ?LOG("~p got unexpected ~p ~n",[{?MODULE,?LINE}, Some ])
     end    
 ;
+
 process_indexed_hbase(Table, ProtoType, [], TreeEts)->
     receive
         {PidReciverResult, get_pack_of_facts}->
