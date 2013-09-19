@@ -303,7 +303,7 @@ stat(Type, Name, NameSpace,  _ProtoType, true)->
      ?LOG("~p stat  ~p  ~n",[{?MODULE,?LINE}, Key]),
      case catch ets:update_counter(?STAT, Key, {3, 1}) of
         {'EXIT', Desc}->
-            ets:insert(?STAT ,{Key, true, 0, false, 1  }  );
+            ets:insert(?STAT ,{Key, true, 1, false, 0  }  );
          _->
             ?LOG("~p update  stat  ~p  ~n",[{?MODULE,?LINE}, Key])
      end    
