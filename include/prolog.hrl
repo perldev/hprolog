@@ -1,6 +1,6 @@
 
 %%default count of pool to the thrift server
--define(DEFAULT_COUNT_THRIFT, 30).
+-define(DEFAULT_COUNT_THRIFT, 100).
 %% wheather using thrift
 -define(USE_THRIFT, 1).
 -define(SIMPLE_HBASE_ASSERT,1).%%1 or 0 
@@ -57,7 +57,7 @@
 
 
 
-%-define(ENABLE_LOG,1).
+-define(ENABLE_LOG,1).
 -define(COMPILE_TRACE, 1).
 
 -define('DEV_DEBUG_MATCH'(Str, Pars ), true ).
