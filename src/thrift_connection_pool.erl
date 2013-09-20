@@ -34,7 +34,7 @@ init([Count]) ->
         Free =  start_pool(Count),
         timer:apply_interval(?SLEEP_CRITICAL, ?MODULE, reconnect_long, [ ?CRITICAL ] ),
         { ok,#thrift_pool{free = Free,speed_get = 0, sleep = 0, sleep_timeout = ?SLEEP_CRITICAL, speed_return = 0, 
-        busy = ets:new(?THRIFT_BUSY, [set,  public]) } }
+        busy = ets:new(?THRIFT_BUSY, [set,named_table,  public]) } }
 .
 
 start_pool(Count)->
