@@ -32,7 +32,8 @@ start_link(Count) ->
 init([Count]) ->
 
         Free =  start_pool(Count),
-        { ok,#thrift_pool{free = Free,speed_get = 0, sleep = 0, sleep_timeout = ?SLEEP_CRITICAL, speed_return = 0, busy = ets:new(?THRIFT_BUSY, [set,  private]) } }
+        { ok,#thrift_pool{free = Free,speed_get = 0, sleep = 0, sleep_timeout = ?SLEEP_CRITICAL, speed_return = 0, 
+        busy = ets:new(?THRIFT_BUSY, [set,  public]) } }
 .
 
 start_pool(Count)->
@@ -64,7 +65,9 @@ code_change(_OldVsn, State, _Extra) ->
     {ok, State}.
 
 handle_call(status,_From ,State)->
-    { reply,  { ets:info(State#thrift_pool.busy, size),
+    { reply,  { ets:tab2list(State#thrift_pool.busy),
+                State#thrift_pool.busy, 
+                ets:info(State#thrift_pool.busy, size),
                 length(State#thrift_pool.free) }, State }
 ;    
 
