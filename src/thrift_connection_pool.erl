@@ -4,11 +4,11 @@
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2, terminate/2, code_change/3]).
 -export([start_link/1, stop/0, status/0 ]).
 
--export([get_free/0, return/1,reconnect/1, connect/4 ]).
+-export([get_free/0, return/1,reconnect/1, connect/4,reconnect_long/1 ]).
 
 -include("prolog.hrl").
--define(CRITICAL, 500).
--define(SLEEP_CRITICAL, 1000).
+-define(CRITICAL, 3500000).%%%TODO move it to config
+-define(SLEEP_CRITICAL, 1000).%%%TODO move it to config
 -record(thrift_pool,{
                   free,
                   busy,
@@ -19,7 +19,7 @@
                 }
                 ).
                 
--define(THRIFT_BUSY, some ).
+-define(THRIFT_BUSY, thrift_connection_pool_busy ).
 
 
 
@@ -32,6 +32,7 @@ start_link(Count) ->
 init([Count]) ->
 
         Free =  start_pool(Count),
+        timer:apply_interval(?SLEEP_CRITICAL, ?MODULE, reconnect_long, [ ?CRITICAL ] ),
         { ok,#thrift_pool{free = Free,speed_get = 0, sleep = 0, sleep_timeout = ?SLEEP_CRITICAL, speed_return = 0, 
         busy = ets:new(?THRIFT_BUSY, [set,  public]) } }
 .
@@ -49,6 +50,24 @@ start_pool(Count)->
                        
 .
 
+
+reconnect_long( ReasonTimeout )->
+    Now = erlang:now(),
+    ListTimeout = 
+      ets:foldl(
+        fun( {Key, _Connection , Started }, Acc )->
+            case timer:now_diff(Now, Started) > ReasonTimeout of
+                    true->
+                        [Key | Acc];
+                    false->
+                        Acc        
+            end
+        end
+    , [], ?THRIFT_BUSY),
+    lists:foreach(fun(Key)->
+                    ?MODULE:reconnect(Key)
+                  end, ListTimeout)
+.
 
 
 get_free()->
