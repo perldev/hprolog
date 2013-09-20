@@ -65,6 +65,8 @@ reconnect_long( ReasonTimeout )->
         end
     , [], ?THRIFT_BUSY),
     lists:foreach(fun(Key)->
+                    ?WAIT("~p THROW connection  ~p ~n",
+                           [{?MODULE,?LINE}, Key ]),
                     ?MODULE:reconnect(Key)
                   end, ListTimeout)
 .
