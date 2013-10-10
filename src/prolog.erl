@@ -236,12 +236,15 @@ process_term_first( Rule = {':-', Body }, Prefix ) ->
 
 
      ?DEBUG("~p got rule ~p~n",[{?MODULE,?LINE}, Rule  ]),    
-%     ets:insert(common:get_logical_name(Prefix, ?RULES), { Name, Body } ),
+
+     %     ets:insert(common:get_logical_name(Prefix, ?RULES), { Name, Body } ),
+
      Prefix
 ;
 process_term_first( NothingRule, Prefix) ->
 
      ?DEBUG("~p unnessery rule during first step  ~p~n",[{?MODULE,?LINE}, NothingRule  ]),    
+     
      Prefix
 
 .
@@ -256,7 +259,6 @@ process_term(Rule  = {':-',ProtoType, Body}, {RulesTable, Count})->
      Name  = element(1, ProtoType),
      Args =  common:my_delete_element(1,ProtoType),
      ?DEBUG("~p compile rule ~p~n",[{?MODULE,?LINE}, Rule  ]),
-     
      ets:insert(RulesTable, { Name, Args, Body } ),
      {RulesTable, Count +1}
 ;
@@ -373,8 +375,7 @@ dynamic_del_rule(Search, TreeEts)->
 	      ?DEBUG("~p new rule list ~p~n",[{?MODULE,?LINE}, NewRuleList ]), %%find matching rules
 	      fact_hbase:del_rule(Name, TreeEts),
 	      ets:insert(RulesTable, NewRuleList),
-	      lists:foreach(fun( { NameRule, Args, Body } )->
-				  
+	      lists:foreach(fun( { NameRule, Args, Body } )->				  
 				  ResProtoType = list_to_tuple( [ NameRule | tuple_to_list(Args) ] ) ,
 				  Tree = {':-',ResProtoType, Body },
 				  fact_hbase:add_new_rule(Tree, first, TreeEts )
@@ -2027,15 +2028,6 @@ bound_aim(ProtoType, Context)->
 	BoundedSearch
 .
 
-%%HACK avoid this 
--ifdef(USE_HBASE).
-
-operators( Op )->
-  no
-.
-
--else.
-
 
 operators( Op )->
   Table = get(?DYNAMIC_STRUCTS),
@@ -2051,10 +2043,10 @@ operators( Op )->
   
   end
 .
--endif.
 
 %TODO avoid this by saving facts and rules in one table
-%%comments we are not able avoid with using HBASE
+%% comments we are not able to avoid with using HBASE
+
 is_deep_rule(Name, TreeEts)->
     FactTable = common:get_logical_name(TreeEts,?RULES ),
     case ets:lookup(FactTable, Name) of
