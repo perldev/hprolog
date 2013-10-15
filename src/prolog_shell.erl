@@ -38,7 +38,6 @@ start(Prefix)->
 	  false -> converter_monitor:start_link();
 	  true  -> do_nothing
     end,
-
     prolog:create_inner_structs(Prefix),
     case (catch ?INCLUDE_HBASE( Prefix ) ) of
         true-> io:format("~p namespace was loaded ~n",[Prefix]);
@@ -125,6 +124,8 @@ server_loop(TreeEts, TraceOn) ->
                process_prove(Pid, TempAim, Goal,  StartTime ),
 % 	       clean(tree_processes),%%%[this is very bad design or solution
 	       prolog:clean_tree(TreeEts),
+               Pid! finish,
+
 % 	       ets:insert(TreeEts, {system_record, ?AIM_COUNTER, 0}),
 	       server_loop(TreeEts, TraceOn);
 
@@ -138,23 +139,34 @@ server_loop(TreeEts, TraceOn) ->
 
     
 aim_spawn(start, Pid, Goal, TreeEts  )->
+                process_flag(trap_exit, true),
+                ?DEBUG("~p start aim ~p~n",[{?MODULE,?LINE},Goal ]),
                 Res = ( catch prolog:aim( finish, ?ROOT, Goal,  dict:new(), 1, TreeEts, ?ROOT) ),
                 Pid ! Res,
                 receive 
-                    {next, Prev} ->
-                        aim_spawn(Prev, Pid, Res, TreeEts );
+                    {next, NewPrev} ->
+                        aim_spawn(NewPrev, Pid, Res, TreeEts );
                     finish ->
-                        exit(normal)    
+                        exit(normal);
+                    Signal->
+                          ?DEBUG("~p exit signal ~p~n",[{?MODULE,?LINE},Signal ]),
+                          Pid ! {enexpected, Signal},
+                          exit(normal)
                 end;
 aim_spawn(Prev, Pid, Goal, TreeEts  )->
+                ?DEBUG("~p next aim ~p~n",[{?MODULE,?LINE}, {Prev,Goal} ]),
                 Res = (catch prolog:next_aim(Prev, TreeEts )),
                 Pid ! Res,
                 receive 
-                    {next, Prev} ->
-                        aim_spawn(Prev, Pid, Res, TreeEts );
+                    { next, NewPrev } ->
+                        ?DEBUG("~p normal signal ~p~n",[{?MODULE,?LINE}, Prev ]),
+                        aim_spawn(NewPrev, Pid, Res, TreeEts );
                     finish ->
-                        exit(normal)    
-                        
+                        exit(normal);
+                    Signal ->
+                          ?DEBUG("~p exit signal ~p~n",[{?MODULE,?LINE},Signal ]),
+                           Pid ! {enexpected, Signal},
+                           exit(normal)
                 end
 .
                 
@@ -169,7 +181,7 @@ process_prove(Pid,   TempAim , Goal, StartTime)->
 		  FinishTime = erlang:now(),
 		  io:fwrite(" elapsed time ~p ~n", [ timer:now_diff(FinishTime, StartTime)*0.000001 ] );           
             {true, SomeContext, Prev} ->
-                  ?DEBUG("~p got from prolog shell aim ~p~n",[?LINE ,{TempAim, Goal, dict:to_list(SomeContext)} ]),
+                  ?DEBUG("~p got from prolog shell aim ~p~n",[{?MODULE,?LINE} ,{TempAim, Goal, dict:to_list(SomeContext)} ]),
                   FinishTime = erlang:now(),
                   New = prolog_matching:bound_body( 
                                         Goal, 
@@ -189,7 +201,7 @@ process_prove(Pid,   TempAim , Goal, StartTime)->
                        0 ->
                           io:fwrite("Yes~n");
                        _ ->
-                         ?DEBUG("~p send next to pid ~p",[{?MODULE,?LINE}, {Pid, Goal} ]),
+                         ?DEBUG("~p send next to pid ~p",[{?MODULE,?LINE}, {Pid, Goal, Prev} ]),
                          ?START_COUNTER(tree_processes),
                          Pid ! {next, Prev},
                          process_prove(Pid,  TempAim , Goal,  erlang:now() )              
@@ -199,8 +211,7 @@ process_prove(Pid,   TempAim , Goal, StartTime)->
 		   io:fwrite("No ~p~n",[Res]),FinishTime = erlang:now(),
     		   io:fwrite(" elapsed time ~p ~n", [ timer:now_diff(FinishTime, StartTime)*0.000001 ] )
     		   
-     end,
-     exit(Pid, finish)
+     end
 .
      
 
