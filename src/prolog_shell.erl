@@ -38,10 +38,14 @@ start(Prefix)->
 	  false -> converter_monitor:start_link();
 	  true  -> do_nothing
     end,
-    prolog:create_inner_structs(Prefix),
-    case (catch ?INCLUDE_HBASE( Prefix ) ) of
-        true-> io:format("~p namespace was loaded ~n",[Prefix]);
-        Res ->io:format("unable to load namespace ~p  ~n",[Res])
+    case prolog:create_inner_structs(Prefix) of
+         true->   case (catch ?INCLUDE_HBASE( Prefix ) ) of
+                    true-> io:format("~p namespace was loaded ~n",[Prefix]);
+                    Res ->io:format("unable to load namespace ~p  ~n",[Res])
+                  end;
+         already->
+                  io:format("~p  names is already loaded ~n",[Prefix])
+            
     end,
     server(Prefix) 
 .

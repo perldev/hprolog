@@ -147,30 +147,26 @@ only_rules_delete_inner(Prefix)->
 % Set a process as heir. The heir will inherit the table if the owner terminates. The message {'ETS-TRANSFER',tid(),FromPid,HeirData} will
 %  | {heir,none}
 create_inner_structs(Prefix, HeirPid)->
-    ets:new(common:get_logical_name(Prefix, ?DYNAMIC_STRUCTS),[named_table, set, public, { heir,HeirPid, Prefix } ]),
-    %TODO remove this
-    put(?DYNAMIC_STRUCTS, common:get_logical_name(Prefix, ?DYNAMIC_STRUCTS) ),
-    ets:new(common:get_logical_name(Prefix, ?META_WEIGHTS),[named_table, set, public, { heir,HeirPid, Prefix }] ),
-    ets:new(common:get_logical_name(Prefix, ?META),[named_table, set, public, { heir,HeirPid, Prefix }]),
-    ets:new(common:get_logical_name(Prefix, ?RULES),[named_table, bag, public, { heir,HeirPid, Prefix }]),
-    ets:new(common:get_logical_name(Prefix, ?META_LINKS),[named_table, bag, public, { heir,HeirPid, Prefix }]),
-    %the hbase database is for everything
-    ets:new(common:get_logical_name(Prefix, ?HBASE_INDEX), [named_table, bag, public, { heir,HeirPid, Prefix }])
+    case ets:info(common:get_logical_name(Prefix, ?DYNAMIC_STRUCTS)) of    
+        undefined-> already;
+        _ ->    
+            ets:new(common:get_logical_name(Prefix, ?DYNAMIC_STRUCTS),[named_table, set, public, { heir,HeirPid, Prefix } ]),
+            %TODO remove this
+            put(?DYNAMIC_STRUCTS, common:get_logical_name(Prefix, ?DYNAMIC_STRUCTS) ),
+            ets:new(common:get_logical_name(Prefix, ?META_WEIGHTS),[named_table, set, public, { heir,HeirPid, Prefix }] ),
+            ets:new(common:get_logical_name(Prefix, ?META),[named_table, set, public, { heir,HeirPid, Prefix }]),
+            ets:new(common:get_logical_name(Prefix, ?RULES),[named_table, bag, public, { heir,HeirPid, Prefix }]),
+            ets:new(common:get_logical_name(Prefix, ?META_LINKS),[named_table, bag, public, { heir,HeirPid, Prefix }]),
+            %the hbase database is for everything
+            ets:new(common:get_logical_name(Prefix, ?HBASE_INDEX), [named_table, bag, public, { heir,HeirPid, Prefix }]),
+            true
+    end
     %%statistic is common
 .
 
 create_inner_structs(Prefix)->
     Pid = erlang:whereis(converter_monitor), %%in result all ets tables will be transfered to converter_monitor
-    ets:new(common:get_logical_name(Prefix, ?DYNAMIC_STRUCTS),[named_table, set, public, { heir,Pid, Prefix } ]),
-    %TODO remove this
-    put(?DYNAMIC_STRUCTS, common:get_logical_name(Prefix, ?DYNAMIC_STRUCTS) ),
-    ets:new(common:get_logical_name(Prefix, ?META_WEIGHTS),[named_table, set, public, { heir,Pid, Prefix }] ),
-    ets:new(common:get_logical_name(Prefix, ?META),[named_table, set, public, { heir,Pid, Prefix }]),
-    ets:new(common:get_logical_name(Prefix, ?RULES),[named_table, bag, public, { heir,Pid, Prefix }]),
-    ets:new(common:get_logical_name(Prefix, ?META_LINKS),[named_table, bag, public, { heir,Pid, Prefix }]),
-    %the hbase database is for everything
-    ets:new(common:get_logical_name(Prefix, ?HBASE_INDEX), [named_table, bag, public, { heir,Pid, Prefix }])
-    %%statistic is common
+    create_inner_structs(Prefix, Pid)
 .
 
 
@@ -398,36 +394,7 @@ aim(next_in_current_leap, { T , TreeEts, ThatLocalContext, Prev })->
                 [aim, conv3 , NewParams ]  
      end     
 ;
-aim(process_next_hbase, {[], T, TreeEts, {Parent, Head } })->
-        ets:insert(TreeEts, T#aim_record{solutions = [], next = one } ), %%tell finish everything
-        { Type, Params } = Head,        
-         NewParams = [false| Params ],
-        [aim, Type, NewParams];
-aim(process_next_hbase,{ [Res], T, TreeEts, Parent})->
-        %    Res = [{}]
-        %%TODO remove this reorganization 
-        NewIndex =  get_index(T#aim_record.id), % now(), %T#aim_record.id + 1,
-        Name =  erlang:element(1, T#aim_record.prototype ),
-        BoundProtoType = list_to_tuple( [Name|tuple_to_list( Res )] ),
-        %%MUST BE TRUE
-        ?DEBUG("~p bound temp aim  ~p ~n",[{?MODULE,?LINE},
-                                           {T#aim_record.prototype, T#aim_record.temp_prototype, BoundProtoType }]),
-                                  
-        %TODO mistakes there                                    
-        { true, NewLocalContext } = prolog_matching:var_match(BoundProtoType, T#aim_record.prototype, T#aim_record.context),
-        %%TODO remove all logs with dict:to_list functions
-        ?DEBUG("~p process FACT ~p ~n",[{?MODULE,?LINE},  {
-                                                            T#aim_record.prototype,
-                                                            T#aim_record.temp_prototype,
-                                                            T#aim_record.next_leap} ]),
-        %%TODO change all conv3е to aim procedure
-        %% this case is needed for saving original context of current tree leap
-        ?TRACE(T#aim_record.id, TreeEts, T#aim_record.temp_prototype, NewLocalContext),
-        ?TRACE2(T#aim_record.id, TreeEts, BoundProtoType, NewLocalContext),
-        NewParams = { T#aim_record.next_leap , NewLocalContext, T#aim_record.id, NewIndex, TreeEts, Parent },
-        [aim, conv3 , NewParams];
-aim(process_next_hbase,{ Unexpected, _T, TreeEts, _Parent})->
-        throw({'EXIT',unexpected_tree_leap, {Unexpected, TreeEts} } );              
+              
 aim(next_aim, { _ ,?ROOT, _ } )->
         false
 ;
@@ -486,15 +453,15 @@ aim(next_aim,  {Parent, Index, TreeEts} )->
                  Pattern = fact_hbase:get_facts(Pid),
                  ?DEV_DEBUG("~p work pattern  ~p ~n",[{?MODULE,?LINE},  Pattern ]),
                  %%TODO you MUST AVOID THIS LINE
-                 case aim(process_next_hbase, {Pattern, T, TreeEts, T#aim_record.parent}) of
-                         ProcessRes = {true, _Context, _Prev} -> 
-                             ProcessRes;
-                         false ->
-                             ?DEV_DEBUG("~p work to previouse  ~p ~n",[{?MODULE,?LINE},  Index ]),
-                             aim(next_aim, { Parent, Index, TreeEts } );
-                          Unexpected ->
-                             throw({'EXIT',unexpected_return_value, {Unexpected, T, TreeEts} } )
-                 end;
+                 [aim, process_next_hbase, {Pattern, T, TreeEts, T#aim_record.parent}];
+%                          ProcessRes = {true, _Context, _Prev} -> 
+%                              ProcessRes;
+%                          false ->
+%                              ?DEV_DEBUG("~p work to previouse  ~p ~n",[{?MODULE,?LINE},  Index ]),
+%                              aim(next_aim, { Parent, Index, TreeEts } );
+%                           Unexpected ->
+%                              throw({'EXIT',unexpected_return_value, {Unexpected, T, TreeEts} } )
+%                  end;
 
 
         [ T = #aim_record{next = one} ]-> %%one  it's pattern matching 
@@ -520,6 +487,36 @@ aim(next_aim,  {Parent, Index, TreeEts} )->
               throw({'EXIT',unexpected_tree_leap, {Unexpected, TreeEts} } )
         end
 ;
+aim(process_next_hbase, {[], T, TreeEts, Parent })->
+        ets:delete( TreeEts, T#aim_record.id ),%% may be do it separate 
+        NewParams = {Parent, T#aim_record.prev_id, TreeEts},
+        [aim, next_aim, NewParams];
+aim(process_next_hbase,{ [Res], T, TreeEts, Parent})->
+        %    Res = [{}]
+        %%TODO remove this reorganization 
+        NewIndex =  get_index(T#aim_record.id), % now(), %T#aim_record.id + 1,
+        Name =  erlang:element(1, T#aim_record.prototype ),
+        BoundProtoType = list_to_tuple( [Name|tuple_to_list( Res )] ),
+        %%MUST BE TRUE
+        ?DEBUG("~p bound temp aim  ~p ~n",[{?MODULE,?LINE},
+                                           {T#aim_record.prototype, T#aim_record.temp_prototype, BoundProtoType }]),
+                                  
+        %TODO mistakes there                                    
+        { true, NewLocalContext } = prolog_matching:var_match(BoundProtoType, T#aim_record.prototype, T#aim_record.context),
+        %%TODO remove all logs with dict:to_list functions
+        ?DEBUG("~p process FACT ~p ~n",[{?MODULE,?LINE},  {
+                                                            T#aim_record.prototype,
+                                                            T#aim_record.temp_prototype,
+                                                            T#aim_record.next_leap} ]),
+        %%TODO change all conv3е to aim procedure
+        %% this case is needed for saving original context of current tree leap
+        ?TRACE(T#aim_record.id, TreeEts, T#aim_record.temp_prototype, NewLocalContext),
+        ?TRACE2(T#aim_record.id, TreeEts, BoundProtoType, NewLocalContext),
+        NewParams = { T#aim_record.next_leap , NewLocalContext, T#aim_record.id, NewIndex, TreeEts, Parent },
+        [aim, conv3 , NewParams];
+aim(process_next_hbase,{ Unexpected, _T, TreeEts, _Parent})->
+        throw({'EXIT',unexpected_tree_leap, {Unexpected, TreeEts} } );
+
 aim(process_next, { false, T, TreeEts, Parent } )->        
         ets:delete( TreeEts, T#aim_record.id ),%% may be do it separate 
         NewParams = {Parent, T#aim_record.prev_id, TreeEts},

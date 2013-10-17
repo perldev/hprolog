@@ -199,14 +199,14 @@ put_key(Table, Key, Family, Key2, Value)->
 
 low_get_key(Table, Key, Family,  SecondKey)->
     
-        {KeyC, Connection} = thrift_connection_pool:get_free(),
+       {KeyC, Connection} = thrift_connection_pool:get_free(),
 %      thrift_client:call(State, getRowWithColumns, 
 %         ["pay","0faf51ea7ba2292dd69f6ec66b1e4ba9",["params"],dict:new()]).
         Time = now(),
         case catch thrift_client:call(Connection, get, [ Table, Key, Family ++ ":" ++ SecondKey, dict:new() ] ) of
         { NewState, {ok, []} } -> 
                     thrift_connection_pool:return({Key, NewState}),
-                     {hbase_exception, not_found};
+                    {hbase_exception, not_found};
         { NewState, {ok, Data} } ->
                 ?DEBUG("~p fetch : data ~p in ~p  ~n", [{?MODULE,?LINE}, Data,  timer:now_diff(now(), Time ) ]),
                 thrift_connection_pool:return({KeyC, NewState}),
