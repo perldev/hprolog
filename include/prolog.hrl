@@ -1,15 +1,16 @@
 
 %%default count of pool to the thrift server
--define(DEFAULT_COUNT_THRIFT, 200).
+-define(DEFAULT_COUNT_THRIFT, 50).
 %% wheather using thrift
 -define(USE_THRIFT, 1).
 -define(SIMPLE_HBASE_ASSERT,1).%%1 or 0 
--define(THRIFT_RECONNECT_TIMEOUT, 10000).
+-define(THRIFT_RECONNECT_TIMEOUT,130000).
 -define(THRIFT_MAX_RECONNECT_COUNT, 10).
 -define(INTERVAL_INVOKE_SCANNER, 2000000). %microseconds
 %-define(DEV_BUILD,1). %%this uncommented line means that hbase driver will use avias
 -define(USE_HBASE,1).
 
+-define(ENABLE_LOG,1).
 
 %%for connect prolog with web console
 -define(WEB,1).
@@ -42,10 +43,10 @@
 
 
 
--define(DEFAULT_TIMEOUT, 10000).%%miliseconds
+-define(DEFAULT_TIMEOUT, 210000).%%miliseconds
 -define(IO_SERVER, io).
 %%miliseconds
--define(FATAL_WAIT_TIME,10000).% 60000).
+-define(FATAL_WAIT_TIME,210000).% 60000).
 -define(META_INFO_BATCH, 3). %%for using as batch param for scanner meta info
 -define(AIM_COUNTER, aim_counter).
 
@@ -57,7 +58,6 @@
 
 
 
-%-define(ENABLE_LOG,1).
 -define(COMPILE_TRACE, 1).
 
 -define('DEV_DEBUG_MATCH'(Str, Pars ), true ).
@@ -107,7 +107,7 @@
 -define(FACT_STAT(Ets), io:format("Facts  ~p ~n",[ ets:tab2list(Ets)  ]) ).
 
 -define(SYSTEM_STAT(Ets, Pointers), io:format("System ~p prolog ~p  pointers is ~p ~n",[ length(processes()), 
-                                                                                         ets:info(Ets, size), 
+                                                                                         ets:info(Ets,size), 
                                                                                          Pointers ]) ).
 
 
@@ -211,7 +211,7 @@
 -define(SL_TIMER,60000). %minute
 % pay(Re,"75000.00",Currency,Date,From_okpo,To_okpo,From_account,To_account,FromName,ToName,FromMfo,ToMfo, Desc,Ip).
 
--define(LIMIT,100). %% LIMIT and GET_FACT_PACK must be equal 
+-define(LIMIT,1). %% LIMIT and GET_FACT_PACK must be equal 
 -define(GET_FACT_PACK, 1). 
 %%TODO realize algorithm for return first element, but in background continue process of receiveing data from hbase
 %%for example we return first element...and save to the memory 1024 records and in next call return from memory
@@ -352,7 +352,27 @@
 '<',
 '=\\=',
 '=..',
-'\\+'
+'\\+',
+%%MATH function 
+'sin',
+'cos',
+'tan',
+'asin',
+acos ,
+atan ,
+atan2, %(X, Y) ,
+sinh ,
+cosh ,
+tanh ,
+asinh ,
+acosh ,
+atanh ,
+exp ,
+log ,
+log10 ,
+pow ,%(X, Y) ,
+sqrt ,
+pi %()
 
 ]
 
@@ -374,3 +394,20 @@
     maxColumnInclusive_bool,
     opts
     }).
+
+-record(aim_record,
+{
+id, 
+prototype,
+temp_prototype,
+solutions,
+next,%%%
+prev_id,
+context,
+next_leap,
+parent
+
+}
+
+).    
+    
