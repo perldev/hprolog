@@ -642,9 +642,12 @@ inner_defined_aim(NextBody, PrevIndex , Body = {'date', _Ini, _Typei, _Accumi },
         end,
        Res
 ;
-inner_defined_aim(NextBody, PrevIndex , {'is',  NewVarName = { _Accum }, Expr },
+inner_defined_aim(NextBody, PrevIndex , {'is',  NewVarName , Expr },
                   Context, _Index , _TreeEts )->
-        CalcRes = common_process_expr(Expr, Context),
+                  
+        CalcExpr =  prolog_matching:bound_body(Expr, Context),
+        ?DEBUG("common expression  math in   - ~p", [CalcExpr] ),
+        CalcRes = common_process_expr(CalcExpr),
         ?DEBUG("~p calc expression ~p ~n",[{?MODULE,?LINE},{ NewVarName, Expr, CalcRes  } ]),
          prolog_matching:var_match(NewVarName, CalcRes, Context)
 
@@ -681,8 +684,9 @@ inner_defined_aim(NextBody, PrevIndex ,{ '=..', First, Second }, Context, _Index
 %     ToTerm = tuple_to_list(BoundFirst),
    
 inner_defined_aim(NextBody, PrevIndex ,{ '=:=', First, Second }, Context, _Index, _TreeEts  )->
-    One = arithmetic_process(First, Context),
-    Two = arithmetic_process(Second, Context),
+    
+    One = arithmetic_process( prolog_matching:bound_body(First, Context)),
+    Two = arithmetic_process( prolog_matching:bound_body(Second, Context)),
     Res ={ compare(One,Two), Context },
     Res
 ;
@@ -706,33 +710,33 @@ inner_defined_aim(NextBody, PrevIndex ,{ '==', First, Second }, Context, _Index,
 ;
 inner_defined_aim(NextBody, PrevIndex ,{ '>=', First, Second }, Context, _Index, _TreeEts  )->
     
-    One = arithmetic_process(First, Context),
-    Two = arithmetic_process(Second, Context),
+    One = arithmetic_process(prolog_matching:bound_body(First, Context)),
+    Two = arithmetic_process(prolog_matching:bound_body(Second, Context)),
     Res = { One >= Two, Context },
     Res
 ;
 inner_defined_aim(NextBody, PrevIndex ,{'=<', First, Second }, Context, _Index, _TreeEts  )->
             
-    One = arithmetic_process(First, Context),
-    Two = arithmetic_process(Second, Context),
+    One = arithmetic_process(prolog_matching:bound_body(First, Context)),
+    Two = arithmetic_process(prolog_matching:bound_body(Second, Context)),
     Res = { One =< Two, Context }, 
     Res
 ;
 inner_defined_aim(NextBody, PrevIndex ,{ '>', First, Second }, Context, _Index, _TreeEts  )->
-    One = arithmetic_process(First, Context),
-    Two = arithmetic_process(Second, Context),
+    One = arithmetic_process( prolog_matching:bound_body(First, Context)),
+    Two = arithmetic_process( prolog_matching:bound_body(Second, Context)),
     Res = { One > Two, Context }, 
     Res
 ;
 inner_defined_aim(NextBody, PrevIndex ,{'<', First, Second }, Context, _Index, _TreeEts  )->
-    One = arithmetic_process(First, Context),
-    Two = arithmetic_process(Second, Context),
+    One = arithmetic_process(prolog_matching:bound_body(First,Context) ),
+    Two = arithmetic_process(prolog_matching:bound_body(Second, Context)),
     Res = { One < Two, Context },
     Res
 ;
 inner_defined_aim(NextBody, PrevIndex , {'=\\=', First, Second }, Context, _Index, _TreeEts )->
-    One = arithmetic_process(First, Context),
-    Two = arithmetic_process(Second, Context),
+    One = arithmetic_process(prolog_matching:bound_body(First, Context) ),
+    Two = arithmetic_process(prolog_matching:bound_body(Second,Context)),
     Res = { not_compare(One ,Two), Context },
     Res;
 inner_defined_aim(_NextBody, _PrevIndex , Body, _Context, _Index, TreeEts )->
@@ -936,87 +940,44 @@ is_rule([Head|Tail])->
 
 
 
-common_process_expr( Body = {'mod', _Var1, _Var2  } , Context )->
-    arithmetic_process(Body,Context );
-common_process_expr( Body = {'+', _Var1, _Var2  } , Context )->
-    arithmetic_process(Body,Context );
-common_process_expr( Body = {'/', _Var1, _Var2  } , Context )->
-    arithmetic_process(Body,Context );
-common_process_expr( Body = {'*', _Var1, _Var2  } , Context )->
-    arithmetic_process(Body,Context );
-common_process_expr( Body = {'-', _Var1, _Var2  } , Context )->
-    arithmetic_process(Body,Context );
-common_process_expr( Var, _Context ) when is_float(Var)->
+common_process_expr( Body = {'mod', _Var1, _Var2  }  )->
+    arithmetic_process(Body );
+common_process_expr( Body = {'+', _Var1, _Var2  }  )->
+    arithmetic_process(Body );
+common_process_expr( Body = {'/', _Var1, _Var2  }  )->
+    arithmetic_process(Body );
+common_process_expr( Body = {'*', _Var1, _Var2  } )->
+    arithmetic_process(Body );
+common_process_expr( Body = {'-', _Var1, _Var2  } )->
+    arithmetic_process(Body );
+common_process_expr( Var ) when is_float(Var)->
      Var
 ;
-common_process_expr( Var, _Context ) when is_integer(Var)->
+common_process_expr( Var ) when is_integer(Var)->
      Var
 ;
-common_process_expr( Body, Context )->
-      case prolog_matching:find_var(Context, Body ) of 
-            nothing -> false;
-            Var -> Var
-      end
+common_process_expr( Body )->
+      false
+      
       .
 
  
 %%%TODO think about it 
 %% do we need automatic converting strings to number
 % {'+',{'+',{'R1'},{'R'}},{'R4'}}
-arithmetic_process(nothing, _Context)->
+arithmetic_process(nothing)->
     false;
-arithmetic_process( {Operator, Var1, Var2  } , Context )->      
-     NewVar1 =  arithmetic_process(Var1, Context),
-     NewVar2 =  arithmetic_process(Var2, Context),
-     ?DEBUG(" test  - ~p, ~p", [NewVar1,NewVar2] ),
+arithmetic_process( {Operator, Var1, Var2  }  )->  
+     ?DEBUG("  math in test  - ~p, ~p", [Var1, Var2] ),
+     NewVar1 =  arithmetic_process(Var1),
+     NewVar2 =  arithmetic_process(Var2),
+     ?DEBUG(" math out test  - ~p, ~p", [NewVar1,NewVar2] ),
      a_result(Operator, NewVar1, NewVar2)
 ;
-arithmetic_process( Name = {'-',Var}, Context )->       
-        NewVar1 =  prolog_matching:bound_body(Var, Context),
-        NewVar = case NewVar1 of
-                    {_}-> false;
-                    _ -> NewVar1
-                  end,
-        
-       case arithmetic_process(NewVar, Context) of 
-            false -> false;
-            X when is_float(X) -> -1*X;
-            X when is_integer(X) -> -1*X;
-            X when is_atom(X) -> false;
-            X when is_binary(X)->
-                        {First, _Second} = string:to_float("-"++binary_to_list(X)++".0" ),
-                        my_float( First );        
-            X ->
-                        {First, _Second} = string:to_float("-"++ X ++".0" ),
-                        my_float( First )
-        end;
-arithmetic_process( Name = {'+',Var}, Context )->       
-        NewVar1 = prolog_matching:bound_body(Var, Context),
-        NewVar = case NewVar1 of
-                    {_}-> false;
-                    _ -> NewVar1
-                  end,
-       case arithmetic_process(NewVar, Context) of 
-            false -> false;
-            X when is_float(X) -> X;
-            X when is_integer(X) -> X;
-            X when is_atom(X) -> false;
-            X when is_binary(X)->
-                        {First, _Second} = string:to_float(binary_to_list(X)++".0" ),
-                        my_float( First );        
-            X ->
-                        {First, _Second} = string:to_float( X ++".0" ),
-                        my_float( First )
-        end;    
-arithmetic_process( Name = {_Var}, Context )->  
-        NewVar1 = prolog_matching:bound_body(Name, Context),
-        NewVar = case NewVar1 of
-                    {_}-> false;
-                    _ -> NewVar1
-                  end,
+arithmetic_process( NewVar  )->  
         %cause the hbase store only strings
         %%in normal case all non-number it must fail
-       case arithmetic_process(NewVar, Context) of 
+       case NewVar of 
             nothing -> false;
             X when is_float(X) -> X;
             X when is_integer(X) -> X;
@@ -1027,21 +988,7 @@ arithmetic_process( Name = {_Var}, Context )->
             X ->
                   {First, _Second} = string:to_float( X++".0" ),
                   my_float( First )
-        end;
-        
-arithmetic_process(SomeThing, _Context )->      
-       case SomeThing of 
-            X when is_float(X) -> X;
-            X when is_integer(X) -> X;
-            X when is_atom(X) -> false;
-            X when is_binary(X)->
-                 {First, _Second} = string:to_float( binary_to_list(X)++".0" ),
-                  my_float( First );
-            X ->
-                  {First,_Second} = string:to_float( X++".0" ),
-                  my_float( First )
-        end
-.
+        end.
 
 a_result(_Operator, _NewVar1, false)->
     false;

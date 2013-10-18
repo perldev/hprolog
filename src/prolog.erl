@@ -148,8 +148,7 @@ only_rules_delete_inner(Prefix)->
 %  | {heir,none}
 create_inner_structs(Prefix, HeirPid)->
     case ets:info(common:get_logical_name(Prefix, ?DYNAMIC_STRUCTS)) of    
-        undefined-> already;
-        _ ->    
+         undefined-> 
             ets:new(common:get_logical_name(Prefix, ?DYNAMIC_STRUCTS),[named_table, set, public, { heir,HeirPid, Prefix } ]),
             %TODO remove this
             put(?DYNAMIC_STRUCTS, common:get_logical_name(Prefix, ?DYNAMIC_STRUCTS) ),
@@ -159,7 +158,9 @@ create_inner_structs(Prefix, HeirPid)->
             ets:new(common:get_logical_name(Prefix, ?META_LINKS),[named_table, bag, public, { heir,HeirPid, Prefix }]),
             %the hbase database is for everything
             ets:new(common:get_logical_name(Prefix, ?HBASE_INDEX), [named_table, bag, public, { heir,HeirPid, Prefix }]),
-            true
+            true;
+         _ -> already
+         
     end
     %%statistic is common
 .
