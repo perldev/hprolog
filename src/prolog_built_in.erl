@@ -1060,7 +1060,7 @@ foldl_linked_rules(FactName, [Head| Tail], TreeEts, ProtoType)->
     RuleCall = list_to_tuple([Rule| ProtoType]),
     ?WAIT("~p start next rule ~p ~p ~n",[{?MODULE,?LINE}, Rule, FactName]),
     
-    Res = repeat(3, ?MODULE, aim, [finish, ?ROOT, RuleCall, dict:new(), 1, TreeEts, ?ROOT ]),
+    Res = repeat(3, prolog, aim, [finish, ?ROOT, RuleCall, dict:new(), 1, TreeEts, ?ROOT ]),
     
     
     ?COUNT("~p finish rule ~p result ~p ~n",[FactName, Rule, Res]),
