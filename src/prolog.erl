@@ -147,11 +147,11 @@ only_rules_delete_inner(Prefix)->
 % Set a process as heir. The heir will inherit the table if the owner terminates. The message {'ETS-TRANSFER',tid(),FromPid,HeirData} will
 %  | {heir,none}
 create_inner_structs(Prefix, HeirPid)->
+    put(?DYNAMIC_STRUCTS, common:get_logical_name(Prefix, ?DYNAMIC_STRUCTS) ),
     case ets:info(common:get_logical_name(Prefix, ?DYNAMIC_STRUCTS)) of    
          undefined-> 
             ets:new(common:get_logical_name(Prefix, ?DYNAMIC_STRUCTS),[named_table, set, public, { heir,HeirPid, Prefix } ]),
             %TODO remove this
-            put(?DYNAMIC_STRUCTS, common:get_logical_name(Prefix, ?DYNAMIC_STRUCTS) ),
             ets:new(common:get_logical_name(Prefix, ?META_WEIGHTS),[named_table, set, public, { heir,HeirPid, Prefix }] ),
             ets:new(common:get_logical_name(Prefix, ?META),[named_table, set, public, { heir,HeirPid, Prefix }]),
             ets:new(common:get_logical_name(Prefix, ?RULES),[named_table, bag, public, { heir,HeirPid, Prefix }]),
