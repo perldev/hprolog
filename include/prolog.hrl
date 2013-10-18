@@ -1,6 +1,6 @@
 
 %%default count of pool to the thrift server
--define(DEFAULT_COUNT_THRIFT, 50).
+-define(DEFAULT_COUNT_THRIFT, 150).
 %% wheather using thrift
 -define(USE_THRIFT, 1).
 -define(SIMPLE_HBASE_ASSERT,1).%%1 or 0 
@@ -10,7 +10,7 @@
 %-define(DEV_BUILD,1). %%this uncommented line means that hbase driver will use avias
 -define(USE_HBASE,1).
 
--define(ENABLE_LOG,1).
+%-define(ENABLE_LOG,1).
 
 %%for connect prolog with web console
 -define(WEB,1).
