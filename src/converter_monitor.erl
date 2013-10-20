@@ -25,7 +25,6 @@ start_link() ->
 %%TODO name spaces
 
 init([LogFun]) ->
-	 common:prepare_log("log/e_"),
 	 inets:start(),
 	 crypto:start(),
 	 ?LOG_APPLICATION,
