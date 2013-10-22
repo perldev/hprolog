@@ -4,8 +4,23 @@
 
 -export([console_write/2, web_console_write/2, console_write_unicode/2,
           web_console_read/1, web_console_writenl/2,
-         console_get_char/1, console_read/1, console_nl/1,generate_id/0, get_logical_name/1 ]).
+         console_get_char/1, console_read/1, console_nl/1,generate_id/0, get_logical_name/1,member_tail/2 ]).
 
+         
+         
+member_tail(Item, [])->
+    false
+;
+member_tail(Item, [Item|Tail])->
+    Tail;
+member_tail(Item, [_|Tail])->
+    member_tail(Item, Tail).
+    
+
+
+
+         
+         
 return_count(TreeEts)->
 
     case catch ets:lookup(TreeEts, aim_counter) of

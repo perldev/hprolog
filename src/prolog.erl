@@ -679,7 +679,8 @@ aim(next_aim_fork_conv,{ [  {true, NewLocalContext, NewPrev}, NextBody,  TreeEts
 %                                 {'=',{'Output'},equal}},
 %                                {'=',{'Output'},other}}}}}}
 %%%OPTIMIZE IT  %%TODO
-aim(default, {NextBody, PrevIndex , Body = {';', {'->', Objection, FirstBody }, SecondBody }, Context, Index, TreeEts, Parent})->
+
+aim(default, {NextBody, PrevIndex , Body = {'->', Objection, SecondBody }, Context, Index, TreeEts, Parent})->
         %%we make just to temp aims with two patterns 
         %%TODO rewrite it without '!' 
        
@@ -688,11 +689,11 @@ aim(default, {NextBody, PrevIndex , Body = {';', {'->', Objection, FirstBody }, 
          #aim_record{ id = Index,
                       prototype = ?LAMBDA,
                       temp_prototype = ?LAMBDA, 
-                      solutions = [ {?LAMBDA,{',',Objection,
-                                                 {',', '!', FirstBody } 
-                                              } 
-                                     }, 
-                                     {?LAMBDA, SecondBody }],
+                      solutions = [ {
+                                    ?LAMBDA,{',',{once, Objection},
+                                                   SecondBody }  
+                                    }
+                                  ],
                       next = one,
                       prev_id = PrevIndex,
                       context = Context,
@@ -702,6 +703,29 @@ aim(default, {NextBody, PrevIndex , Body = {';', {'->', Objection, FirstBody }, 
          NewParams = { Parent, Index, TreeEts},
          [aim, next_aim, NewParams ]
 ;
+% aim(default, {NextBody, PrevIndex , Body = {';', {'->', Objection, FirstBody }, SecondBody }, Context, Index, TreeEts, Parent})->
+%         %%we make just to temp aims with two patterns 
+%         %%TODO rewrite it without '!' 
+%        
+%        
+%          ets:insert(TreeEts,
+%          #aim_record{ id = Index,
+%                       prototype = ?LAMBDA,
+%                       temp_prototype = ?LAMBDA, 
+%                       solutions = [ {?LAMBDA,{',',Objection,
+%                                                  {',', '!', FirstBody } 
+%                                               } 
+%                                      }, 
+%                                      {?LAMBDA, SecondBody }],
+%                       next = one,
+%                       prev_id = PrevIndex,
+%                       context = Context,
+%                       next_leap = NextBody,
+%                       parent = Parent 
+%                       }),
+%          NewParams = { Parent, Index, TreeEts},
+%          [aim, next_aim, NewParams ]
+% ;
 aim(default, {NextBody, PrevIndex ,  MainBody = {'clause', Head_, Body_ }, Context, Index, TreeEts, Parent})->
         
         
@@ -740,11 +764,12 @@ aim(default, {NextBody, PrevIndex ,  MainBody = {'clause', Head_, Body_ }, Conte
 aim(default, {NextBody, PrevIndex , Body = {'once', ProtoType }, Context, Index, TreeEts, Parent})->
           BodyBounded = bound_aim(ProtoType, Context),
        %%we make just to temp aims with two patterns 
+%          { retract, { {'_X_RETRACTING'} } , {',',{ 'call', {'_X_RETRACTING'} }, {'inner_retract___', {'_X_RETRACTING'}  }  } }
          ets:insert(TreeEts,
          #aim_record{ id = Index,
-                      prototype = ?LAMBDA,
-                      temp_prototype = ?LAMBDA, 
-                      solutions = [ {?LAMBDA, {',', BodyBounded, '!' } } ],
+                      prototype = {once, BodyBounded },
+                      temp_prototype = {once, BodyBounded }, 
+                      solutions = [ {once, { {'_X_ONCE'} }, {',', {'call', {'_X_ONCE'} }, '!' } } ],
                       next = one,
                       prev_id = PrevIndex,
                       context = Context,
@@ -1165,7 +1190,7 @@ bound_struct_hack(Var, Context)->
 
 
 process_var_hack({Var})->
-    {_Me,_,Mic} = erlang:now(),
+    {_Me,_Sec,Mic} = erlang:now(),
     %%TODO you must avoid this
     { list_to_atom( "_" ++ integer_to_list(Mic) ) }
 .

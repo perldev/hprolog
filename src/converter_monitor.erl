@@ -28,6 +28,7 @@ init([LogFun]) ->
 	 inets:start(),
 	 crypto:start(),
 	 ?LOG_APPLICATION,
+%%%TODO MOVE it auth_demon of console
          ets:new(?ERWS_LINK, [set, public,named_table ]),
          start_statistic(),
          timer:apply_interval(?UPDATE_STAT_INTERVAL, ?MODULE, update_hbase_stat, [ LogFun ] ),

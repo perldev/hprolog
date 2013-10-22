@@ -51,7 +51,7 @@
 -define(AIM_COUNTER, aim_counter).
 
 
--define(MAX_ETS_BUFFER_SIZE, 20000).
+-define(MAX_ETS_BUFFER_SIZE, 100000).
 
 -define(UPDATE_STAT_INTERVAL,120000).%%interval of updating meta stat of prolog statements
 
@@ -211,7 +211,7 @@
 -define(SL_TIMER,60000). %minute
 % pay(Re,"75000.00",Currency,Date,From_okpo,To_okpo,From_account,To_account,FromName,ToName,FromMfo,ToMfo, Desc,Ip).
 
--define(LIMIT,1). %% LIMIT and GET_FACT_PACK must be equal 
+-define(LIMIT,500). %% LIMIT and GET_FACT_PACK must be equal 
 -define(GET_FACT_PACK, 1). 
 %%TODO realize algorithm for return first element, but in background continue process of receiveing data from hbase
 %%for example we return first element...and save to the memory 1024 records and in next call return from memory
@@ -295,10 +295,15 @@
 'to_float',
 'to_integer',
 'to_list',
+'to_atom', %%realize !!
 'write_unicode',
 'length',
 'localtime',
 'date_diff',
+
+member_tail,
+member,
+
 
 
 'once',

@@ -24,7 +24,7 @@
 -include_lib("thrift/src/hbase_types.hrl").
 -include("prolog.hrl").
 -record(mapper_state,
-        {pids, ets_buffer, ets_stat, out_speed, ets_buffer_size}
+        {pids, ets_buffer, ets_stat, out_speed, ets_buffer_size, process_size=0 }
     ).
 -record(hbase_search_params, { prototype, table, filter } ).
 
@@ -438,7 +438,7 @@ delete_scanner({ State, Scanner })->
     
 process_loop_hbase( start,    ProtoType, State = #mapper_state{ pids = [] } )->
     io:format("~p nothing find ~p ~n",[{?MODULE,?LINE}, ProtoType ]),
-    
+    io:format("Records have been processed ~p~n~n",[State#mapper_state.process_size]),
     receive 
             {PidReciverResult ,get_pack_of_facts} ->
                    PidReciverResult ! [];
@@ -456,6 +456,7 @@ process_loop_hbase( start,    ProtoType, State = #mapper_state{ pids = [] } )->
 ;
 process_loop_hbase(start,   ProtoType,  State )->
         ?WAIT("~p GOT  wait thrift  hbase ~p ~n",[{?MODULE,?LINE}, ProtoType ]),
+        io:format("Records have been processed ~p~n~n",[State#mapper_state.process_size]),
         receive 
             %%as we got first result we can continue the work
             {result, ack} ->
@@ -502,8 +503,9 @@ process_loop_hbase(start,   ProtoType,  State )->
         end
         
 ;
-process_loop_hbase( {hbase_exception, Reason},  ProtoType, _State)->
+process_loop_hbase( {hbase_exception, Reason},  ProtoType, State)->
      io:format("~p GOT  wait thrift  hbase ~p ~n",[{?MODULE,?LINE}, ProtoType ]),
+     io:format("Records have been processed ~p~n~n",[State#mapper_state.process_size]),
 
     receive 
             {PidReciverResult ,get_pack_of_facts} ->
@@ -519,6 +521,7 @@ process_loop_hbase( {hbase_exception, Reason},  ProtoType, _State)->
 ;
 
 process_loop_hbase(normal ,  ProtoType, State = #mapper_state{ets_buffer_size = 0, pids = []  } )->
+       io:format("Records have been processed ~p~n~n",[State#mapper_state.process_size]),
         receive 
             {PidReciverResult ,get_pack_of_facts} ->      
                    PidReciverResult !  [];
@@ -535,11 +538,14 @@ process_loop_hbase(normal ,  ProtoType, State = #mapper_state{ets_buffer_size = 
 %%TODO share EtsBuffer with the prolog leap
 process_loop_hbase(normal ,  ProtoType, State)->
  ?WAIT("~p GOT  wait thrift  hbase ~p ~n",[{?MODULE,?LINE}, ProtoType ]),
+  io:format("Records have been processed ~p~n~n",[State#mapper_state.process_size]),
   receive 
             {PidReciverResult ,get_pack_of_facts} ->
-                    
-                   PidReciverResult !  get_buffer_value(State),
-                   process_loop_hbase( normal, ProtoType,  State#mapper_state{ets_buffer_size = ets:info(State#mapper_state.ets_buffer, size)  } );
+                   Res =  get_buffer_value(State),
+                   PidReciverResult !  Res,
+                   Size =  State#mapper_state.process_size + 1,
+                   process_loop_hbase( normal, ProtoType,  State#mapper_state{ets_buffer_size = ets:info(State#mapper_state.ets_buffer, size),
+                                                            process_size = Size    } );
             {'EXIT', From, normal} -> %%all except of normal it's strange that a recieve this signal
                   ?WAIT("~p GOT  got exit from ~p  delete it from pids array~n",[{?MODULE,?LINE}, From ]), 
                    NewPids = lists:keydelete(From, 1,  State#mapper_state.pids),

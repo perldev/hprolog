@@ -589,7 +589,7 @@ fill_rule_tree( Rule, _Table )->
 .
 
 start_fact_process( Aim, TreeEts, ParentPid)->
-    spawn( ?MODULE, fact_start_link, [ Aim, TreeEts, ParentPid] )
+      spawn( ?MODULE, fact_start_link, [ Aim, TreeEts, ParentPid] )
 .
 %%TODO add rest call to find all facts and rules 
 fact_start_link( Aim,  TreeEts, ParentPid )->
@@ -1859,7 +1859,8 @@ get_list_facts()->
 	case catch  httpc:request( get, { Hbase_Res,[ {"Accept","application/json"}, {"Host", Host}]},
 				    [ {connect_timeout,?DEFAULT_TIMEOUT },
 				      {timeout, ?DEFAULT_TIMEOUT }],
-				    [ {sync, true},{ body_format, binary } ] ) of
+				    [ {sync, true},
+                                      { body_format, binary } ] ) of
                     { ok, { {_NewVersion, 200, _NewReasonPhrase}, _NewHeaders, Text1 } } ->
 			    	?DEBUG("~p process data with ~n ~p ~n~n~n",[{?MODULE,?LINE}, {Text1} ] ),
 % 			    	[ {<<"table">>,
@@ -1874,8 +1875,7 @@ get_list_facts()->
 				lists:map(fun([Elem])-> Elem end, ListTables );
 % 				{"table":[{"name":"pay"},{"name":"table"}]}
 		     Res ->
-			    ?DEBUG("~p got ~p try reach tables again ~n",[ {?MODULE,?LINE}, Res ] ),
-                           
+			   ?DEBUG("~p got ~p try reach tables again ~n",[ {?MODULE,?LINE}, Res ] ),
                            get_list_facts()
                            
 	end

@@ -554,10 +554,25 @@ inner_defined_aim(NextBody, PrevIndex ,Body = {read_str, X }, Context, _Index, T
  
     end
 ;
-
-
-
-
+inner_defined_aim(NextBody, PrevIndex ,Body = {member, X, List }, Context, _Index, TreeEts)->
+    {_, Item, List1 } = prolog_matching:bound_body( Body, Context),
+    
+    
+     case catch( lists:member(Item, List1) ) of
+         {'EXIT', Reason} -> throw({unexpected_return_value, {Reason, Context, Body} });
+         Result -> {Result, Context}
+    end
+;
+inner_defined_aim(NextBody, PrevIndex ,Body = {member_tail, X, List, ResList }, Context, _Index, TreeEts)->
+    
+    {_, Item, List1, ResList1 } = prolog_matching:bound_body( Body, Context),
+    case common:member_tail(Item, List1) of
+        false -> {false, Context};
+        TailList -> 
+                prolog_matching:var_match( { member_tail, Item, List1, ResList1 }, 
+                                           { member_tail, Item, List1, TailList }, Context  )
+    end
+;
 inner_defined_aim(NextBody, PrevIndex ,Body = { 'write', X }, Context, _Index,  TreeEts  ) ->
     X1 = prolog_matching:bound_body( X, Context),
 %     ?DEBUG("~p write ~p ~n",[X, dict:to_list(Context)]),
