@@ -68,12 +68,12 @@ handle_cast(start_statistic, MyState)->
     
     LogFun = 
     case application:get_env(eprolog, stat_log_function) of
-         {ok, {Mod, Func}} ->
+         {ok, Level} ->
                             fun(Format, Params)->
-                                erlang:apply(Mod,Func,[Format, Params])
+                                lager:log(Level,Format, Params)
                             end;
          _->
-                        fun(Format, Params)->
+                            fun(Format, Params)->
                                 do_nothing
                             end
     end,                    
