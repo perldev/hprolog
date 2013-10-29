@@ -59,6 +59,7 @@ scan_file(File) ->
     end.
 
 scan_stream(Fd, L0) ->
+
     case scan_erlog_term(Fd, '', L0) of
 	{ok,Toks,L1} -> [Toks|scan_stream(Fd, L1)];
 	{error,Error,_} -> throw({error,Error});
@@ -118,8 +119,7 @@ read(Io, P) ->
     end.
 
 scan_erlog_term(Io, Prompt, Line) ->
-%     io:format("~p",[io:getopts(Io)] ),
-    io:request(Io, {get_until, unicode, Prompt,erlog_scan,tokens,[Line]}).
+    io:request(Io, {get_until, unicode, Prompt, erlog_scan,tokens,[Line]}).
 
 -record(ops, {op=false,q=true}).
 

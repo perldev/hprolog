@@ -31,13 +31,13 @@ api_start(Prefix)->
 .
 
 start(Prefix)-> 
-    inets:start(),
-    crypto:start(),
-    ?LOG_APPLICATION,
-    case lists:member(converter_monitor, global:registered_names() ) of
-	  false -> converter_monitor:start_link();
-	  true  -> do_nothing
-    end,
+%     inets:start(),
+%     crypto:start(),
+%     ?LOG_APPLICATION,
+%     case lists:member(converter_monitor, global:registered_names() ) of
+% 	  false -> converter_monitor:start_link();
+% 	  true  -> do_nothing
+%     end,
     case prolog:create_inner_structs(Prefix) of
          true->   case (catch ?INCLUDE_HBASE( Prefix ) ) of
                     true-> io:format("~p namespace was loaded ~n",[Prefix]);
@@ -49,7 +49,6 @@ start(Prefix)->
     end,
     server(Prefix) 
 .
-
 
 server(Prefix) ->
     io:fwrite("Prolog Shell V~s (abort with ^G)\n",

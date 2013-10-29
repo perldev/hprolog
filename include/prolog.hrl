@@ -1,21 +1,39 @@
 
 %%default count of pool to the thrift server
--define(DEFAULT_COUNT_THRIFT, 150).
 %% wheather using thrift
 -define(USE_THRIFT, 1).
 -define(SIMPLE_HBASE_ASSERT,1).%%1 or 0 
--define(THRIFT_RECONNECT_TIMEOUT,130000).
--define(THRIFT_MAX_RECONNECT_COUNT, 10).
--define(INTERVAL_INVOKE_SCANNER, 2000000). %microseconds
+
+%-define(THRIFT_RECONNECT_TIMEOUT,130000).
+%-define(THRIFT_MAX_RECONNECT_COUNT, 10).
+%-define(INTERVAL_INVOKE_SCANNER, 2000000). %microseconds
+
+
+-define(DEFAULT_TIMEOUT, 210000).%%miliseconds
+%%miliseconds
+-define(FATAL_WAIT_TIME,210000).% 60000).
+-define(META_INFO_BATCH, 3). %%for using as batch param for scanner meta info
+
+%-define(MAX_ETS_BUFFER_SIZE, 3000000).
+%-define(UPDATE_STAT_INTERVAL,120000).%%interval of updating meta stat of prolog statements
+
+
+
+
+
 %-define(DEV_BUILD,1). %%this uncommented line means that hbase driver will use avias
+
 -define(USE_HBASE,1).
+-define(LOAD_LOG,1).
+
 
 %-define(ENABLE_LOG,1).
 
 %%for connect prolog with web console
--define(WEB,1).
+%%-define(WEB,1).
 
 -define('WRITE_UNICODE'(Parent,X), common:console_write_unicode(Parent, X) ).
+
 
 -ifdef(WEB).
 
@@ -43,18 +61,13 @@
 
 
 
--define(DEFAULT_TIMEOUT, 210000).%%miliseconds
--define(IO_SERVER, io).
-%%miliseconds
--define(FATAL_WAIT_TIME,210000).% 60000).
--define(META_INFO_BATCH, 3). %%for using as batch param for scanner meta info
+
 -define(AIM_COUNTER, aim_counter).
 
 
--define(MAX_ETS_BUFFER_SIZE, 100000).
 
--define(UPDATE_STAT_INTERVAL,120000).%%interval of updating meta stat of prolog statements
 
+-define(IO_SERVER, io).
 
 
 
@@ -82,8 +95,15 @@
 -endif.
 
 
+-ifdef(LOAD_LOG).
 
+-define(LOG_APPLICATION,application:start(lager)).
 
+-else.
+
+-define(LOG_APPLICATION,true).
+
+-endif.
 
 -ifdef(ENABLE_LOG).
 
@@ -96,11 +116,7 @@
 -define(LOGGING, 1).
 -define(SYNC_DEBUG, 1). %%for debug process's calls
 -define(SYNC_COUNT, 1). %%count
--define(LOG_APPLICATION,   application:start(lager) ).
 
--else.
-
--define(LOG_APPLICATION,  true ).
 
 -endif.
 
@@ -131,8 +147,14 @@
 
 -ifdef(USE_HBASE).
 -define('INCLUDE_HBASE'(X),  fact_hbase:load_rules2ets(X) ).
+
+
+-define('THRIFT_LOG'(Str, Pars ),   log).
+
 -else.
 -define('INCLUDE_HBASE'(X),  true ).
+-define('THRIFT_LOG'(Str, Pars ),   true).
+
 -endif.
 
 -ifdef(TIMER).
@@ -188,13 +210,6 @@
 -define(LAMBDA, 'lambda;lambda_function'). 
 
 
--ifdef(LOCAL).
--define(HOST, "hd-test-2.ceb.loc:60050").
--define(HBASE_RES,"http://hd-test-2.ceb.loc:60050/").
--else.
--define(HOST, "127.0.0.1:60050").
--define(HBASE_RES,"http://127.0.0.1:60050/").
--endif.
 
 
 %HBASE COLUMNS
@@ -207,8 +222,8 @@
 -define(RULES_TABLE,"rules").
 -define(META_FACTS,"meta").
 
--define(RABBIT_SPEED,700).
--define(SL_TIMER,60000). %minute
+-define(RABBIT_SPEED, 700).
+-define(SL_TIMER, 60000). %minute
 % pay(Re,"75000.00",Currency,Date,From_okpo,To_okpo,From_account,To_account,FromName,ToName,FromMfo,ToMfo, Desc,Ip).
 
 -define(LIMIT,500). %% LIMIT and GET_FACT_PACK must be equal 
@@ -262,9 +277,9 @@
 -define(HBASE_HOSTS, 
 	[
 	 {"http://hd-test-2.ceb.loc:60050/", "hd-test-2.ceb.loc:60050" },
-	 {"http://es-1.ceb.loc:60050/", "es-1.ceb.loc:60050" },
-	 {"http://es-2.ceb.loc:60050/", "es-2.ceb.loc:60050" },
-	 {"http://es-3.ceb.loc:60050/", "es-3.ceb.loc:60050" }
+	 {"http://hd-test-2.ceb.loc:60050/", "hd-test-2.ceb.loc:60050" },
+	 {"http://hd-test-2.ceb.loc:60050/", "hd-test-2.ceb.loc:60050" },
+	 {"http://hd-test-2.ceb.loc:60050/", "hd-test-2.ceb.loc:60050" }
          ]).
 -define(HBASE_HOSTS_COUNT,4).
 
@@ -304,14 +319,10 @@
 member_tail,
 member,
 
-
-
 'once',
 'atom_length',
-
 'copy_term',
 'clause',
-'inner_retract___',
 'meta',
 'functor',
 'arg',
@@ -332,7 +343,7 @@ member,
 'assertz',
 'assert',
 'asserta',
-'retract',
+'string_tokens',%tokens(String, SeparatorList, X)
 'get_char',
 'read',
 'read_str',

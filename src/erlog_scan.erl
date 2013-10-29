@@ -217,13 +217,14 @@ token_cont(Rest, Line, {error,S}) ->
 
 tokens(Cont, Chars) -> 
 
-%     io:format("~p ~p ~n",[{?MODULE,?LINE} ,{Cont, Chars} ]),
+%    io:format("~p ~p ~n",[{?MODULE,?LINE} ,{Cont, Chars} ]),
 
     tokens(Cont, Chars, 1).
 
 tokens([], Chars, Line) ->
-%     io:format("~p ~p ~n",[{?MODULE,?LINE} ,{Line, Chars} ]),
-
+    
+%     io:format("~p ~p ~n",[{?MODULE,?LINE} ,{ Chars} ]),
+    
     tokens(yystate(), Chars, Line, Chars, 0, Line, [], reject, 0);
 tokens(S = {tokens,State,Line,Tcs,Tlen,Tline,Ts,Action,Alen}, Chars, _) ->
 %     io:format("~p ~p ~n",[{?MODULE,?LINE}, {S, Chars} ]),
