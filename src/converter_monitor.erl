@@ -13,40 +13,31 @@
                 ).
 -include("prolog.hrl").
 
-start_link(LogFun) ->
+start_link(_) ->
+          gen_server:start_link({local, ?MODULE},?MODULE, [ ],[]).
           
-          gen_server:start_link({local, ?MODULE},?MODULE, [ LogFun ],[]).
-
 start_link() ->
-          Fun = fun(Str, Params)-> ?LOG(Str, Params) end,
-	  gen_server:start_link({local, ?MODULE},?MODULE, [ Fun ],[]).
+          gen_server:start_link({local, ?MODULE},?MODULE, [  ],[]).
+
 
 	  
 %%TODO name spaces
 
-init([LogFun]) ->
-	 inets:start(),
-	 crypto:start(),
-	 ?LOG_APPLICATION,
+init([]) ->
 %%%TODO MOVE it auth_demon of console
          ets:new(?ERWS_LINK, [set, public,named_table ]),
-         start_statistic(),
-         timer:apply_interval(?UPDATE_STAT_INTERVAL, ?MODULE, update_hbase_stat, [ LogFun ] ),
+         timer:apply_after(1000, converter_monitor, start_statistic, []),
          { ok, #monitor{proc_table = ets:new( process_information, [named_table ,public ,set ] ) } }
 .
 
 code_change(_OldVsn, State, _Extra) ->
     {ok, State}.
 
+    
+
 start_statistic()->
-    ets:new(?SCANNERS_HOSTS_TABLE,[named_table, set, public]),
-    ets:new(?STAT, [named_table, set, public]),  
-    ets:new(?APPLICATION, [named_table, set, public]),
-    lists:foreach(fun(E)-> ets:insert(?SCANNERS_HOSTS_TABLE, {E,0,0} )  end,?HBASE_HOSTS),
-    ets:new( ?SCANNERS_HOSTS_LINK, [named_table, set, public] )
-
-    .
-
+    gen_server:cast(?MODULE, start_statistic).
+%%TODO remove this
 check_run()->
       case ets:lookup(?APPLICATION, converter_run) of
             []-> false;
@@ -62,8 +53,34 @@ handle_call(Info,_From ,State) ->
 .
 stop() ->
     gen_server:cast(?MODULE, stop).
+    
+handle_cast(start_statistic, MyState)->
 
+    ets:new(?SCANNERS_HOSTS_TABLE,[named_table, set, public]),
+    ets:new(?STAT, [named_table, set, public]),  
+    ets:new(?APPLICATION, [named_table, set, public]),
+    {ok, HbaseHosts} = application:get_env(eprolog, hbase_rest_host),
+    {ok, UpdateStatInterval} = application:get_env(eprolog, update_stat_interval),   
+    
 
+    lists:foreach(fun(E)-> ets:insert(?SCANNERS_HOSTS_TABLE, {E,0,0} )  end, HbaseHosts),
+    ets:new(?SCANNERS_HOSTS_LINK, [named_table, set, public] ),
+    
+    LogFun = 
+    case application:get_env(eprolog, stat_log_function) of
+         {ok, {Mod, Func}} ->
+                            fun(Format, Params)->
+                                erlang:apply(Mod,Func,[Format, Params])
+                            end;
+         _->
+                        fun(Format, Params)->
+                                do_nothing
+                            end
+    end,                    
+    timer:apply_interval(UpdateStatInterval, ?MODULE, update_hbase_stat, [ LogFun ] ),
+    
+    {noreply, MyState}
+;
 handle_cast( { regis_timer_restart,  Pid }, MyState) ->
  	 ?WAIT("~p start monitor ~p ~n",
                            [ { ?MODULE, ?LINE }, Pid ]),

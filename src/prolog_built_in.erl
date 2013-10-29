@@ -1,5 +1,5 @@
 -module(prolog_built_in).
--export([inner_defined_aim/6]).
+-export([inner_defined_aim/6,delete_fact/4]).
 -include("prolog.hrl").
 
 
@@ -234,6 +234,12 @@ inner_defined_aim(NextBody, PrevIndex ,Body = { sqrt, _X1, _X2   }, Context, _In
      R = math:sqrt(X1B),
      prolog_matching:var_match(X2B, R, Context)
 ;
+inner_defined_aim(_NextBody, _PrevIndex ,Body = { string_tokens, String, SeparatorList,  Res   }, Context, _Index, _TreeEts )->
+   
+   {string_tokens, StringB, SeparatorListB,  ResB } = prolog_matching:bound_body( Body, Context), 
+   ResFact = string:tokens(StringB,SeparatorListB ),
+   prolog_matching:var_match(Res, ResFact, Context)
+;
 inner_defined_aim(_NextBody, PrevIndex ,Body_ = { 'atom_length', Name, _Length  }, Context, _Index, _TreeEts  ) ->
  
         Body = prolog_matching:bound_body( Body_, Context),
@@ -282,13 +288,12 @@ inner_defined_aim(_NextBody, PrevIndex ,{ 'assert', Body   }, Context, _Index, T
 inner_defined_aim(_NextBody, PrevIndex ,{ 'asserta', Body   }, Context, _Index, TreeEts  ) when is_tuple(Body)->
       add_fact(Context, Body, first, TreeEts, ?SIMPLE_HBASE_ASSERT)
 ;
-inner_defined_aim(_NextBody, PrevIndex, {'inner_retract___', Body }, Context, _index, TreeEts)->
-%%only facts
-%%TODO rules
-     delete_fact(TreeEts, Body, Context,?SIMPLE_HBASE_ASSERT),
-     %%it's alway true cause this system predicat  must be used before call(X)
-     {true, Context}
-; 
+% inner_defined_aim(_NextBody, PrevIndex, {'inner_retract___', Body }, Context, _index, TreeEts)->
+% %%only facts
+% %%TODO rules
+%      %%it's alway true cause this system predicat  must be used before call(X)
+%      {true, Context}
+% ; 
 inner_defined_aim(_NextBody, PrevIndex, Body = { 'meta', _FactName, _ParamName, Val }, Context, _Index, TreeEts  )->
     NewBody = prolog_matching:bound_body(Body, Context),
     Res = fact_hbase:meta_info(NewBody,  TreeEts),     
@@ -517,13 +522,7 @@ inner_defined_aim(NextBody, PrevIndex ,{ 'assert', SourceFact,  ForeignFact, Rul
                   {SourceFact, ForeignFact, RuleName  }),
       {true, Context}
 ;
-%%del only link
-inner_defined_aim(NextBody, PrevIndex ,{ 'retract', FirstFact, SecondFact } , Context, _Index, TreeEts  ) when is_atom(FirstFact)->
-        erlang:apply(?MODULE, dynamic_del_link, [ FirstFact, SecondFact, TreeEts ] ),
-        ?LOG("~p del ~p  yes ~n",[ {?MODULE,?LINE}, {  FirstFact, SecondFact } ] ), 
-        %%all this Previndex just for retract and !
-        {true, Context}
-;
+
 %%%inner predicates of our system
 inner_defined_aim(NextBody, PrevIndex ,Body = {get_char, X }, Context, _Index, TreeEts)-> 
     TempX = ?GET_CHAR(TreeEts), %%only one character
@@ -836,7 +835,7 @@ delete_fact(TreeEts, Body, Context ,1)->
                      true ->
                         %%TODO BOUNDING of CONSTANS
                         ?DEV_DEBUG("~p delete rule ~p ~n", [{?MODULE,?LINE},BodyBounded]),
-                        erlang:apply(?MODULE, dynamic_del_rule, [BodyBounded, TreeEts]);
+                        dynamic_del_rule(BodyBounded, TreeEts);
 %                         unlink(Pid);
                         
                      false ->

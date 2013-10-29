@@ -383,7 +383,7 @@ aim(next_in_current_leap, { T , TreeEts, ThatLocalContext, Prev })->
      NewIndex2 = get_index( Prev  ), 
      case  NewT of
           #aim_record{prototype = ?LAMBDA}->
-                ?DEV_DEBUG("~p process next_in_current_leap lambda ~p",[{?MODULE,?LINE}, T]),
+                ?DEV_DEBUG("~p process next_in_current_leap lambda ~p",[{?MODULE,?LINE}, NewT]),
                 NewParams = { NewT#aim_record.next_leap , ThatLocalContext, T,
                               NewIndex2, TreeEts, NewT#aim_record.parent },               
                 [aim, conv3 , NewParams ];
@@ -402,30 +402,8 @@ aim(next_aim, { _ ,?ROOT, _ } )->
 aim(next_aim, {?ROOT, TreeEts})-> %% for console???
         false
 ; 
-aim(next_aim, { Index ,cut, TreeEts } )->
-        
-        %%cause there can be root leap
-        Res = ets:lookup(TreeEts, Index),
-        ?DEV_DEBUG("~p cut aim ~p ~n",[{?MODULE,?LINE}, Res ]),
-        case Res of 
-                []->
-                    false;
-                [Record = #aim_record{ prototype=?LAMBDA }] ->
-                    ets:delete(TreeEts, Record),
-                    [aim, next_aim, { Record#aim_record.parent, cut, TreeEts } ];
-                 [Record] ->
-                    ets:delete(TreeEts, Record),
-                    [aim, next_aim,  {  Record#aim_record.parent, Record#aim_record.prev_id, TreeEts} ]
-       end 
-;
-aim(next_aim, { Parent ,finish, TreeEts } )->
-
-        ?DEV_DEBUG("~p process aim ~p ~n",[{?MODULE,?LINE}, Parent ]),
-        [aim, next_aim, {Parent, TreeEts} ]
-        
-;
 aim(next_aim,  {finish,_, TreeEts} )-> %%parent is not able be a finish
-        throw({'EXIT',unexpected_finish,  TreeEts } );     
+        throw({'EXIT',unexpected_finish,  ets:tab2list(TreeEts) } );     
         
 aim(next_aim, {Index, TreeEts})-> %% for console???
 
@@ -437,8 +415,7 @@ aim(next_aim, {Index, TreeEts})-> %% for console???
 aim(next_aim,  {Parent, Index, TreeEts} )->
       Res = ets:lookup(TreeEts, Index),  
       ?DEV_DEBUG("~p process aim ~p ~n",[{?MODULE,?LINE}, {Res, Parent, Index} ]),
-%       ?PAUSE,
-      %%UPDATE counter
+
       case Res of
    
         [ T = #aim_record{solutions = [], next = one }] ->%%one  it's pattern matching 
@@ -446,23 +423,12 @@ aim(next_aim,  {Parent, Index, TreeEts} )->
                 ets:delete(TreeEts, T#aim_record.id),%% it doesn't need us now
                 NewParams = {T#aim_record.parent, T#aim_record.prev_id, TreeEts},
                 [aim ,next_aim, NewParams]; %go to the prev aim
-                
-
-                
-%%TODO think a lot about overhead 
+        %%TODO think a lot about overhead 
         [ T = #aim_record{next = hbase, solutions = Pid} ]-> %%one  it's pattern matching 
                  Pattern = fact_hbase:get_facts(Pid),
                  ?DEV_DEBUG("~p work pattern  ~p ~n",[{?MODULE,?LINE},  Pattern ]),
                  %%TODO you MUST AVOID THIS LINE
                  [aim, process_next_hbase, {Pattern, T, TreeEts, T#aim_record.parent}];
-%                          ProcessRes = {true, _Context, _Prev} -> 
-%                              ProcessRes;
-%                          false ->
-%                              ?DEV_DEBUG("~p work to previouse  ~p ~n",[{?MODULE,?LINE},  Index ]),
-%                              aim(next_aim, { Parent, Index, TreeEts } );
-%                           Unexpected ->
-%                              throw({'EXIT',unexpected_return_value, {Unexpected, T, TreeEts} } )
-%                  end;
 
 
         [ T = #aim_record{next = one} ]-> %%one  it's pattern matching 
@@ -479,10 +445,7 @@ aim(next_aim,  {Parent, Index, TreeEts} )->
 
                      ets:insert(TreeEts, T#aim_record{ next = one}),
                      [aim, next_aim,  {T#aim_record.parent, NextSolution, TreeEts } ];  
-        %%TODO why it is HERE ?? because of '!'
          []->
-%             aim(next_aim, { Parent,TreeEts}, BackList );
-%             ?DEV_DEBUG("~p some unexpectet  ~p ~n",[{?MODULE,?LINE},  ets:tab2list(TreeEts) ]),
               throw({'EXIT',unexpected_tree_leap, {[], TreeEts} } );
          Unexpected ->
               throw({'EXIT',unexpected_tree_leap, {Unexpected, TreeEts} } )
@@ -492,6 +455,7 @@ aim(process_next_hbase, {[], T, TreeEts, Parent })->
         ets:delete( TreeEts, T#aim_record.id ),%% may be do it separate 
         NewParams = {Parent, T#aim_record.prev_id, TreeEts},
         [aim, next_aim, NewParams];
+        
 aim(process_next_hbase,{ [Res], T, TreeEts, Parent})->
         %    Res = [{}]
         %%TODO remove this reorganization 
@@ -500,10 +464,10 @@ aim(process_next_hbase,{ [Res], T, TreeEts, Parent})->
         BoundProtoType = list_to_tuple( [Name|tuple_to_list( Res )] ),
         %%MUST BE TRUE
         ?DEBUG("~p bound temp aim  ~p ~n",[{?MODULE,?LINE},
-                                           {T#aim_record.prototype, T#aim_record.temp_prototype, BoundProtoType }]),
+                                           {Res, T#aim_record.prototype, T#aim_record.temp_prototype, BoundProtoType }]),
                                   
         %TODO mistakes there                                    
-        { true, NewLocalContext } = prolog_matching:var_match(BoundProtoType, T#aim_record.prototype, T#aim_record.context),
+        { true, NewLocalContext } = prolog_matching:var_match( T#aim_record.prototype, BoundProtoType, T#aim_record.context),
         %%TODO remove all logs with dict:to_list functions
         ?DEBUG("~p process FACT ~p ~n",[{?MODULE,?LINE},  {
                                                             T#aim_record.prototype,
@@ -553,8 +517,15 @@ aim(process_next,{ { true, NewContext, NextBody, Tail }, T, TreeEts, Parent })->
          
          
          ?DEV_DEBUG("~p new head for stack pattern  ~n",[{?MODULE,?LINE} ]),
-         NewParams =  { NextBody, NewContext, finish, NewIndex, TreeEts,  T#aim_record.id },
+         NewParams =  { NextBody, NewContext, T#aim_record.id , NewIndex, TreeEts,  T#aim_record.id },
          [aim, conv3, NewParams]
+;
+aim(default, {NextBody, PrevIndex ,{ 'retract', FirstFact, SecondFact } , Context, Index, TreeEts, Parent  } ) when is_atom(FirstFact)->
+        prolog_built_in:dynamic_del_link( FirstFact, SecondFact, TreeEts  ),
+        ?LOG("~p del ~p  yes ~n",[ {?MODULE,?LINE}, {  FirstFact, SecondFact } ] ), 
+        %%all this Previndex just for retract and !
+        NewParams = {NextBody, Context, PrevIndex,  Index, TreeEts, Parent },
+        [aim, conv3 , NewParams ]
 ;
 aim(default, {NextBody, PrevIndex , {'retract', {':-', Obj,'true' }  }, Context, Index, TreeEts, Parent}) when is_tuple(Obj) ->
   NewParams =  { NextBody, PrevIndex , {'retract', Obj }, Context, Index, TreeEts, Parent },
@@ -564,6 +535,9 @@ aim(default, {NextBody, PrevIndex , {'retract', {':-', Obj, Body }  }, Context, 
 %%% TODO retraction clause rules
         true
 ;
+
+%%del only link
+
 aim(default, {NextBody, PrevIndex , {'retract', Body }, Context, Index, TreeEts, Parent})->
        %%we make just to temp aims with two patterns 
          BodyBounded = prolog_matching:bound_body(Body, Context),
@@ -571,7 +545,7 @@ aim(default, {NextBody, PrevIndex , {'retract', Body }, Context, Index, TreeEts,
          #aim_record{ id = Index,
                       prototype = { retract,  BodyBounded },
                       temp_prototype = { retract, BodyBounded  }, 
-                      solutions = [ { retract, { {'_X_RETRACTING'} } , {',',{ 'call', {'_X_RETRACTING'} }, {'inner_retract___', {'_X_RETRACTING'}  }  } } ],
+                      solutions = [ { retract, { {'_X_RETRACTING'} } , {',',{ 'call', {'_X_RETRACTING'} }, {'__inner_retract', {'_X_RETRACTING'}  }  } } ],
                       next = one,
                       prev_id = PrevIndex,
                       context = Context,
@@ -581,12 +555,19 @@ aim(default, {NextBody, PrevIndex , {'retract', Body }, Context, Index, TreeEts,
          NewParams = { Parent, Index, TreeEts },
          [aim, next_aim, NewParams]
 ;
-aim(default, { _NextBody, PrevIndex ,'fail', _Context, _Index, TreeEts, Parent  }) ->
+aim(default, { _NextBody, PrevIndex ,'fail', Context, Index, TreeEts, Parent  }) ->
+        ?DEBUG("~p tree contain ~p ",[ {?MODULE,?LINE},{PrevIndex, Parent}]),
+        ?TRACE(Index, TreeEts,  'false', Context),
        NewParams = {Parent, PrevIndex, TreeEts },
        [aim, next_aim, NewParams] %%go back
 ;
-aim(default, { _NextBody, PrevIndex ,'false', _Context, _Index, TreeEts, Parent }) ->
+aim(default, { _NextBody, PrevIndex ,'false', Context, Index, TreeEts, Parent }) ->
+       ?DEBUG("~p tree contain ~p ",[ {?MODULE,?LINE},{PrevIndex, Parent}]),
+
+      ?TRACE(Index, TreeEts,  'false', Context),
+      
        NewParams = {Parent, PrevIndex, TreeEts },
+       
        [aim, next_aim, NewParams ]
 ;  
 aim(default, { NextBody, PrevIndex ,'nl', Context, Index, TreeEts, Parent } ) ->
@@ -595,6 +576,9 @@ aim(default, { NextBody, PrevIndex ,'nl', Context, Index, TreeEts, Parent } ) ->
         [aim,conv3, NewParams]
 ;  
 aim(default, { NextBody, PrevIndex ,'true', Context,  Index, TreeEts, Parent }) ->
+       ?DEBUG("~p tree contain ~p ",[ {?MODULE,?LINE},{PrevIndex, Parent}]),
+
+        ?TRACE(Index, TreeEts,  'true', Context),
          NewParams = {NextBody, Context, PrevIndex,  Index, TreeEts, Parent },
          [aim, conv3 , NewParams ]
 ;  
@@ -608,24 +592,14 @@ aim(default, { NextBody, PrevIndex ,fact_statistic, Context, Index, TreeEts, Par
          NewParams = { NextBody, Context, PrevIndex,  Index, TreeEts, Parent }, 
          [aim, conv3 , NewParams]
 ;   
-aim(default, { NextBody, PrevIndex,'!', Context, Index , TreeEts, Parent })->
+aim(default, { NextBody, PrevIndex, '!', Context, Index , TreeEts, Parent })->
          ?DEBUG("~p  parent cut  ~p", [{?MODULE,?LINE}, {NextBody, PrevIndex,'!', Context, Index , TreeEts, Parent} ]),
 %        hardworking procedure of cutting another  solution
-%         cut_all_solutions(TreeEts, PrevIndex, Parent ),
-%        CUT all solution and current leap tell that there is a finish
-         ets:insert(TreeEts,
-                #aim_record{ id = Index,
-                      prototype = '!',
-                      temp_prototype = '!', 
-                      solutions = [],
-                      next = cut,
-                      prev_id = cut,
-                      context = Context,
-                      next_leap = NextBody,
-                      parent = Parent 
-                      }),
-         NewIndex = get_index(Index),
-         NewParams = { NextBody, Context, Index, NewIndex , TreeEts, Parent }, 
+         ?TRACE(Index, TreeEts, '!', Context),
+         cut_parent(Parent, TreeEts),
+         spawn(?MODULE, cut_all_solutions, [TreeEts, PrevIndex, Parent ]),
+         ?TRACE2(Index, TreeEts, '!', Context),
+         NewParams = { NextBody, Context, Parent, Index , TreeEts, Parent }, 
          [aim, conv3 , NewParams ]
 ;
 % it is 'not' !!!
@@ -678,19 +652,48 @@ aim(next_aim_fork_conv,{ [  {true, NewLocalContext, NewPrev}, NextBody,  TreeEts
 %                                 {'=:=',{'N'},{'M'}},
 %                                 {'=',{'Output'},equal}},
 %                                {'=',{'Output'},other}}}}}}
-%%%OPTIMIZE IT  %%TODO
 
-aim(default, {NextBody, PrevIndex , Body = {'->', Objection, SecondBody }, Context, Index, TreeEts, Parent})->
+aim(default, {NextBody, PrevIndex , Body = { ';', {'->', Objection, SecondBody }, Other }, Context, Index, TreeEts, Parent})->
         %%we make just to temp aims with two patterns 
-        %%TODO rewrite it without '!' 
        
+        ?TRACE(Index, TreeEts, {'->',Objection}, Context),
        
          ets:insert(TreeEts,
          #aim_record{ id = Index,
                       prototype = ?LAMBDA,
                       temp_prototype = ?LAMBDA, 
                       solutions = [ {
-                                    ?LAMBDA,{',',{once, Objection},
+                                    ?LAMBDA,{',',{ once, Objection},
+                                                 {',',{'__cut_solution', Index},
+                                                   SecondBody }  }
+                                    },
+                                    {?LAMBDA, Other }
+                                  ],
+                      next = one,
+                      prev_id = PrevIndex,
+                      context = Context,
+                      next_leap = NextBody,
+                      parent = Parent 
+                      }),
+         
+         
+         
+%          [aim, default,{NextBody, PrevIndex , Body = { ';', {'->', Objection, SecondBody }, Other }, Context, Index, TreeEts, Parent}]
+         NewParams = { Parent, Index, TreeEts},
+         
+         [aim, next_aim, NewParams ]
+;
+aim(default, {NextBody, PrevIndex , Body = {'->', Objection, SecondBody }, Context, Index, TreeEts, Parent})->
+        %%we make just to temp aims with two patterns 
+        %%TODO rewrite it without '!' 
+        ?TRACE(Index, TreeEts, {'->',Objection}, Context),
+       
+         ets:insert(TreeEts,
+         #aim_record{ id = Index,
+                      prototype = ?LAMBDA,
+                      temp_prototype = ?LAMBDA, 
+                      solutions = [ {
+                                    ?LAMBDA,{',',{ once, Objection},
                                                    SecondBody }  
                                     }
                                   ],
@@ -703,29 +706,18 @@ aim(default, {NextBody, PrevIndex , Body = {'->', Objection, SecondBody }, Conte
          NewParams = { Parent, Index, TreeEts},
          [aim, next_aim, NewParams ]
 ;
-% aim(default, {NextBody, PrevIndex , Body = {';', {'->', Objection, FirstBody }, SecondBody }, Context, Index, TreeEts, Parent})->
-%         %%we make just to temp aims with two patterns 
-%         %%TODO rewrite it without '!' 
-%        
-%        
-%          ets:insert(TreeEts,
-%          #aim_record{ id = Index,
-%                       prototype = ?LAMBDA,
-%                       temp_prototype = ?LAMBDA, 
-%                       solutions = [ {?LAMBDA,{',',Objection,
-%                                                  {',', '!', FirstBody } 
-%                                               } 
-%                                      }, 
-%                                      {?LAMBDA, SecondBody }],
-%                       next = one,
-%                       prev_id = PrevIndex,
-%                       context = Context,
-%                       next_leap = NextBody,
-%                       parent = Parent 
-%                       }),
-%          NewParams = { Parent, Index, TreeEts},
-%          [aim, next_aim, NewParams ]
-% ;
+aim(default, {NextBody, PrevIndex , {'__cut_solution', Head }, Context, Index, TreeEts, Parent})->
+        [AimRecord] = ets:lookup(TreeEts, Head),
+        ets:insert(TreeEts, AimRecord#aim_record{next = one, solutions = [] }),
+        NewParams = { NextBody, Context, PrevIndex,  Index, TreeEts, Parent },
+        [aim, conv3, NewParams]
+        
+;
+aim(default, {NextBody, PrevIndex , {'__inner_retract', Body }, Context, Index, TreeEts, Parent})->
+        prolog_built_in:delete_fact(TreeEts, Body, Context,?SIMPLE_HBASE_ASSERT),
+        NewParams = { NextBody, Context, PrevIndex,  Index, TreeEts, Parent },
+        [aim, conv3, NewParams]
+;
 aim(default, {NextBody, PrevIndex ,  MainBody = {'clause', Head_, Body_ }, Context, Index, TreeEts, Parent})->
         
         
@@ -764,8 +756,9 @@ aim(default, {NextBody, PrevIndex ,  MainBody = {'clause', Head_, Body_ }, Conte
 aim(default, {NextBody, PrevIndex , Body = {'once', ProtoType }, Context, Index, TreeEts, Parent})->
           BodyBounded = bound_aim(ProtoType, Context),
        %%we make just to temp aims with two patterns 
-%          { retract, { {'_X_RETRACTING'} } , {',',{ 'call', {'_X_RETRACTING'} }, {'inner_retract___', {'_X_RETRACTING'}  }  } }
-         ets:insert(TreeEts,
+
+       ?TRACE(Index, TreeEts, Body, Context),
+        ets:insert(TreeEts,
          #aim_record{ id = Index,
                       prototype = {once, BodyBounded },
                       temp_prototype = {once, BodyBounded }, 
@@ -798,12 +791,17 @@ aim(default, {NextBody, PrevIndex , Body = {';', FirstBody, SecondBody }, Contex
 
 %%YES im very lazy ;)
 aim(default, { NextBody, PrevIndex, {'call', ProtoType }, Context, Index, TreeEts, Parent })->    
+    ?TRACE(Index, TreeEts,  {'call', ProtoType }, Context),
     BodyBounded = bound_aim(ProtoType, Context),
+    ?TRACE2(Index, TreeEts,  {'call', BodyBounded }, Context),
+    
     NewParams = { NextBody, PrevIndex, BodyBounded, Context, Index, TreeEts, Parent},
     [aim, default, NewParams]
 ;
 aim(default, {NextBody, PrevIndex, ProtoType, Context, Index, TreeEts, Parent }) when is_atom(ProtoType)->
+    
     NewParams = {NextBody, PrevIndex, ProtoType, Context, Index, TreeEts, Parent, ?SIMPLE_HBASE_ASSERT},
+    
     [aim, user_defined_aim, NewParams ]
 ;
 aim(default, {NextBody, PrevIndex, ProtoType, Context, Index, TreeEts, Parent })->
@@ -881,7 +879,7 @@ aim(hbase_user_defined_aim,{[], NextBody, PrevIndex, ProtoType, Context, Index, 
          [aim, next_aim,  NewParams ]
 
 ;
-aim(hbase_user_defined_aim,{RuleList, NextBody, PrevIndex, ProtoType, Context, Index, TreeEts, Parent})->
+aim(hbase_user_defined_aim, {RuleList, NextBody, PrevIndex, ProtoType, Context, Index, TreeEts, Parent} )->
          BoundProtoType = bound_aim(ProtoType, Context),
          {TempSearch, _NewContext} = prolog_shell:make_temp_aim(BoundProtoType),%% think about it
          %%pattern matching like one aim
@@ -1205,20 +1203,18 @@ bound_aim(ProtoType, Context)->
 
 %%%HARD solution, that hase scense only with hbase
 cut_all_solutions(TreeEts, Parent, Parent )->
-    true;
-cut_all_solutions(TreeEts, finish, Parent )->
-    true;
+    exit(normal);
 cut_all_solutions(TreeEts, 1, Parent )->
-    true;
+    exit(normal);
 cut_all_solutions(TreeEts, PrevIndex, Parent )->
- 
+%        io:format("~p delete another solution ~p~n",[{?MODULE,?LINE}, {PrevIndex, Parent }]),
+
      [ AimRecord ] = ets:lookup(TreeEts, PrevIndex),
      %%TODO delete there delete hbase pids
-      io:format("~p delete another solution ~p~n",[{?MODULE,?LINE}, AimRecord]),
- 
+%       io:format("~p delete another solution ~p~n",[{?MODULE,?LINE}, AimRecord]),
       case AimRecord of
          #aim_record{  next = hbase, solutions = HbasePid }->
-                 exit(HbasePid, finished),
+                 exit(HbasePid, cut_solution),
                  ets:delete(TreeEts, AimRecord#aim_record.id  )
                  ;
          #aim_record{  next = one }->
@@ -1226,9 +1222,28 @@ cut_all_solutions(TreeEts, PrevIndex, Parent )->
          _ ->
              ets:delete(TreeEts, AimRecord#aim_record.id),
              cut_all_solutions(TreeEts, AimRecord#aim_record.next, AimRecord#aim_record.id )
-             
       end,
       cut_all_solutions(TreeEts, AimRecord#aim_record.prev_id, Parent ).
 
-
+      
+      
+cut_parent(Parent, TreeEts)->
+    ?DEBUG("~p  delete ~p",[{?MODULE,?LINE}, Parent]),
+    case  ets:lookup(TreeEts, Parent) of
+        [AimRecord = #aim_record{prototype = ?LAMBDA } ]->
+                ets:insert(TreeEts, AimRecord#aim_record{  next = one, solutions = [] }),
+                cut_parent(AimRecord#aim_record.parent, TreeEts)                
+                ;
+        [ AimRecord ] ->       
+                ets:insert(TreeEts, AimRecord#aim_record{  next = one, solutions = [] }),                
+                case  ets:lookup(TreeEts, AimRecord#aim_record.parent) of
+                    []-> ?DEBUG("~p nothing to delete ~p",[{?MODULE,?LINE}, AimRecord#aim_record.parent]);
+                    [AimRecord1]->
+                        ets:insert(TreeEts, AimRecord1#aim_record{  next = one  })                
+                end;       
+                
+         []->
+            ?DEBUG("~p nothing to delete ~p",[{?MODULE,?LINE},Parent])
+    end
+.
 

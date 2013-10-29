@@ -3,8 +3,14 @@
         {vsn, "1"},  
         {registered, []},  
         {applications, [  
-            kernel,stdlib,crypto,cowboy,  
-            compiler,syntax_tools  
+            kernel,
+            stdlib,
+            crypto,
+            inets,
+            lager,
+            compiler,
+            syntax_tools  
         ]},  
+        {mod, { eprolog_app, []}},  
         {env, []}  
 ]}.  

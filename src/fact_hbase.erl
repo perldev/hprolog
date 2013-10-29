@@ -64,7 +64,7 @@ process_ets_key(Key, Links, Weights, Acum)->
                                 [ WeightsB ] = ets:lookup(Weights, NameFact),
                                 [ WeightsA ] = ets:lookup(Weights, NameFact1),
                                 ?DEBUG("~p compare weights ~p ~n",[{?MODULE,?LINE}, {WeightsB, WeightsA }]),
-                                erlang:element(3,WeightsB) > erlang:element(3,WeightsA)                  
+                                erlang:element(3, WeightsB) > erlang:element(3,WeightsA)                  
                         end, List),
     NewKey = ets:next(Links, Key),
     process_ets_key(NewKey, Links, Weights, [List1|Acum] )
@@ -115,19 +115,11 @@ load_rules2ets(Prefix)->
       get_meta_facts(ScannerUrlMeta, common:get_logical_name(Prefix, ?META) ),
       get_and_load_rules(ScannerUrl, common:get_logical_name(Prefix,?RULES) ),
       weight_prolog_sort(Prefix),
-      start_thrift_pool(?USE_THRIFT),      
       true
      
 .
 
 
-start_thrift_pool(0)->
-    false;
-start_thrift_pool(1)->
-    case lists:member(thrift_connection_pool,  global:registered_names() ) of
-          false -> thrift_connection_pool:start_link(?DEFAULT_COUNT_THRIFT);
-          true  -> do_nothing
-    end.
 
 
 
@@ -604,7 +596,7 @@ fact_start_link( Aim,  TreeEts, ParentPid )->
                         fact_start_link_hbase(Aim,  TreeEts, ParentPid);
                     false -> 
 			 ?DEBUG("~p delete on start ~p ~n",[{?MODULE,?LINE},  Name  ]),
-			 ParentPid ! non_exist_exception,
+			 ParentPid ! {non_exist_exception, Name},
 			 exit(normal)
       end
      
@@ -969,19 +961,19 @@ get_facts( Pid )-> %%in this will not work method of cutting logic results
 
 
 call(Pid,  Atom )->
-    ?DEBUG("~p call to hbase reducer  ~p ~n",[{?MODULE,?LINE},{Pid,Atom} ]),
+    ?THRIFT_LOG("~p call to hbase reducer  ~p ~n",[{?MODULE,?LINE},{Pid,Atom} ]),
     Pid !   { self(), Atom } ,
-    ?WAIT("~p regis  wait in  inner fact call  ~p ~n",[{?MODULE,?LINE},{Atom, Pid} ]),
+    ?THRIFT_LOG("~p regis  wait in  inner fact call  ~p ~n",[{?MODULE,?LINE},{Atom, Pid} ]),
     receive 
          {hbase_exception, Reason}->
               throw({'EXIT',hbase_exception, Reason  } );
 	 Result ->
-	    ?WAIT("~p GOT  wait in  inner fact call  ~p ~n",[{?MODULE,?LINE},{Atom, Pid} ]),
-	    ?DEBUG("~p  reducer result ~p  ~n",[{?MODULE,?LINE}, Result ]),
+	    ?THRIFT_LOG("~p GOT  wait in  inner fact call  ~p ~n",[{?MODULE,?LINE},{Atom, Pid} ]),
+	    ?THRIFT_LOG("~p  reducer result ~p  ~n",[{?MODULE,?LINE}, Result ]),
 	    Result
 	after ?FATAL_WAIT_TIME ->
-              ?WAIT("~p GOT  TIMEOUT in  inner fact call  ~p ~n",[{?MODULE,?LINE},{Atom, Pid} ]),
-	      ?DEBUG("~p  reducer didn't return result   ~n",[{?MODULE,?LINE}]),
+              ?THRIFT_LOG("~p GOT  TIMEOUT in  inner fact call  ~p ~n",[{?MODULE,?LINE},{Atom, Pid} ]),
+	      ?THRIFT_LOG("~p  reducer didn't return result   ~n",[{?MODULE,?LINE}]),
 	      throw({'EXIT',timeout_hbase, ?FATAL_WAIT_TIME  } )
     end     
 .
@@ -1009,7 +1001,8 @@ start_recr(Facts, ProtoType)->
 				      end, {<<>>,InIndex}, ProtoType ),
 	  Size = length(ProtoType),
          ?DEBUG("~p scanner filters ~p ~n",[{?MODULE,?LINE}, Filters ]),
-	  Main = generate_scanner( ?LIMIT*Size , Filters),
+          {ok, Limit } = application:get_env(eprolog, scanner_limit),
+	  Main = generate_scanner( Limit*Size , Filters),
 	  ?DEBUG("~p Generate scanner for hbase ~p ~n",[{?MODULE,?LINE},Main ]),
 	  Scanner =  get_scanner(Facts, Main),
 	  List = get_data( Scanner, ProtoType),
@@ -1317,6 +1310,7 @@ hbase_del_index(IndexTable, NameSpace, Type, Params)->
         
 .
 
+%%TODO move to thrift
 index_work_add(Name, Params, TreeEts)->
      Key = generate_key( Params ),
      Table = common:get_logical_name( TreeEts, ?HBASE_INDEX),
@@ -1897,7 +1891,7 @@ get_val(E, Key)->
 	  base64:decode(Value)
 .
 
-
+%%TODO DEPRECATE USING REST
 process_data(<<"">>, _ProtoType)->
     [];
 process_data([], _ProtoType)->
@@ -1937,7 +1931,6 @@ process_data(Text1, ProtoType)->
 				
 		  end, Result),
 	?DEBUG("~p result facts ~p ~n",[{?MODULE,?LINE}, Got ] ),
-	  
 	Got
 .
 
