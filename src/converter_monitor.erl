@@ -25,7 +25,6 @@ start_link() ->
 
 init([]) ->
 %%%TODO MOVE it auth_demon of console
-         ets:new(?ERWS_LINK, [set, public,named_table ]),
          timer:apply_after(1000, converter_monitor, start_statistic, []),
          { ok, #monitor{proc_table = ets:new( process_information, [named_table ,public ,set ] ) } }
 .
@@ -185,7 +184,7 @@ start_converter()->
 update_hbase_stat(Fun)->
 %       NameSpaces = fact_hbase:get_list_namespaces(),
       Stat = ets:tab2list(?STAT),
-      Fun("~p update  stat of hbase   ~p~n",[{?MODULE,?LINE},  Stat ]),
+      Fun("~p update  stat of hbase ~p ~n",[ {?MODULE,?LINE},  Stat ]),
       lists:foldl(fun process_stat/2,  Fun, Stat  ),	 
       ets:delete_all_objects(?STAT).
       

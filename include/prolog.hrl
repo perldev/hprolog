@@ -237,7 +237,6 @@
 
 -define(RESTART_CONVERTER, 120*1000).
 
--define(ERWS_LINK, erws_link_trace).
 -define(DYNAMIC_STRUCTS, op_structs).
 -define(INNER, inner).
 -define(RULES, rules_inner).
