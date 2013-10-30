@@ -145,7 +145,7 @@ handle_cast( { return,  NewState = {Key, _NewConn} }, MyState) ->
         end;         
 handle_cast( { reconnect,  hbase_thrift_exception, Reason }, MyState) -> 
         ?THRIFT_LOG("~p got back new connection  ~p reason is ~p ~n",
-                           [ { ?MODULE, ?LINE }, Key, Reason ]),
+                           [ { ?MODULE, ?LINE },  Reason ]),
         { noreply, MyState } ;
 handle_cast( { reconnect,  Key, Reason }, MyState) ->
         ?THRIFT_LOG("~p got back new connection  ~p reason is ~p ~n",
