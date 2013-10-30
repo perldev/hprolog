@@ -30,7 +30,7 @@
 %-define(ENABLE_LOG,1).
 
 %%for connect prolog with web console
-%%-define(WEB,1).
+-define(WEB,1).
 
 -define('WRITE_UNICODE'(Parent,X), common:console_write_unicode(Parent, X) ).
 
