@@ -69,7 +69,7 @@ handle_cast(start_statistic, MyState)->
     case application:get_env(eprolog, stat_log_function) of
          {ok, Level} ->
                             fun(Format, Params)->
-                                lager:log(Level,Format, Params)
+                                lager:warning(Format, Params)
                             end;
          _->
                             fun(Format, Params)->

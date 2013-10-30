@@ -688,12 +688,12 @@ flash_stat(Pid, Config = #mapper_config{ets_stat = Ets, ets_buffer =  EtsBuffer}
 .
 
 
-%%TODO this logic must be rewrited, when we begin use a lot of mappers
-thrift_mappper(Conn, Acum)->
+thrift_mappper(Acum, Conn)->
     
     thrift_mappper(Conn, Acum, 1).
 thrift_mappper(Conn = #mapper_config{mapper_reconnect_count = MaxCount}, Acum,MaxCount)->   
     receive
+        %%TODO this logic must be rewrited, when we begin use a lot of mappers
         {PidReciverResult ,get_pack_of_facts} ->
                     PidReciverResult ! {hbase_exception, max_create_attempts},
                     exit(hbase_exception)
@@ -704,11 +704,11 @@ thrift_mappper(Conn = #mapper_config{mapper_reconnect_count = MaxCount}, Acum,Ma
 thrift_mappper(Conn, Acum, Count)->
         {Host, Port} = Conn#mapper_config.mapper_host, 
         ?THRIFT_LOG("~p connect to ~p~n",[{?MODULE,?LINE}, {{Host, Port}, Conn }]),
-        Pid = spawn_link(?MODULE, thrift_mappper_low, [self(), Conn, Acum]  ),
+        Pid = spawn_link(?MODULE, thrift_mappper_low, [self(),  Acum, Conn]  ),
         receive 
-            { ListItem, Acum  } ->
+            { pong, ListItem  } ->
                     Pid ! continue_ping,
-                    { ListItem, Acum  };
+                    { ListItem, Conn  };
             {'EXIT', Reason}->
                      ?THRIFT_LOG("~p can't connect to hbase ~p ~n",[{?MODULE,?LINE}, {{Host, Port}, Conn, Count }]),
                      thrift_mappper(Conn, Acum, Count+1)
@@ -737,7 +737,7 @@ thrift_mappper_low(PidReducer,  {Location, StartKey, EndKey},  Connection = #map
                     ets:insert( EtsStat, { workers, self() } ),
                     ets:insert( EtsStat, { all_workers_launched, { self(), ScannerId , Location } } ),
                     
-                    PidReducer !  { { self(), State1, ScannerId  }, {EtsStat, EtsBuffer, Table, ProtoType}  },
+                    PidReducer !  {pong ,{ self(), State1, ScannerId  } },
                     ProtoRecord = #hbase_search_params{prototype = ProtoType, table = Table, filter = Filter},
                     get_data(Connection,  PidReducer, ScannerId, ProtoRecord, State1, 0, 0  )
 .

@@ -74,7 +74,7 @@ reconnect_long( ReasonTimeout )->
     lists:foreach(fun(Key)->
                     ?THRIFT_LOG("~p THROW connection  ~p ~n",
                            [{?MODULE,?LINE}, Key ]),
-                    ?MODULE:reconnect(Key)
+                    ?MODULE:reconnect(Key, timeout)
                   end, ListTimeout)
 .
 
@@ -129,11 +129,11 @@ stop() ->
 
 
 handle_cast( { set_connection_pool,  Conns, Thrift_reconnect_timeout}, MyState) ->
-         ?THRIFT_LOG("~p settings connection  for pool  ~p ~n",
+         ?THRIFT_POOL("~p settings connection  for pool  ~p ~n",
                            [ { ?MODULE, ?LINE }, Conns ]),
          {noreply, MyState#thrift_pool{ free = Conns, thrift_reconnect_timeout = Thrift_reconnect_timeout } } ;
 handle_cast( { return,  NewState = {Key, _NewConn} }, MyState) ->
-         ?WAIT("~p got back new connection  ~p ~n",
+         ?THRIFT_POOL("~p got back new connection  ~p ~n",
                            [ { ?MODULE, ?LINE }, NewState ]),
          Stack = MyState#thrift_pool.free,
          case ets:lookup( MyState#thrift_pool.busy, Key  ) of
@@ -144,11 +144,11 @@ handle_cast( { return,  NewState = {Key, _NewConn} }, MyState) ->
                 {noreply, MyState#thrift_pool{  speed_return = now() } } 
         end;         
 handle_cast( { reconnect,  hbase_thrift_exception, Reason }, MyState) -> 
-        ?THRIFT_LOG("~p got back new connection  ~p reason is ~p ~n",
+        ?THRIFT_POOL("~p got back new connection  ~p reason is ~p ~n",
                            [ { ?MODULE, ?LINE },  Reason ]),
         { noreply, MyState } ;
 handle_cast( { reconnect,  Key, Reason }, MyState) ->
-        ?THRIFT_LOG("~p got back new connection  ~p reason is ~p ~n",
+        ?THRIFT_POOL("~p got back new connection  ~p reason is ~p ~n",
                            [ { ?MODULE, ?LINE }, Key, Reason ]),
          {Host, Port}  = ?THRIFT_CONF,
          Stack = MyState#thrift_pool.free,
@@ -157,13 +157,13 @@ handle_cast( { reconnect,  Key, Reason }, MyState) ->
                                 {ok, NewConn} ->
                                         {noreply, MyState#thrift_pool{ free = [ {Key, NewConn} | Stack ] } } ;  
                                 Exception ->
-                                    ?THRIFT_LOG("got exception during the reconnect ~p ~n", [Exception]),
+                                    ?THRIFT_POOL("got exception during the reconnect ~p ~n", [Exception]),
                                     timer:apply_after(MyState#thrift_pool.thrift_reconnect_timeout, thrift_connection_pool, reconnect, [ Key ] ),
                                     { noreply, MyState} 
          end
 ;        
 handle_cast( Undef, MyState) ->
-        ?THRIFT_LOG("~p undefined msg ~p ~n",
+        ?THRIFT_POOL("~p undefined msg ~p ~n",
                            [ { ?MODULE, ?LINE }, Undef ]),
          {noreply, MyState}.
 % ----------------------------------------------------------------------------------------------------------
@@ -175,14 +175,14 @@ handle_cast( Undef, MyState) ->
 
 handle_info({'DOWN',_,_,Pid,Reason}, State)->
        
-       ?THRIFT_LOG("~p process  msg ~p  ~n",
+       ?THRIFT_POOL("~p process  msg ~p  ~n",
                            [ {?MODULE,?LINE}, { Pid,Reason } ]),
        
        
        {noreply,  State}
 ;
 handle_info(Info, State) ->
-    ?THRIFT_LOG("get msg  unregistered msg ~p ~n",
+    ?THRIFT_POOL("get msg  unregistered msg ~p ~n",
                            [Info]),
 
     {noreply,  State}.
