@@ -1208,27 +1208,26 @@ cut_all_solutions(TreeEts, 1, Parent )->
     exit(normal);
 cut_all_solutions(TreeEts, PrevIndex, Parent )->
 
-        
-      AimRecord  = ets:lookup(TreeEts, PrevIndex),
-     %%TODO delete there delete hbase pids
+         %%TODO delete there delete hbase pids
 %       io:format("~p delete another solution ~p~n",[{?MODULE,?LINE}, AimRecord]),
-      case AimRecord of
-         [#aim_record{  next = hbase, solutions = HbasePid } ]->
+      case ets:lookup(TreeEts, PrevIndex) of
+         [AimRecord = #aim_record{  next = hbase, solutions = HbasePid } ]->
                  exit(HbasePid, cut_solution),
                  ets:delete(TreeEts, AimRecord#aim_record.id  )
                  ;
-         [#aim_record{  next = one } ]->
+         [AimRecord = #aim_record{  next = one } ]->
              ets:delete(TreeEts, AimRecord#aim_record.id  );
          
          []->
             ?CUT_LOG("STRANGE situation during cutting solutin ~p ",[ ets:lookup(TreeEts, 1) ]),
             exit(normal);
          
-         _ ->
-             ets:delete(TreeEts, AimRecord#aim_record.id),
-             cut_all_solutions(TreeEts, AimRecord#aim_record.next, AimRecord#aim_record.id )
-      end,
-      cut_all_solutions(TreeEts, AimRecord#aim_record.prev_id, Parent ).
+         [Record] ->
+             ets:delete(TreeEts, Record#aim_record.id),
+             cut_all_solutions(TreeEts, Record#aim_record.next, Record#aim_record.id ),
+             cut_all_solutions(TreeEts, Record#aim_record.prev_id, Parent )
+      end.
+
 
       
       
