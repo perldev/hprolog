@@ -72,7 +72,7 @@ reconnect_long( ReasonTimeout )->
         end
     , [], ?THRIFT_BUSY),
     lists:foreach(fun(Key)->
-                    ?WAIT("~p THROW connection  ~p ~n",
+                    ?THRIFT_LOG("~p THROW connection  ~p ~n",
                            [{?MODULE,?LINE}, Key ]),
                     ?MODULE:reconnect(Key)
                   end, ListTimeout)
@@ -136,10 +136,13 @@ handle_cast( { return,  NewState = {Key, _NewConn} }, MyState) ->
          ?WAIT("~p got back new connection  ~p ~n",
                            [ { ?MODULE, ?LINE }, NewState ]),
          Stack = MyState#thrift_pool.free,
-         ets:delete( MyState#thrift_pool.busy, Key  ),
-         {noreply, MyState#thrift_pool{ free = [ NewState|Stack ], speed_return = now() } } ;
-         
-         
+         case ets:lookup( MyState#thrift_pool.busy, Key  ) of
+            [_]->
+                ets:delete(MyState#thrift_pool.busy, Key),
+                {noreply, MyState#thrift_pool{ free = [ NewState|Stack ], speed_return = now() } } ;
+            []->
+                {noreply, MyState#thrift_pool{  speed_return = now() } } 
+        end;         
 handle_cast( { reconnect,  hbase_thrift_exception, Reason }, MyState) -> 
         ?THRIFT_LOG("~p got back new connection  ~p reason is ~p ~n",
                            [ { ?MODULE, ?LINE }, Key, Reason ]),
