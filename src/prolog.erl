@@ -1210,16 +1210,19 @@ cut_all_solutions(TreeEts, PrevIndex, Parent )->
 
          %%TODO delete there delete hbase pids
 %       io:format("~p delete another solution ~p~n",[{?MODULE,?LINE}, AimRecord]),
-      case ets:lookup(TreeEts, PrevIndex) of
+      case catch ets:lookup(TreeEts, PrevIndex) of
          [AimRecord = #aim_record{  next = hbase, solutions = HbasePid } ]->
                  exit(HbasePid, cut_solution),
                  ets:delete(TreeEts, AimRecord#aim_record.id  )
                  ;
          [AimRecord = #aim_record{  next = one } ]->
              ets:delete(TreeEts, AimRecord#aim_record.id  );
-         
+         {'EXIT',Reason }->
+            ?CUT_LOG("empty tree situation during cutting solutin  ",[  ]),
+            exit(normal);  
+      
          []->
-            ?CUT_LOG("STRANGE situation during cutting solutin ~p ",[ ets:lookup(TreeEts, 1) ]),
+            ?CUT_LOG("STRANGE situation during cutting solutin ~p ",[ ets:tab2list(TreeEts) ]),
             exit(normal);
          
          [Record] ->
