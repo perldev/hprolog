@@ -280,6 +280,7 @@ get_key(ProtoType, Table, Family, Key)->
                 process_one_record(ProtoType,Family, Data)          
             ;
         Error -> 
+%         {'EXIT',{{badmatch,{{protocol,thrift_binary_protocol,{binary_protocol,{transport,thrift_buffered_transport,{buffered_transport,{transport,thrift_socket_transport,{data,#Port<0.12278>,infinity}},[]}},true,true}},{error,closed}}},[{thrift_client,send_function_call,3,[{file,"src/thrift_client.erl"},{line,83}]},{thrift_client,call,3,[{file,"src/thrift_client.erl"},{line,40}]},{fact_hbase_thrift,stor_new_fact,2,[{file,"src/fact_hbase_thrift.erl"},{line,175}]},{fact_hbase,add_new_fact,4,[{file,"src/fact_hbase.erl"},{line,1192}]},{prolog_built_in,add_fact,5,[{file,"src/prolog_built_in.erl"},{line,774}]},{prolog,aim,2,[{file,"src/prolog.erl"},{line,812}]},{prolog,loop,1,[{file,"src/prolog.erl"},{line,345}]},{api_erws_handler,shell_loop,3,[{file,"src/api_erws_handler.erl"},{line,328}]}]}}
              %%%reconnection !!!??
              thrift_connection_pool:reconnect(KeyC, Error),
              ?DEBUG("get key ~p error result: ~p ~n", [{ Table, Family, Key}, Error]),
