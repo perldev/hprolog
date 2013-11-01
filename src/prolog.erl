@@ -35,8 +35,6 @@ operators( Op )->
 get_index(_Index)->
     erlang:make_ref().
     
--ifdef(USE_HBASE).
-    
 clean_tree(TreeEts)->
     ets:foldl(fun(Elem, Acum)->
                 case Elem of 
@@ -46,26 +44,12 @@ clean_tree(TreeEts)->
                           T#aim_record.solutions ! finish,
                           ets:delete(TreeEts, T#aim_record.id), Acum;
                       T = #aim_record{} ->
-                        ets:delete(TreeEts, T#aim_record.id), Acum
+                          ets:delete(TreeEts, T#aim_record.id), Acum
                 end
               end, true, TreeEts)
 .     
 
--else.
 
-clean_tree(TreeEts)->
-             ets:foldl(fun(Elem, Acum)->
- 			 case Elem of
-                            {system_record, _, _, _}-> Acum;
-                            {system_record, _, _}-> Acum;
-                            T = #aim_record{} ->
-                                
-                                ets:delete(TreeEts, T#aim_record.id), Acum
-                        end
-              end, true, TreeEts).
-              
-
--endif.
         
   
     
@@ -806,6 +790,7 @@ aim(default, {NextBody, PrevIndex, ProtoType, Context, Index, TreeEts, Parent })
 ;
 aim(default, {NextBody, PrevIndex, ProtoType, Context, Index, TreeEts, Parent })->
     Name = element(1,ProtoType),
+    %%TODO rewrite using ets
     case inner_meta_predicates(Name) of
           true ->
             ?TRACE(Index, TreeEts, bound_aim(ProtoType, Context), Context),
@@ -851,6 +836,49 @@ aim(user_defined_aim,{NextBody, PrevIndex, ProtoType, Context, Index, TreeEts, P
                       }),                
          NewParams = {Parent, Index, TreeEts},
          [aim, next_aim, NewParams ]
+;
+aim(user_defined_aim,{NextBody, PrevIndex, ProtoType, Context, Index, TreeEts, Parent, 0}) when is_atom(ProtoType)->
+         
+         %% at first we will looking in inner database
+         RulesTable = common:get_logical_name(TreeEts, ?RULES), 
+         RuleList = ets:lookup(RulesTable, ProtoType),        
+         %% pattern matching like one aim
+         ets:insert(TreeEts,
+         #aim_record{ id = Index,
+                      prototype = ProtoType,
+                      temp_prototype = ProtoType, 
+                      solutions = RuleList,
+                      next = one,
+                      prev_id = PrevIndex,
+                      context = Context,
+                      next_leap = NextBody,
+                      parent = Parent 
+                      }),
+         NewParams = {Parent, Index, TreeEts},
+         [aim, next_aim, NewParams ]
+;
+aim(user_defined_aim,{ NextBody, PrevIndex, ProtoType, Context, Index, TreeEts, Parent, 0} )->
+         Name = element(1, ProtoType),%%from the syntax tree get name of fact
+         RulesTable = common:get_logical_name(TreeEts, ?RULES), 
+         RuleList = ets:lookup(RulesTable, Name),        
+         BoundProtoType = bound_aim(ProtoType, Context),
+         {TempSearch, _NewContext} = prolog_shell:make_temp_aim(BoundProtoType),%% think about it
+ 
+        %%pattern matching like one aim
+         ?DEBUG("~p user defined aim ~p ~n",[{?MODULE,?LINE}, { BoundProtoType, TempSearch,  NextBody } ]),
+         ets:insert(TreeEts,
+         #aim_record{ id = Index,
+                      prototype = ProtoType,
+                      temp_prototype = TempSearch, 
+                      solutions = RuleList,
+                      next = one,
+                      prev_id = PrevIndex,
+                      context = Context,
+                      next_leap = NextBody,
+                      parent = Parent 
+                      }),
+         NewParams = {Parent, Index, TreeEts},
+         [aim, next_aim,  NewParams  ]
 ;
 aim(user_defined_aim, {NextBody, PrevIndex, ProtoType, Context, Index, TreeEts, Parent, 1}) ->
         Name = element(1, ProtoType),%%from the syntax tree get name of fact
@@ -902,49 +930,6 @@ aim(hbase_user_defined_aim, {RuleList, NextBody, PrevIndex, ProtoType, Context, 
                       }),   
          NewParams = {Parent, Index, TreeEts },
          [aim, next_aim,  NewParams]
-;
-aim(user_defined_aim,{NextBody, PrevIndex, ProtoType, Context, Index, TreeEts, Parent, 0}) when is_atom(ProtoType)->
-         
-         %% at first we will looking in inner database
-         RulesTable = common:get_logical_name(TreeEts, ?RULES), 
-         RuleList = ets:lookup(RulesTable, ProtoType),        
-         %% pattern matching like one aim
-         ets:insert(TreeEts,
-         #aim_record{ id = Index,
-                      prototype = ProtoType,
-                      temp_prototype = ProtoType, 
-                      solutions = RuleList,
-                      next = one,
-                      prev_id = PrevIndex,
-                      context = Context,
-                      next_leap = NextBody,
-                      parent = Parent 
-                      }),
-         NewParams = {Parent, Index, TreeEts},
-         [aim, next_aim, NewParams ]
-;
-aim(user_defined_aim,{NextBody, PrevIndex, ProtoType, Context, Index, TreeEts, Parent, 0} )->
-         Name = element(1, ProtoType),%%from the syntax tree get name of fact
-         RulesTable = common:get_logical_name(TreeEts, ?RULES), 
-         RuleList = ets:lookup(RulesTable, Name),        
-         BoundProtoType = bound_aim(ProtoType, Context),
-         {TempSearch, _NewContext} = prolog_shell:make_temp_aim(BoundProtoType),%% think about it
- 
-        %%pattern matching like one aim
-         ?DEBUG("~p user defined aim ~p ~n",[{?MODULE,?LINE}, { BoundProtoType, TempSearch,  NextBody } ]),
-         ets:insert(TreeEts,
-         #aim_record{ id = Index,
-                      prototype = ProtoType,
-                      temp_prototype = TempSearch, 
-                      solutions = RuleList,
-                      next = one,
-                      prev_id = PrevIndex,
-                      context = Context,
-                      next_leap = NextBody,
-                      parent = Parent 
-                      }),
-         NewParams = {Parent, Index, TreeEts},
-         [aim, next_aim,  NewParams  ]
 ;
 aim(Type, Params)->
     throw({unexpected_tree_leap, { Type, Params} }).
@@ -1203,9 +1188,9 @@ bound_aim(ProtoType, Context)->
 
 %%%HARD solution, that hase scense only with hbase
 cut_all_solutions(TreeEts, Parent, Parent )->
-    exit(normal);
+    true;
 cut_all_solutions(TreeEts, 1, Parent )->
-    exit(normal);
+    true;
 cut_all_solutions(TreeEts, PrevIndex, Parent )->
 
          %%TODO delete there delete hbase pids
@@ -1218,16 +1203,12 @@ cut_all_solutions(TreeEts, PrevIndex, Parent )->
          [AimRecord = #aim_record{  next = one } ]->
              ets:delete(TreeEts, AimRecord#aim_record.id  );
          {'EXIT',Reason }->
-            ?CUT_LOG("empty tree situation during cutting solutin  ",[  ]),
-            exit(normal);  
-      
+            ?CUT_LOG("empty tree situation during cutting solutin  ",[  ]);      
          []->
-            ?CUT_LOG("STRANGE situation during cutting solutin ~p ",[ ets:tab2list(TreeEts) ]),
-            exit(normal);
-         
+            ?CUT_LOG("STRANGE situation during cutting solutin ~p ",[ ets:tab2list(TreeEts) ]);         
          [Record] ->
-             ets:delete(TreeEts, Record#aim_record.id),
              cut_all_solutions(TreeEts, Record#aim_record.next, Record#aim_record.id ),
+             ets:delete(TreeEts, Record#aim_record.id),
              cut_all_solutions(TreeEts, Record#aim_record.prev_id, Parent )
       end.
 

@@ -1043,10 +1043,15 @@ not_compare(_One, _Two) ->
 
 %%working with linked facts this is the first step for implementation expert dynamic  system
 worker_linked_rules(Body, OutTree)->
+
+
       ?WAIT("~p out table  ~p ~n",[{?MODULE,?LINE},  ets:tab2list(OutTree) ]),
       TreeEts = ets:new(some_name ,[set, public, { keypos, 2 } ]),
       [Prefix] = ets:lookup(OutTree, ?PREFIX),
+      [Hbase] = ets:lookup(OutTree, hbase),
+
       ets:insert(TreeEts, Prefix),
+      ets:insert(TreeEts, Hbase),
       ets:insert(TreeEts, {system_record, ?DEBUG_STATUS, false}), %%turn off debugging      
       
 
