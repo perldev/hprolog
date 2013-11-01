@@ -2,7 +2,7 @@
 %%default count of pool to the thrift server
 %% wheather using thrift
 -define(USE_THRIFT, 1).
--define(SIMPLE_HBASE_ASSERT, common:check_source(TreeEts) ).%%1 or 0 
+-define(SIMPLE_HBASE_ASSERT, 1 ).%%1 or 0  common:check_source(TreeEts)
 
 %-define(THRIFT_RECONNECT_TIMEOUT,130000).
 %-define(THRIFT_MAX_RECONNECT_COUNT, 10).
