@@ -4,7 +4,7 @@
 
 -export([console_write/2, web_console_write/2, console_write_unicode/2,
           web_console_read/1, web_console_writenl/2,
-         console_get_char/1, console_read/1, console_nl/1,generate_id/0, get_logical_name/1,member_tail/2 ]).
+         console_get_char/1, check_source/1, console_read/1, console_nl/1,generate_id/0, get_logical_name/1,member_tail/2 ]).
 
          
          
@@ -17,7 +17,12 @@ member_tail(Item, [_|Tail])->
     member_tail(Item, Tail).
     
 
-
+check_source(TreeEts)->
+    case ets:lookup(TreeEts, hbase) of
+        [] -> 0;
+        [{system_record, hbase, A}]->A
+    end
+.
 
          
          
@@ -52,7 +57,8 @@ console_write(_, X)->
       
 console_write_unicode(_,X)->
      io:format("~ts",[X]).
-      
+
+     
 console_writenl(_, X)->      
     io:format("~p~n",[X]).
     

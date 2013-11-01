@@ -2,7 +2,7 @@
 %%default count of pool to the thrift server
 %% wheather using thrift
 -define(USE_THRIFT, 1).
--define(SIMPLE_HBASE_ASSERT,1).%%1 or 0 
+-define(SIMPLE_HBASE_ASSERT, common:check_source(TreeEts) ).%%1 or 0 
 
 %-define(THRIFT_RECONNECT_TIMEOUT,130000).
 %-define(THRIFT_MAX_RECONNECT_COUNT, 10).
@@ -24,13 +24,14 @@
 %-define(DEV_BUILD,1). %%this uncommented line means that hbase driver will use avias
 
 -define(USE_HBASE,1).
+
 -define(LOAD_LOG,1).
 
 
 %-define(ENABLE_LOG,1).
 
 %%for connect prolog with web console
--define(WEB,1).
+%-define(WEB,1).
 
 -define('WRITE_UNICODE'(Parent,X), common:console_write_unicode(Parent, X) ).
 
@@ -144,15 +145,18 @@
 -define( 'TRACE2'(I, Tree, Res, Body), true   ).
 -endif.
 
+-define('CUT_LOG'(Str,Pars), lager:warning(Str, Pars) ).
+
 
 -ifdef(USE_HBASE).
 -define('INCLUDE_HBASE'(X),  fact_hbase:load_rules2ets(X) ).
 
 -define('THRIFT_POOL'(Str, Pars ),   true ).
 -define('THRIFT_LOG'(Str, Pars ),   true ).
--define('CUT_LOG'(Str,Pars), lager:warning(Str, Pars) ).
 
 -else.
+-define('THRIFT_POOL'(Str, Pars ),   true ).
+
 -define('INCLUDE_HBASE'(X),  true ).
 -define('THRIFT_LOG'(Str, Pars ),   true).
 
