@@ -1182,7 +1182,6 @@ add_new_fact([ Name | ProtoType ] , Pos, TreeEts,  1)->
 	  CountParams = length(ProtoType),
 	  RealName = common:get_logical_name(TreeEts, Name),
           NameSpace = common:get_logical_name(TreeEts),
-
 	  converter_monitor:stat(try_add, Name,  NameSpace , ProtoType, true ),
 	  %TODO catch a lot exceptions
 	  case check_params_facts( Name, TreeEts ) of
@@ -1239,9 +1238,19 @@ add_new_fact(Body, first, TreeEts,  _Something) ->
 .
 
 
-put_key_body(Name, Key, Body )->
+index_put_key_body(Name, Key, Body)->
+      put_key_body(Name, Key, Body, ?USE_THRIFT).
+      
+put_key_body(Name, Key, Body, 1 )->
+      %%TODO rewrite working with hash working
+      fact_hbase_thrift:put_key(atom_to_list(Name), Key, ?FAMILY, "1", Body)
+      
+;
+put_key_body(Name, Key, MakeCellSet, 0 )->
 	    LTableName = atom_to_list( Name ),
 	    BKey= base64:encode(Key),
+            Body = make_cell_set( [ MakeCellSet ] ),
+
 	    SendBody = <<"<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\" ?><CellSet><Row key=\"", 
 		    BKey/binary, "\">", Body/binary, "</Row></CellSet>" >>,    
 	    ?DEBUG("~p new fact body with ~n ~p ~n~n~n",[{?MODULE,?LINE}, Body ] ),
@@ -1268,24 +1277,25 @@ put_key_body(Name, Key, Body )->
 
 
 %TODO  move to thrift
-hbase_add_index(IndexTable, NameSpace,  Type, Params)->
+hbase_add_index(IndexTable, NameSpace,  Type, Params, MD5Key)->
       Keys =  string:tokens(Type, ","),
       KeyList = lists:map(fun(E)->
 		      Index = list_to_integer(E),
+		      %%the index descriptor is could be in any order
 		      lists:nth(Index, Params )
 		 end,
 		 Keys
 		 ),
       Key = generate_key( KeyList ),
-      MD5Key = generate_key( Params ),
-      ?DEBUG("~p process delete index ~p",[{?MODULE,?LINE}, {Key,KeyList }  ]),
-      MakeCellSet = make_cell_set( [ MD5Key ] ),
+      ?DEBUG("~p process add index ~p",[{?MODULE,?LINE}, {Key,KeyList }  ]),
+
       converter_monitor:stat(try_add_index, IndexTable, NameSpace, { Type,MD5Key, Key }, true ),
-      Res = put_key_body(IndexTable, Key, MakeCellSet),
-      converter_monitor:stat(add_index, IndexTable, NameSpace , { Type,MD5Key, Key }, Res ), 
-      
+      Res = index_put_key_body(IndexTable, Key, MD5Key),
+      converter_monitor:stat(add_index, IndexTable, NameSpace , { Type, MD5Key, Key }, Res ), 
       Res
 .
+
+
 %%%TODO IT'S WRONG!!!!
 hbase_del_index(IndexTable, NameSpace, Type, Params)->
       Keys =  string:tokens(Type, ","),
@@ -1320,7 +1330,7 @@ index_work_add(Name, Params, TreeEts)->
 	   [] -> [];
 	   List ->
 		  lists:foreach(fun({_InKey, IndexTable, KeyName})->
-					hbase_add_index(IndexTable, NameSpace,  KeyName, Params)
+					hbase_add_index(IndexTable, NameSpace,  KeyName, Params, Key)
 				 end, List)
     end
 .
