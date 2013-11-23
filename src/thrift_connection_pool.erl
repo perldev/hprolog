@@ -133,7 +133,8 @@ handle_cast( start_pool, MyState) ->
                        thrift_connection_pool:set_connection_pool(Hosts, Thrift_reconnect_timeout );
                    _->
                        do_nothing
-                end;
+                end,
+            {noreply, MyState};
 handle_cast( { set_connection_pool,  Conns, Thrift_reconnect_timeout}, MyState) ->
          ?THRIFT_POOL("~p settings connection  for pool  ~p ~n",
                            [ { ?MODULE, ?LINE }, Conns ]),
