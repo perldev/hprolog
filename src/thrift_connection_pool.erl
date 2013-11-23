@@ -41,10 +41,10 @@ init([]) ->
 start_pool()->
                 case application:get_env(eprolog, use_hbase) of
                     {ok, yes} ->
-                      {ok, {Host, Port} } =  application:get_env(eprolog, thrift_connection),
-                      {ok, Count } =  application:get_env(eprolog, thrift_pool_size),
-                      {ok,  Critical } = application:get_env(eprolog, thrift_busy_critical_timeout), 
-%                       {Host, Port}  = ?THRIFT_CONF,
+                      { ok, {Host, Port} } =  application:get_env(eprolog, thrift_connection),
+                      { ok, Count } =  application:get_env(eprolog, thrift_pool_size),
+                      { ok,  Critical } = application:get_env(eprolog, thrift_busy_critical_timeout), 
+%                     { Host, Port}  = ?THRIFT_CONF,
                       gen_server:cast(?MODULE,{start_reconnect_timer, Critical}),
                       Hosts = 
                             lists:map( fun(E)-> 
@@ -158,14 +158,19 @@ handle_cast( { reconnect,  Key, Reason }, MyState) ->
                            [ { ?MODULE, ?LINE }, Key, Reason ]),
          {Host, Port}  = ?THRIFT_CONF,
          Stack = MyState#thrift_pool.free,
-         ets:delete( MyState#thrift_pool.busy, Key  ),
-         case catch thrift_connection_pool:connect(Host, Port, [], hbase_thrift ) of
+         case ets:lookup( MyState#thrift_pool.busy, Key  ) of
+            [ { Key, TClient, Time } ] ->
+                    thrift_client:close(TClient),
+                    case catch thrift_connection_pool:connect(Host, Port, [], hbase_thrift ) of
                                 {ok, NewConn} ->
                                         {noreply, MyState#thrift_pool{ free = [ {Key, NewConn} | Stack ] } } ;  
                                 Exception ->
                                     ?THRIFT_POOL("got exception during the reconnect ~p ~n", [Exception]),
                                     timer:apply_after(MyState#thrift_pool.thrift_reconnect_timeout, thrift_connection_pool, reconnect, [ Key ] ),
                                     { noreply, MyState} 
+                    end;
+              [] -> 
+                { noreply, MyState} 
          end
 ;        
 handle_cast( Undef, MyState) ->
