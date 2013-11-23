@@ -39,7 +39,7 @@ init([]) ->
 
 
 start_pool()->
-    get_server:cast(?MODULE,start_pool).
+    gen_server:cast(?MODULE,start_pool).
 
 
 reconnect_long( ReasonTimeout )->
