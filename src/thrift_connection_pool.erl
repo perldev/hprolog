@@ -161,6 +161,7 @@ handle_cast( { reconnect,  Key, Reason }, MyState) ->
          case ets:lookup( MyState#thrift_pool.busy, Key  ) of
             [ { Key, TClient, Time } ] ->
                     thrift_client:close(TClient),
+                    ets:delete(MyState#thrift_pool.busy, Key),
                     case catch thrift_connection_pool:connect(Host, Port, [], hbase_thrift ) of
                                 {ok, NewConn} ->
                                         {noreply, MyState#thrift_pool{ free = [ {Key, NewConn} | Stack ] } } ;  
