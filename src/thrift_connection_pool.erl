@@ -37,11 +37,15 @@ init([]) ->
         busy = ets:new(?THRIFT_BUSY, [set,named_table,  public]) } }
 .
 
+
 start_pool()->
-                      {ok, {Host, Port} } =  application:get_env(eprolog, thrift_connection),
-                      {ok, Count } =  application:get_env(eprolog, thrift_pool_size),
-                      {ok,  Critical } = application:get_env(eprolog, thrift_busy_critical_timeout), 
-%                       {Host, Port}  = ?THRIFT_CONF,
+                case application:get_env(eprolog, use_hbase) of
+                    {ok, yes} ->
+                      { ok, {Host, Port} } =  application:get_env(eprolog, thrift_connection),
+                      { ok, Count } =  application:get_env(eprolog, thrift_pool_size),
+                      { ok,  Critical } = application:get_env(eprolog, thrift_busy_critical_timeout), 
+%                     { Host, Port}  = ?THRIFT_CONF,
+                      gen_server:cast(?MODULE,{start_reconnect_timer, Critical}),
                       Hosts = 
                             lists:map( fun(E)-> 
                             case catch thrift_connection_pool:connect(Host, Port, [], hbase_thrift ) of
@@ -51,11 +55,11 @@ start_pool()->
                                     throw({hbase_thrift_exception, Exception})
                             end
                        end, lists:seq(1, Count) ),
-                       timer:apply_interval(?SLEEP_CRITICAL, ?MODULE, reconnect_long, [ Critical ] ),
                        {ok, Thrift_reconnect_timeout} = application:get_env(eprolog, thrift_reconnect_timeout),
-                       thrift_connection_pool:set_connection_pool(Hosts, Thrift_reconnect_timeout )
-                       
-.
+                       thrift_connection_pool:set_connection_pool(Hosts, Thrift_reconnect_timeout );
+                   _->
+                       do_nothing
+                end.
 
 
 reconnect_long( ReasonTimeout )->
@@ -126,8 +130,10 @@ handle_call(get_free,_From, State) ->
 
 stop() ->
     gen_server:cast(?MODULE, stop).
-
-
+    
+handle_cast( {start_reconnect_timer, Critical}, MyState) ->
+            timer:apply_interval(?SLEEP_CRITICAL, ?MODULE, reconnect_long, [ Critical ] ),
+            {noreply, MyState};
 handle_cast( { set_connection_pool,  Conns, Thrift_reconnect_timeout}, MyState) ->
          ?THRIFT_POOL("~p settings connection  for pool  ~p ~n",
                            [ { ?MODULE, ?LINE }, Conns ]),
@@ -152,14 +158,20 @@ handle_cast( { reconnect,  Key, Reason }, MyState) ->
                            [ { ?MODULE, ?LINE }, Key, Reason ]),
          {Host, Port}  = ?THRIFT_CONF,
          Stack = MyState#thrift_pool.free,
-         ets:delete( MyState#thrift_pool.busy, Key  ),
-         case catch thrift_connection_pool:connect(Host, Port, [], hbase_thrift ) of
+         case ets:lookup( MyState#thrift_pool.busy, Key  ) of
+            [ { Key, TClient, Time } ] ->
+                    thrift_client:close(TClient),
+                    ets:delete(MyState#thrift_pool.busy, Key),
+                    case catch thrift_connection_pool:connect(Host, Port, [], hbase_thrift ) of
                                 {ok, NewConn} ->
                                         {noreply, MyState#thrift_pool{ free = [ {Key, NewConn} | Stack ] } } ;  
                                 Exception ->
                                     ?THRIFT_POOL("got exception during the reconnect ~p ~n", [Exception]),
                                     timer:apply_after(MyState#thrift_pool.thrift_reconnect_timeout, thrift_connection_pool, reconnect, [ Key ] ),
                                     { noreply, MyState} 
+                    end;
+              [] -> 
+                { noreply, MyState} 
          end
 ;        
 handle_cast( Undef, MyState) ->
