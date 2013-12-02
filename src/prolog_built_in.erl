@@ -553,6 +553,35 @@ inner_defined_aim(NextBody, PrevIndex ,Body = {read_str, X }, Context, _Index, T
  
     end
 ;
+inner_defined_aim(NextBody, PrevIndex ,Body = { soundex, _X, _Res }, Context, _Index, TreeEts)->
+     {_, X1, X2 } = prolog_matching:bound_body( Body, Context),     
+     case  soundex_rus:start(X1) of
+                 X when is_list(X) -> 
+                        prolog_matching:var_match( X, X2, Context );                 
+                 B1 ->
+                        throw( { instantiation_error, Body,  B1 } )
+     end
+;
+inner_defined_aim(_NextBody, _PrevIndex ,Body = { reverse, _Name, _X   }, Context, _Index, TreeEts )->
+   case  prolog_matching:bound_body( Body, Context) of
+         {reverse, Val, Val}   ->
+                {true, Context};
+         {reverse, NewCand, NewVal  }->       
+               Res =  lists:reverse(NewCand),
+               prolog_matching:var_match(Res, NewVal, Context);
+          B1 ->
+            throw( { instantiation_error, B1 } )
+   end
+;
+inner_defined_aim(_NextBody, _PrevIndex, Body = { add, _Name, _X, _NewList }, Context, _Index, TreeEts )->
+   case  prolog_matching:bound_body( Body, Context) of
+         {add, X1, X2, NewList1 }   ->
+                 Res =  X1 ++ X2,
+                 prolog_matching:var_match( NewList1, Res, Context );
+          B1 ->
+            throw( { instantiation_error, B1 } )
+   end
+;
 inner_defined_aim(NextBody, PrevIndex ,Body = {member, X, List }, Context, _Index, TreeEts)->
     {_, Item, List1 } = prolog_matching:bound_body( Body, Context),
     
