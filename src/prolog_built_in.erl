@@ -387,6 +387,17 @@ inner_defined_aim(NextBody, PrevIndex , Body  = { to_list, _X1, _X2  }, Context,
                     prolog_matching:var_match(X2B, R, Context)
      end
 ;
+%%сonvert to string
+inner_defined_aim(NextBody, PrevIndex , Body  = { to_atom, _X1, _X2  }, Context, _Index, TreeEts  ) ->
+     {_, X1B, X2B } = prolog_matching:bound_body( Body, Context),     
+     case common:inner_to_atom(X1B) of
+                false -> {false,Context};
+                R ->  
+                    prolog_matching:var_match(X2B, R, Context)
+     end
+;
+
+
 inner_defined_aim(NextBody, PrevIndex ,Body = { 'length', _List, _Size   }, Context, _Index, TreeEts  )->
      {_, List, Size } = prolog_matching:bound_body( Body, Context),     
     case catch(length(List)) of
@@ -539,7 +550,7 @@ inner_defined_aim(NextBody, PrevIndex ,Body = {read, X }, Context, _Index, TreeE
               ?WRITELN(TreeEts, lists:flatten(io_lib:format("i can parse input ~p",[Res] ) ) ),
               {false, Context}
  
- end
+    end
 ;
 inner_defined_aim(NextBody, PrevIndex ,Body = {read_str, X }, Context, _Index, TreeEts)->
     TempX = ?READ_STR(TreeEts), %%read prolog term
@@ -548,29 +559,28 @@ inner_defined_aim(NextBody, PrevIndex ,Body = {read_str, X }, Context, _Index, T
             ?WRITELN(TreeEts, lists:flatten(io_lib:format("i can parse input ~p",[Res] ) ) ),
              {false, Context};
        _ ->
-              Res = prolog_matching:var_match( TempX, X, Context ),
-              Res
- 
+             Res = prolog_matching:var_match( TempX, X, Context ),
+             Res
     end
 ;
 inner_defined_aim(NextBody, PrevIndex ,Body = { soundex, _X, _Res }, Context, _Index, TreeEts)->
      {_, X1, X2 } = prolog_matching:bound_body( Body, Context),     
      case  soundex_rus:start(X1) of
-                 X when is_list(X) -> 
-                        prolog_matching:var_match( X, X2, Context );                 
-                 B1 ->
-                        throw( { instantiation_error, Body,  B1 } )
+            X when is_list(X) -> 
+                prolog_matching:var_match( X, X2, Context );                 
+            B1 ->
+                throw( { instantiation_error, Body,  B1 } )
      end
 ;
 inner_defined_aim(_NextBody, _PrevIndex ,Body = { reverse, _Name, _X   }, Context, _Index, TreeEts )->
    case  prolog_matching:bound_body( Body, Context) of
          {reverse, Val, Val}   ->
-                {true, Context};
+                { true, Context };
          {reverse, NewCand, NewVal  }->       
-               Res =  lists:reverse(NewCand),
-               prolog_matching:var_match(Res, NewVal, Context);
+                 Res =  lists:reverse(NewCand),
+                 prolog_matching:var_match(Res, NewVal, Context);
           B1 ->
-            throw( { instantiation_error, B1 } )
+                 throw( { instantiation_error, B1 } )
    end
 ;
 inner_defined_aim(_NextBody, _PrevIndex, Body = { add, _Name, _X, _NewList }, Context, _Index, TreeEts )->
@@ -670,19 +680,18 @@ inner_defined_aim(NextBody, PrevIndex , Body = {'localtime', _In },  Context, In
       prolog_matching:var_match(Body, {'localtime', Date}, Context)       
 ;
 inner_defined_aim(NextBody, PrevIndex , Body = {'date', _Ini, _Typei, _Accumi },  Context, Index, TreeEts)->
-        
 
-      {In, Type, Accum} = bound_vars:bound_vars( common:my_delete_element(1, Body) , Context ),
-      ?DEV_DEBUG("~p call date function with ~p",[{?MODULE,?LINE},{In, Type, Accum}]),
-      Res =
-        case common:get_date(In,Type) of                
+       {In, Type, Accum} = bound_vars:bound_vars( common:my_delete_element(1, Body) , Context ),
+       ?DEV_DEBUG("~p call date function with ~p",[{?MODULE,?LINE},{In, Type, Accum}]),
+       Res =
+       case common:get_date(In,Type) of                
           false ->
               {false, Context};
           Var -> 
               prolog_matching:var_match(Body, 
                                     {'date',In, Type, Var }  , Context)
           
-        end,
+       end,
        Res
 ;
 inner_defined_aim(NextBody, PrevIndex , {'is',  NewVarName , Expr },
