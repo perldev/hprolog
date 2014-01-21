@@ -1,6 +1,23 @@
 -module(prolog_built_in).
--export([inner_defined_aim/6,delete_fact/4]).
+-export([inner_defined_aim/6,delete_fact/4, inner_to_var/3]).
 -include("prolog.hrl").
+
+      
+inner_to_var(List , X2, Context) when is_list(List)->
+        
+       L = lists:map(fun(E)-> case is_atom(E) of true-> {E} end   end, List),
+       prolog_matching:var_match(  X2, L, Context);
+       
+inner_to_var(Atom, X2, Context) when is_atom(Atom) ->
+       NewContext =  prolog_matching:store_var( { X2, {Atom} }, Context),
+       {true, NewContext};
+       
+inner_to_var(_Atom, _X2, _Context) ->
+       false.             
+             
+             
+     
+
 
 
 
@@ -251,7 +268,7 @@ inner_defined_aim(_NextBody, PrevIndex ,Body_ = { 'atom_length', Name, _Length  
             true ->
                  Length =  length(atom_to_list (Atom)  ),
                  case prolog_matching:is_var(Count) of
-                        true ->
+                        positive ->
                              {true,   prolog_matching:store_var( {Count, Length } , Context ) };
                         _->
                             case Count of
@@ -268,13 +285,15 @@ inner_defined_aim(NextBody, PrevIndex ,{ 'assertz', Body = {':-', _ProtoType, _B
   inner_defined_aim(NextBody, PrevIndex , { 'assert', Body   }, Context, Index, TreeEts   )
 ;
 inner_defined_aim(_NextBody, PrevIndex ,{ 'assert', Body = {':-', _ProtoType, _Body1 }  }, Context, _Index, TreeEts ) ->
-      dynamic_new_rule(Body, last, TreeEts),
+      BodyBounded = prolog_matching:bound_body(Body, Context),
+      dynamic_new_rule(BodyBounded, last, TreeEts),
       {true, Context}
 
 ;
 inner_defined_aim(_NextBody, PrevIndex ,{ 'asserta', Body = {':-', _ProtoType, _Body1 }   }, Context, _Index, TreeEts  )->
-     dynamic_new_rule(Body, first, TreeEts),
-     {true,Context}
+     BodyBounded = prolog_matching:bound_body(Body, Context),
+     dynamic_new_rule(BodyBounded, first, TreeEts),
+     {true, Context}
     
 ;
 
@@ -717,12 +736,12 @@ inner_defined_aim(NextBody, PrevIndex ,{ '=..', First, Second }, Context, _Index
     BoundSecond = prolog_matching:bound_body(Second, Context),
     ?DEV_DEBUG("~p =.. ~p ~n   ",[{?MODULE,?LINE}, {BoundFirst, BoundSecond} ]),
     case prolog_matching:is_var(BoundFirst)  of
-        true ->  
+        positive ->  
                 ToTerm = list_to_tuple(BoundSecond),
                 {true, prolog_matching:store_var( { BoundFirst, ToTerm }, Context ) };
         _ ->  
             case   prolog_matching:is_var(BoundSecond ) of
-                    true->
+                    positive->
                           ToTerm = tuple_to_list(BoundFirst),
                           {true, prolog_matching:store_var( { BoundSecond, ToTerm }, Context ) };
                     _->
@@ -984,7 +1003,7 @@ is_rule([])->
 is_rule([Head|Tail])->
       %TODO
       case prolog_matching:is_var(Head) of
-            true -> true;
+            positive -> true;
             _ -> 
                   is_rule(Tail)
       end

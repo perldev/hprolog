@@ -6,7 +6,7 @@
 %%This module provides prolog kernel work with parsed code before
 %%% code is presented as a tree using tuples
 
-
+-export([call/1, call/2, call/3, start_aim_spawn/4]).
 
 %   ets:insert(TreeEts,{ Index, BoundProtoType, TempSearch, RuleList, one, PrevIndex, Context, NextBody  }),
 -include("prolog.hrl").
@@ -154,16 +154,11 @@ create_inner_structs(Prefix)->
     create_inner_structs(Prefix, Pid)
 .
 
-
-
-
 ets_code_record_process( {Name, ProtoType, Body}, In)->
        ?DEBUG("~p process ets code ~p~n",[{?MODULE,?LINE}, {Name, ProtoType, Body}  ]),  
-
        NormalProtoType  =  list_to_tuple( [ Name| tuple_to_list(ProtoType) ] ),
        PrologCode =  erlog_io:write1({':-',NormalProtoType, Body  }),      
        ?DEBUG("~p process ets code ~p~n",[{?MODULE,?LINE}, PrologCode  ]),  
-
        V2 = list_to_binary( lists:flatten(PrologCode)++"." ),
        <<In/binary, V2/binary >>
 ;
@@ -192,9 +187,7 @@ ets_code_record_process({Name}, In)->
 process_code_ets_key('$end_of_table', _RealRulesTable, _)->
     true;
 process_code_ets_key(Key, RealRulesTable, RulesTable2)->
-
     List = ets:lookup(RealRulesTable, Key),
- %%     {Name , ProtoType, BodyRule}
     Binary = lists:foldl(fun ets_code_record_process/2, <<>> , List),    
     NewKey = ets:next(RealRulesTable, Key),    
     ?DEBUG("~p put code  to ~p  ~p~n",[{?MODULE,?LINE}, Binary, {RulesTable2, Key}  ]),
@@ -238,7 +231,7 @@ process_term_first( NothingRule, Prefix) ->
 process_term(Rule  = {':-',Name, Body}, {RulesTable, Count}) when is_atom(Name)->
      ?DEBUG("~p got rule ~p~n",[{?MODULE,?LINE}, {Count, Rule } ]),    
      ets:insert(RulesTable, { Name, Body } ),
-     {RulesTable, Count +1}
+     {RulesTable, Count + 1}
 ;
 process_term(Rule  = {':-',ProtoType, Body}, {RulesTable, Count})->
      ?DEBUG("~p got rule ~p~n",[{?MODULE,?LINE},  {Count, Rule }  ]),
@@ -305,12 +298,66 @@ bound_vars(Search, Context) ->
 
 
 
+
 %%TODO avoid this
 var_generator_name(Name)->
        { list_to_atom( Name ) }
 .
+%  Res = (catch prolog:aim( finish, ?ROOT, Goal,  dict:new(), 1, TreeEts, ?ROOT)),
 
+%% simple way for using prolog 
+call(Goal)->
+   call(Goal, 0,  "").
+   
+   
+call(Goal, Tracing)->
+        call(Goal, Tracing,  "").
+   
+call(Goal, Tracing,   NameSpace)->
+        spawn(?MODULE, start_aim_spawn, [ self(), Goal, Tracing,  NameSpace]).
 
+start_aim_spawn( BackPid, Goal, Tracing, NameSpace  )->
+         process_flag(trap_exit, true),
+         ?DEBUG("~p start aim ~p~n",[{?MODULE,?LINE},Goal ]),
+         TreeEts = ets:new(tree_processes,[ public, set, named_table,{ keypos, 2 } ] ),   
+         ets:insert(TreeEts, {system_record,?PREFIX, NameSpace}),            
+         prolog_trace:trace_on(Tracing, TreeEts),              
+         aim_spawn(start, BackPid, Goal, TreeEts). 
+        %%%must bee
+aim_spawn(start, BackPid, Goal, TreeEts  )->
+                Res = ( catch prolog:aim( finish, ?ROOT, Goal,  dict:new(), 1, TreeEts, ?ROOT) ),
+                BackPid ! Res,
+                receive 
+                    {next, NewPrev} ->
+                        aim_spawn(NewPrev, BackPid, Res, TreeEts );
+                    finish ->
+                        clean_tree(TreeEts), 
+                        exit(normal);
+                    Signal->
+                          ?DEBUG("~p exit signal ~p~n",[{?MODULE,?LINE},Signal ]),
+                          clean_tree(TreeEts), 
+                          BackPid ! {unexpected, Signal},
+                          exit(normal)
+                end;
+aim_spawn(Prev, BackPid, Goal, TreeEts  )->
+                ?DEBUG("~p next aim ~p~n",[{?MODULE,?LINE}, {Prev,Goal} ]),
+                Res = (catch prolog:next_aim(Prev, TreeEts )),
+                BackPid ! Res,
+                receive 
+                    { next, NewPrev } ->
+                        ?DEBUG("~p normal signal ~p~n",[{?MODULE,?LINE}, Prev ]),
+                        aim_spawn(NewPrev, BackPid, Res, TreeEts );
+                    finish ->
+                        clean_tree(TreeEts), 
+                        exit(normal);
+                    Signal ->
+                          ?DEBUG("~p exit signal ~p~n",[{?MODULE,?LINE},Signal ]),
+                           BackPid ! {unexpected, Signal},
+                           clean_tree(TreeEts), 
+                           exit(normal)
+                end
+.
+%%TODO move clean tree to the supervisour
 
     
 %%%just redesign to tail recursion    
@@ -510,6 +557,19 @@ aim(default, {NextBody, PrevIndex ,{ 'retract', FirstFact, SecondFact } , Contex
         %%all this Previndex just for retract and !
         NewParams = {NextBody, Context, PrevIndex,  Index, TreeEts, Parent },
         [aim, conv3 , NewParams ]
+;
+aim(default, {NextBody, PrevIndex,  Body = {to_var, _, _}, Context, Index, TreeEts, Parent } ) ->
+    %%converting atom to variable
+% inner_defined_aim(NextBody, PrevIndex , Body  = { to_var, X, _  }, Context, _Index, TreeEts  ) ->
+      {_, X1, X2 } = prolog_matching:bound_body( Body, Context), 
+      case  prolog_built_in:inner_to_var(X1,  X2, Context ) of
+         {true, NewContext } ->
+             NewParams = { NextBody, NewContext, PrevIndex,  Index, TreeEts, Parent },
+             [ aim, conv3, NewParams];
+         false ->         
+            NewParams = {Parent, PrevIndex, TreeEts },
+            [ aim, next_aim, NewParams ]
+      end       
 ;
 aim(default, {NextBody, PrevIndex , {'retract', {':-', Obj,'true' }  }, Context, Index, TreeEts, Parent}) when is_tuple(Obj) ->
   NewParams =  { NextBody, PrevIndex , {'retract', Obj }, Context, Index, TreeEts, Parent },
@@ -817,7 +877,7 @@ aim(process_builtin_pred, { {true, Context}, NextBody, PrevIndex, NewIndex2, Tre
 %%WITH HBASE we do not work with facts without prototype
 %%Do not allow to make rule and facts
 
-aim(user_defined_aim,{NextBody, PrevIndex, ProtoType, Context, Index, TreeEts, Parent, 1}) when is_atom(ProtoType)->
+aim(user_defined_aim, {NextBody, PrevIndex, ProtoType, Context, Index, TreeEts, Parent, 1}) when is_atom(ProtoType)->
          
          %% at first we will looking in inner database
          RulesTable = common:get_logical_name(TreeEts, ?RULES), 
@@ -1064,7 +1124,7 @@ bound_list_hack([], Context, Res)->
     
 bound_list_hack([ Head | Tail ], Context, Res) when is_list(Tail)->
      case prolog_matching:is_var(Head) of
-	  true ->	
+	  positive ->	
 		      case  prolog_matching:find_var(Context, Head) of
 			nothing ->   
 				NewSearchVar = process_var_hack(Head),
@@ -1124,7 +1184,7 @@ bound_vars_hack([Some| List], Res, Context ) when is_atom(Some)->
 ;
 bound_vars_hack([Search| List], Res, Context )->
       case prolog_matching:is_var(Search) of
-	    true -> 
+	    positive -> 
 		    case prolog_matching:find_var(Context, Search) of %%val in search wasn't bounded
 			  nothing ->  	NewSearchVar = process_var_hack(Search),
 				        bound_vars_hack(List, [ NewSearchVar| Res ], 

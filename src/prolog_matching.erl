@@ -170,7 +170,7 @@ var_match(Var1, Body =  { _Operator, _Var3, _Var4  } , Context )->
 						     {Var1, Body, dict:to_list(Context)} ]),
      	BoundBody = bound_body(Body, Context),
 	case is_var(Var1) of
-		true ->
+		positive ->
 		      case find_var(Context, Var1) of
 			    nothing-> {true, store_var( { Var1, BoundBody }, Context) };
 			    Var -> var_match(Var, BoundBody, Context)
@@ -187,7 +187,7 @@ var_match(Body = {_Operator, _Var1, _Var2  }, Var3  , Context )->
 	BoundBody = bound_body(Body, Context),
   	case is_var(Var3) of
 		
-		true ->
+		positive ->
 		      case find_var(Context, Var3) of
 			    nothing -> {true, store_var( { Var3, BoundBody }, Context) };
 			    Var -> var_match(Var, BoundBody, Context)
@@ -283,7 +283,7 @@ match_common([Head1| VarList1], [Head2 | VarList2], Context)->
 
 
 is_var( { Atom } ) when is_atom(Atom)->
-    true;    
+    positive;    
 is_var(X)->
     X.
 
@@ -306,7 +306,7 @@ match_vars([], [], Res, Pretend, _Dict )->
 ;
 match_vars([Head| List], [Search| Tail], Res, Pretend, Dict )->
       case prolog_matching:is_var(Search) of
-	    true -> 
+	    positive -> 
 		    case find_var( Dict, Search ) of %%val in search wasn't bounded
 			  nothing -> NewDict = store_var({Search, Head}, Dict), 
 				     match_vars(List, Tail, Res, Pretend, NewDict  );
@@ -458,7 +458,7 @@ match_process_list(_, [Pattern| TailPattern], [SearchVal| Tail ], Dict, MatchedS
 	  ?DEV_DEBUG_MATCH("~p main function  of list match  ~p ~n",[{?MODULE,?LINE}, {Pattern, SearchVal} ]),
 	  
 	  case is_var(Pattern) of
-	       true ->
+	       positive ->
 		         {Res, NewDict} = process_var(Pattern, SearchVal, Dict  ),
 			 match_process_list(Res, TailPattern, Tail, NewDict, MatchedStruct ) ;
 		SearchVal ->
@@ -474,7 +474,7 @@ match_process_list(_, Pattern, Search, Dict, MatchedStruct  )->
 	  ?DEV_DEBUG_MATCH("~p final function  of list match  ~p ~n",[{?MODULE,?LINE}, {Pattern, Search} ]),
 
       	  case is_var(Pattern) of
-	       true ->
+	       positive ->
 		         case process_var(Pattern, Search, Dict  ) of
 			      {false, _ }-> {false,Dict};
 			      {_, NewDict} -> {MatchedStruct, NewDict}
@@ -484,7 +484,7 @@ match_process_list(_, Pattern, Search, Dict, MatchedStruct  )->
 		SomeThingElse ->
 
 			 case   is_var(Search) of
- 			      true -> process_var(Pattern, Search, Dict);
+ 			      positive -> process_var(Pattern, Search, Dict);
  			      _Pat  ->
 % 			      
  				    ?DEV_DEBUG_MATCH("~p triggered unexpected else ~p ~n",[{?MODULE,?LINE}, SomeThingElse]),

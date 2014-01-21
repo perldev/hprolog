@@ -23,6 +23,12 @@
 %       "maxColumnInclusive": false
 %     }
 %   ]
+%{
+%  "type": "TimestampsFilter",
+%  "timestamps": [
+%    "1351586939"
+%  ]
+%}
 % }
 %     {
 %         "latestVersion":true, "ifMissing":false, 
@@ -593,13 +599,12 @@ fact_start_link( Aim,  TreeEts, ParentPid )->
       converter_monitor:stat('search', Name, NameSpace , Aim, true ),
       case check_exist_facts( Name, TreeEts) of %%and try to find in hbase
                     true-> 
-                        fact_start_link_hbase(Aim,  TreeEts, ParentPid);
+                         fact_start_link_hbase(Aim,  TreeEts, ParentPid);
                     false -> 
 			 ?DEBUG("~p delete on start ~p ~n",[{?MODULE,?LINE},  Name  ]),
 			 ParentPid ! {non_exist_exception, Name},
 			 exit(normal)
       end
-     
 .
 
 fact_start_link_hbase( Aim,  TreeEts, ParentPid )->
@@ -617,7 +622,6 @@ fact_start_link_hbase( Aim,  TreeEts, ParentPid )->
 		 case  check_index(ProtoType, Name, TreeEts) of
 		       []->
 			      start_process_loop_hbase(Name, ProtoType, TreeEts);
-
 		       {Name,  PartKey }->
     			      ?DEBUG("~p find whole_key ~p ~n",[{?MODULE,?LINE}, { Name, PartKey } ]),
 			       process_indexed_hbase(atom_to_list(NameTable),
@@ -626,10 +630,7 @@ fact_start_link_hbase( Aim,  TreeEts, ParentPid )->
                                                     TreeEts);
 		       {IndexTable , PartKey } ->
 			      ?DEBUG("~p got index ~p ~n",[{?MODULE,?LINE}, { {IndexTable, Name} , PartKey } ]),
-		              PreRes = get_indexed_records(PartKey, atom_to_list(IndexTable) ),
-		              %%TODO process exception timeouts etc
-                                
-		              
+		              PreRes = get_indexed_records(PartKey, atom_to_list(IndexTable) ),             
 			      process_indexed_hbase(atom_to_list(NameTable), ProtoType,  PreRes,  TreeEts)
 		end;
 	  Res ->
@@ -651,7 +652,7 @@ get_indexed_records(PartKey, IndexTable, 1) when is_atom(IndexTable)->
 get_indexed_records(PartKey, IndexTable, 1) ->
 
      ?DEBUG("~p got index ~n",[{?MODULE,?LINE}  ]),
-     fact_hbase_thrift:get_key_custom(IndexTable, ?FAMILY, PartKey, default)    
+     fact_hbase_thrift:get_existed_key_custom(IndexTable, ?FAMILY, PartKey, default)    
 ;
 get_indexed_records(PartKey, IndexTable, 0) when is_atom(IndexTable)->
       get_indexed_records( PartKey, atom_to_list(IndexTable) )
@@ -724,7 +725,7 @@ process_indexed_hbase(Table, ProtoType, {hbase_exception, Reason}, TreeEts)->
 %     converter_monitor:stat('search_index',  Table , NameSpace, ProtoType, false ),
     receive
         {PidReciverResult, get_pack_of_facts}->
-            PidReciverResult !  {hbase_exception,Reason};
+            PidReciverResult !  {hbase_exception, Reason};
          Some ->     
 
             ?LOG("~p got unexpected ~p ~n",[{?MODULE,?LINE}, Some ])
@@ -845,7 +846,7 @@ check_index(ProtoType, Name, TreeEts)->
 
         {_, FindKey, OutVals, WholeKeyReverse} = lists:foldl(fun(E, {Index,In, Vals, WholeKey})->
 						case prolog_matching:is_var(E) of
-						      true->
+						      positive->
 							  {Index+1,In, Vals,[ integer_to_list(Index) | WholeKey] };
 						      Val ->
 							  {Index+1, [ integer_to_list(Index) | In],
@@ -993,7 +994,7 @@ start_recr(Facts, ProtoType)->
 	{Filters, _I} = lists:foldl(fun(Pat,  {In,Index} )->
 					  Elem = integer_to_list(Index),
 					  case prolog_matching:is_var(Pat) of
-					      true ->   {In, Index+1 };
+					      1 ->   {In, Index+1 };
 					      _ -> Var = create_hbase_json_filter( {Pat, Elem} ),  
 						    ?DEBUG(" ~p generate ~p~n",[{?MODULE,?LINE}, { Pat, Elem } ]),
 						  {<< In/binary, ",", Var/binary>>, Index+1}
