@@ -994,7 +994,7 @@ start_recr(Facts, ProtoType)->
 	{Filters, _I} = lists:foldl(fun(Pat,  {In,Index} )->
 					  Elem = integer_to_list(Index),
 					  case prolog_matching:is_var(Pat) of
-					      1 ->   {In, Index+1 };
+					      positive ->   {In, Index+1 };
 					      _ -> Var = create_hbase_json_filter( {Pat, Elem} ),  
 						    ?DEBUG(" ~p generate ~p~n",[{?MODULE,?LINE}, { Pat, Elem } ]),
 						  {<< In/binary, ",", Var/binary>>, Index+1}
