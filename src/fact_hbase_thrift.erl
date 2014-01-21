@@ -6,7 +6,8 @@
          start_process_loop_hbase/3,
          low_get_key/4,
          get_regions/1,
-         get_key_custom/4,
+         get_existed_key_custom/4,
+         get_existed_key_custom/7,
          get_key/4, 
          put_key/5, 
          get_data/7,
@@ -238,10 +239,10 @@ low_get_key(Table, Key, Family,  SecondKey)->
 
 .
 
-get_key_custom( Table, Family, Key, default)->
-    get_key_custom( Table, Family, Key, fun process_one_record/1 )
+get_existed_key_custom( Table, Family, Key, default)->
+    get_existed_key_custom( Table, Family, Key, fun process_one_record/1 )
 ;
-get_key_custom( Table, Family, Key, FunProcess)->
+get_existed_key_custom( Table, Family, Key, FunProcess)->
         {KeyC, Connection} = thrift_connection_pool:get_free(),
 %      thrift_client:call(State, getRowWithColumns, 
 %         ["pay","0faf51ea7ba2292dd69f6ec66b1e4ba9",["params"],dict:new()]).
@@ -251,7 +252,9 @@ get_key_custom( Table, Family, Key, FunProcess)->
         case catch thrift_client:call(Connection, getRowWithColumns, [ Table, Key, [Family], dict:new() ] ) of
             { NewState, {ok, []}  } -> 
                         thrift_connection_pool:return({KeyC, NewState}),
-                        {hbase_exception, not_found};
+                        Error = {hbase_exception, not_found},
+                        Count = application:get_env(eprolog, thrift_reconnect_times ),
+                        get_existed_key_custom(Error, 0,  Table, Family, Key, FunProcess, Count);
             { NewState, {ok, Data} } ->
                     ?DEBUG("~p fetch : data ~p in ~p  ~n", [{?MODULE,?LINE}, Data,  timer:now_diff(now(), Time ) ]),
                     thrift_connection_pool:return({KeyC, NewState}),
@@ -261,9 +264,42 @@ get_key_custom( Table, Family, Key, FunProcess)->
                 %%%reconnection !!!??
                 thrift_connection_pool:reconnect(KeyC, Error),
                 ?DEBUG("get key ~p error result: ~p ~n", [{ Table, Family, Key}, Error]),
-                {hbase_exception, Error}          
+                Count = application:get_env(eprolog, thrift_reconnect_times),
+                get_existed_key_custom(Error, 0,  Table, Family, Key, FunProcess, Count)  
+                
         end.
 
+%%Function for         
+get_existed_key_custom(Res, _Index, _Table, _Family, _Key, _FunProcess, undefined)->
+        Res;       
+get_existed_key_custom(Res, _Count, _Table, _Family, _Key, _FunProcess, _Count)->
+        Res;
+get_existed_key_custom(_PrevRes, Index ,Table, Family, Key, FunProcess, Count)->
+        {KeyC, Connection} = thrift_connection_pool:get_free(),
+%      thrift_client:call(State, getRowWithColumns, 
+%         ["pay","0faf51ea7ba2292dd69f6ec66b1e4ba9",["params"],dict:new()]).
+        Time = now(),
+        ?DEBUG("~p  starting fetch  ~p ~n", [{?MODULE,?LINE}, Connection]),
+
+        case catch thrift_client:call(Connection, getRowWithColumns, [ Table, Key, [Family], dict:new() ] ) of
+            { NewState, {ok, []}  } -> 
+                        thrift_connection_pool:return({KeyC, NewState}),
+                        Error = {hbase_exception, not_found},
+                        get_existed_key_custom(Error, Index + 1,  Table, Family, Key, FunProcess, Count);
+            { NewState, {ok, Data} } ->
+                    ?DEBUG("~p fetch : data ~p in ~p  ~n", [{?MODULE,?LINE}, Data,  timer:now_diff(now(), Time ) ]),
+                    thrift_connection_pool:return({KeyC, NewState}),
+                    FunProcess(Data)          
+                ;
+            Error -> 
+                %%%reconnection !!!??
+                thrift_connection_pool:reconnect(KeyC, Error),
+                ?DEBUG("get key ~p error result: ~p ~n", [{ Table, Family, Key}, Error]),
+                get_existed_key_custom(Error, Index + 1,  Table, Family, Key, FunProcess, Count)  
+                
+        end.        
+        
+        
     
 get_key(ProtoType, Table, Family, Key)->
     {KeyC, Connection} = thrift_connection_pool:get_free(),

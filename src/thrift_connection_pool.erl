@@ -56,9 +56,11 @@ start_pool()->
                             end
                        end, lists:seq(1, Count) ),
                        {ok, Thrift_reconnect_timeout} = application:get_env(eprolog, thrift_reconnect_timeout),
+                       ?THRIFT_LOG("~p thrift server will start ~p  connections ~n", [{?MODULE,?LINE}, Count ]),
                        thrift_connection_pool:set_connection_pool(Hosts, Thrift_reconnect_timeout );
                    _->
-                       do_nothing
+                       ?THRIFT_LOG("~p thrift server will do nothing ~n",
+                           [{?MODULE,?LINE} ]), do_nothing
                 end.
 
 
