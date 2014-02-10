@@ -259,10 +259,12 @@ process_cache_link(Meta, Table)->
 			lists:foreach( fun(E)-> 
 					  CacheInfo  =  get_val(E, <<"column">>) ,
 					  Col = common:inner_to_atom( cut_family( ?CACHE_FAMILY, CacheInfo )  ),
-					  Val = unicode:characters_to_list( get_val(E, <<"$">> ) ) ,
+					  Val =  unicode:characters_to_list( get_val(E, <<"$">> ) ) ,
 					  ?DEBUG("~p insert cache info ~p ~n",[ {?MODULE,?LINE}, 
 										   { RowName, Col, Val  } ] ),
-					  ets:insert(Table, { RowName, Col, Val  })
+					  ListSplit  =  string:tokens(Val,","),
+					  ListsMapInt = lists:map( fun list_to_integer/1, ListSplit  ),
+					  ets:insert(Table, { RowName, Col, ListsMapInt })
 					end, 
 				      RowCells) 
 		      end, Cache )
@@ -847,15 +849,15 @@ check_index(ProtoType, Name, TreeEts)->
         {_, FindKey, OutVals, WholeKeyReverse} = lists:foldl(fun(E, {Index,In, Vals, WholeKey})->
 						case prolog_matching:is_var(E) of
 						      positive->
-							  {Index+1,In, Vals,[ integer_to_list(Index) | WholeKey] };
+							  {Index+1,In, Vals,[ Index | WholeKey] };
 						      Val ->
-							  {Index+1, [ integer_to_list(Index) | In],
-								[ Val | Vals ], [ integer_to_list(Index) | WholeKey] }
+							  {Index+1, [ Index | In],
+								[ Val | Vals ], [ Index | WholeKey] }
 						end
 					    end, {1, "",[],""} ,ProtoType),  
 	BoundedKey = lists:reverse(OutVals),
-	WholeKey = string:join( lists:reverse(WholeKeyReverse), ","),	  
-	PossibleKey = string:join( lists:reverse(FindKey), ","),
+	WholeKey =  lists:reverse(WholeKeyReverse),	  
+	PossibleKey = lists:reverse(FindKey) ,
 	TableName = common:get_logical_name(TreeEts, ?HBASE_INDEX),
 	Indexes = ets:lookup( TableName, Name),
         ?DEBUG("~p possible key ~p ~n",[{?MODULE,?LINE}, {Indexes, PossibleKey, WholeKey}]),
@@ -1277,11 +1279,9 @@ put_key_body(Name, Key, MakeCellSet, 0 )->
 .
 
 
-%TODO  move to thrift
-hbase_add_index(IndexTable, NameSpace,  Type, Params, MD5Key)->
-      Keys =  string:tokens(Type, ","),
-      KeyList = lists:map(fun(E)->
-		      Index = list_to_integer(E),
+%TODO  lists:nth !!!!
+hbase_add_index(IndexTable, NameSpace,  Keys, Params, MD5Key)->
+      KeyList = lists:map(fun(Index)->
 		      %%the index descriptor is could be in any order
 		      lists:nth(Index, Params )
 		 end,
@@ -1290,32 +1290,30 @@ hbase_add_index(IndexTable, NameSpace,  Type, Params, MD5Key)->
       Key = generate_key( KeyList ),
       ?DEBUG("~p process add index ~p",[{?MODULE,?LINE}, {Key,KeyList }  ]),
 
-      converter_monitor:stat(try_add_index, IndexTable, NameSpace, { Type,MD5Key, Key }, true ),
+      converter_monitor:stat(try_add_index, IndexTable, NameSpace, { Keys, MD5Key, Key }, true ),
       Res = index_put_key_body(IndexTable, Key, MD5Key),
-      converter_monitor:stat(add_index, IndexTable, NameSpace , { Type, MD5Key, Key }, Res ), 
+      converter_monitor:stat(add_index, IndexTable, NameSpace , { Keys, MD5Key, Key }, Res ), 
       Res
 .
 
 
-%%%TODO IT'S WRONG!!!!
-hbase_del_index(IndexTable, NameSpace, Type, Params)->
-      Keys =  string:tokens(Type, ","),
-      KeyList = lists:map(fun(E)->
-		      Index = list_to_integer(E),
+%%%TODO IT'S WRONG!!!! lists:nth
+hbase_del_index(IndexTable, NameSpace, Keys, Params)->
+      KeyList = lists:map(fun(Index)->
 		      lists:nth(Index, Params )
 		 end,
 		 Keys
 		 ),
       Key = generate_key( KeyList ),
       ?DEBUG("~p process delete index ~p",[{?MODULE,?LINE}, {Key,KeyList }  ]),
-      converter_monitor:stat(try_del_index,  IndexTable , NameSpace, { Type, Key }, true ),
+      converter_monitor:stat(try_del_index,  IndexTable , NameSpace, { Keys, Key }, true ),
       case catch  del_key(Key, IndexTable ) of
         {hbase_exception, Res }->   
-            converter_monitor:stat(del_index,  IndexTable, NameSpace,  { Type, Key }, false ),
+            converter_monitor:stat(del_index,  IndexTable, NameSpace,  { Keys, Key }, false ),
             true
         ;    
         Res ->
-            converter_monitor:stat(del_index,  IndexTable, NameSpace, { Type, Key }, true ),
+            converter_monitor:stat(del_index,  IndexTable, NameSpace, { Keys, Key }, true ),
             Res
      end
         
