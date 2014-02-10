@@ -2,7 +2,7 @@
 %%default count of pool to the thrift server
 %% wheather using thrift
 -define(USE_THRIFT, 1).
--define(SIMPLE_HBASE_ASSERT,  common:check_source(TreeEts) ).
+-define(SIMPLE_HBASE_ASSERT, 1). %  common:check_source(TreeEts) ).
 
 %-define(THRIFT_RECONNECT_TIMEOUT,130000).
 %-define(THRIFT_MAX_RECONNECT_COUNT, 10).
@@ -78,22 +78,6 @@
 -define(ROOT, console_root).
 -define(PREFIX, prefix).
 
-%%counter of operation, we can count tree lookups
-%-define(INCLUDE_COUNT,1).
-
--ifdef(INCLUDE_COUNT).
-
--define(AIM_COUNTER(TreeEts),   ets:update_counter(TreeEts, aim_counter, {3,1}) ).
--define(START_COUNTER(TreeEts),  ets:insert(TreeEts, {system_record,aim_counter, 0} )   ).
--define(GET_AIM_COUNT(TreeEts), common:return_count(TreeEts) ).
-
--else.
-
--define(AIM_COUNTER(TreeEts),   true ).
--define(START_COUNTER(TreeEts),  true   ).
--define(GET_AIM_COUNT(TreeEts), not_included).
-
--endif.
 
 
 -ifdef(LOAD_LOG).
@@ -151,8 +135,8 @@
 -ifdef(USE_HBASE).
 -define('INCLUDE_HBASE'(X),  fact_hbase:load_rules2ets(X) ).
 
--define('THRIFT_POOL'(Str, Pars ),   true ).
--define('THRIFT_LOG'(Str, Pars ),   true ).
+-define('THRIFT_POOL'(Str, Pars ),   lager:warning(Str, Pars) ).
+-define('THRIFT_LOG'(Str, Pars ),   lager:warning(Str, Pars) ).
 
 -else.
 -define('THRIFT_POOL'(Str, Pars ),   true ).
@@ -226,7 +210,7 @@
 -define(CODE_COLUMN,"code").
 -define(RULES_TABLE,"rules").
 -define(META_FACTS,"meta").
-
+-define(CLOUD_KEY, "cloud").
 -define(RABBIT_SPEED, 700).
 -define(SL_TIMER, 60000). %minute
 % pay(Re,"75000.00",Currency,Date,From_okpo,To_okpo,From_account,To_account,FromName,ToName,FromMfo,ToMfo, Desc,Ip).
@@ -246,6 +230,7 @@
 -define(INNER, inner).
 -define(RULES, rules_inner).
 -define(META_LINKS, meta_facts_links).
+
 
 -define(META_WEIGHTS, meta_weights).
 
@@ -309,7 +294,6 @@
 [
 'date_sub',     
 'date_add',
-
 'id',
 'to_float',
 'to_integer',
@@ -322,9 +306,13 @@
 'add',
 'reverse',
 'soundex',
+'cloud',
+'start_cloud',
+'stop_cloud',
+'cloud_counters',
 
-member_tail,
-member,
+'member_tail',
+'member',
 
 'once',
 'atom_length',
@@ -337,6 +325,8 @@ member,
 'copy_namespace',
 'use_namespace',
 'create_namespace',
+'add_index_fact',
+'drop_index_fact',
 'abolish',
 'integer',
 'list',
