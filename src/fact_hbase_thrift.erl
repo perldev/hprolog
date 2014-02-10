@@ -6,8 +6,8 @@
          start_process_loop_hbase/3,
          low_get_key/4,
          get_regions/1,
-         get_existed_key_custom/4,
-         get_existed_key_custom/7,
+         get_key_custom/4,
+         get_error_key_custom/7,
          get_key/4, 
          put_key/5, 
          get_data/7,
@@ -227,7 +227,7 @@ low_get_key(Table, Key, Family,  SecondKey)->
                 ?DEBUG("~p fetch : data ~p in ~p  ~n", [{?MODULE,?LINE}, Data,  timer:now_diff(now(), Time ) ]),
                 thrift_connection_pool:return({KeyC, NewState}),
 %                 {ok,[{tCell,<<"P2497386422">>,1373889743539}]}}
-                [{tCell,Val ,_TimeStamp}] = Data,
+                [{tCell,Val, _TimeStamp}] = Data,
                 unicode:characters_to_list(Val)
             ;
         Error -> 
@@ -239,10 +239,10 @@ low_get_key(Table, Key, Family,  SecondKey)->
 
 .
 
-get_existed_key_custom( Table, Family, Key, default)->
-    get_existed_key_custom( Table, Family, Key, fun process_one_record/1 )
+get_key_custom( Table, Family, Key, default)->
+    get_key_custom( Table, Family, Key, fun process_one_record/1 )
 ;
-get_existed_key_custom( Table, Family, Key, FunProcess)->
+get_key_custom( Table, Family, Key, FunProcess)->
         {KeyC, Connection} = thrift_connection_pool:get_free(),
 %      thrift_client:call(State, getRowWithColumns, 
 %         ["pay","0faf51ea7ba2292dd69f6ec66b1e4ba9",["params"],dict:new()]).
@@ -252,9 +252,7 @@ get_existed_key_custom( Table, Family, Key, FunProcess)->
         case catch thrift_client:call(Connection, getRowWithColumns, [ Table, Key, [Family], dict:new() ] ) of
             { NewState, {ok, []}  } -> 
                         thrift_connection_pool:return({KeyC, NewState}),
-                        Error = {hbase_exception, not_found},
-                        Count = application:get_env(eprolog, thrift_reconnect_times ),
-                        get_existed_key_custom(Error, 0,  Table, Family, Key, FunProcess, Count);
+                        {hbase_exception, not_found};
             { NewState, {ok, Data} } ->
                     ?DEBUG("~p fetch : data ~p in ~p  ~n", [{?MODULE,?LINE}, Data,  timer:now_diff(now(), Time ) ]),
                     thrift_connection_pool:return({KeyC, NewState}),
@@ -263,29 +261,26 @@ get_existed_key_custom( Table, Family, Key, FunProcess)->
             Error -> 
                 %%%reconnection !!!??
                 thrift_connection_pool:reconnect(KeyC, Error),
-                ?DEBUG("get key ~p error result: ~p ~n", [{ Table, Family, Key}, Error]),
+                ?DEBUG("get key ~p error result: ~p ~p ~n", [{ Table, Family, Key}, Error]),
                 Count = application:get_env(eprolog, thrift_reconnect_times),
-                get_existed_key_custom(Error, 0,  Table, Family, Key, FunProcess, Count)  
+                get_error_key_custom(Error, 0,  Table, Family, Key, FunProcess, Count)  
                 
         end.
 
 %%Function for         
-get_existed_key_custom(Res, _Index, _Table, _Family, _Key, _FunProcess, undefined)->
+get_error_key_custom(Res, _Index, _Table, _Family, _Key, _FunProcess, undefined)->
         Res;       
-get_existed_key_custom(Res, _Count, _Table, _Family, _Key, _FunProcess, _Count)->
+get_error_key_custom(Res, Count, _Table, _Family, _Key, _FunProcess, {ok,Count} )->
         Res;
-get_existed_key_custom(_PrevRes, Index ,Table, Family, Key, FunProcess, Count)->
+get_error_key_custom(_PrevRes, Index ,Table, Family, Key, FunProcess, Count)->
         {KeyC, Connection} = thrift_connection_pool:get_free(),
-%      thrift_client:call(State, getRowWithColumns, 
-%         ["pay","0faf51ea7ba2292dd69f6ec66b1e4ba9",["params"],dict:new()]).
         Time = now(),
-        ?DEBUG("~p  starting fetch  ~p ~n", [{?MODULE,?LINE}, Connection]),
-
+        ?DEBUG("~p  starting fetch  ~p  repeat ~p ~n", [{?MODULE,?LINE}, Connection,{Index, Count} ]),
         case catch thrift_client:call(Connection, getRowWithColumns, [ Table, Key, [Family], dict:new() ] ) of
             { NewState, {ok, []}  } -> 
                         thrift_connection_pool:return({KeyC, NewState}),
                         Error = {hbase_exception, not_found},
-                        get_existed_key_custom(Error, Index + 1,  Table, Family, Key, FunProcess, Count);
+                        get_error_key_custom(Error, Index + 1,  Table, Family, Key, FunProcess, Count);
             { NewState, {ok, Data} } ->
                     ?DEBUG("~p fetch : data ~p in ~p  ~n", [{?MODULE,?LINE}, Data,  timer:now_diff(now(), Time ) ]),
                     thrift_connection_pool:return({KeyC, NewState}),
@@ -295,7 +290,7 @@ get_existed_key_custom(_PrevRes, Index ,Table, Family, Key, FunProcess, Count)->
                 %%%reconnection !!!??
                 thrift_connection_pool:reconnect(KeyC, Error),
                 ?DEBUG("get key ~p error result: ~p ~n", [{ Table, Family, Key}, Error]),
-                get_existed_key_custom(Error, Index + 1,  Table, Family, Key, FunProcess, Count)  
+                get_error_key_custom(Error, Index + 1,  Table, Family, Key, FunProcess, Count)  
                 
         end.        
         
@@ -973,7 +968,8 @@ process_record_disk(E,  {ProtoType, Columns,_, DEtsBuffer, CountS, CountB } )->
     ColumnsData  = E#tRowResult.columns,
     RowKey = E#tRowResult.row,
 %     ?THRIFT_LOG(" process record  ~p ", [E]),
-    { _ColumnsData, Record,_, _, Res } = lists:foldr(fun process_tCell/2,  {ColumnsData, [], ProtoType, dict:new(), true }, Columns),
+    { _ColumnsData, Record,_, _, Res } = lists:foldr(fun process_tCell/2,  
+                                        {ColumnsData, [], ProtoType, dict:new(), true }, Columns),
     case Res of
          false -> {ProtoType, Columns, RowKey, DEtsBuffer, CountS, CountB + 1 };
          true ->   
@@ -985,13 +981,13 @@ process_record_disk(E,  {ProtoType, Columns,_, DEtsBuffer, CountS, CountB } )->
 %TODO remove coverts tuple_to_list
 process_record(E,  {ProtoType, Columns, _, EtsBuffer, CountS, CountB } )->
     ColumnsData  = E#tRowResult.columns,
-%      ?THRIFT_LOG(" process record  ~p ", [E]),
+    ?THRIFT_LOG(" process record  ~p ~n", [E]),
     RowKey = E#tRowResult.row,
-    ?THRIFT_LOG("~p process one cell ~p",[{?MODULE,?LINE}, {RowKey, ColumnsData}]),
-    { _ColumnsData, Record,_, _, Res } = lists:foldr(fun process_tCell/2,  {ColumnsData, [], ProtoType, dict:new(), true }, Columns),
-    ?THRIFT_LOG("~p after  process one cell ~p",[{?MODULE,?LINE}, Record]),
+    ?THRIFT_LOG("~p process one cell ~p",[{?MODULE,?LINE}, E]),
+    { _ColumnsData, Record,_, _, Res } = lists:foldr(fun process_tCell/2,  
+                                        {ColumnsData, [], ProtoType, dict:new(), true }, Columns),
 
-%       ?THRIFT_LOG(" compare ~p and ~p ",[Record, ProtoType]),
+     ?THRIFT_LOG(" compare ~p and ~p ",[Record, ProtoType]),
      case Res of
          false -> {ProtoType, Columns, RowKey, EtsBuffer, CountS, CountB + 1 };
          true ->   

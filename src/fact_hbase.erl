@@ -96,14 +96,14 @@ create_new_namespace(Prefix)->
 load_rules2ets(Prefix)->
       
       Scanner  = generate_scanner(1024,<<>>),
-      Family = create_hbase_family_filter("description"),
+      FamilyDesc = create_hbase_family_filter("description"),
 
       MetaInfo = create_hbase_family_filter(?STAT_FAMILY),
 
       FamilyLinks = create_hbase_family_filter(?LINKS_FAMILY),
       CacheLinks = create_hbase_family_filter(?CACHE_FAMILY),
       ScannerCache  = generate_scanner(1024,  CacheLinks),
-      ScannerMeta  = generate_scanner(?META_INFO_BATCH,  Family),      
+      ScannerMeta  = generate_scanner(1024,  FamilyDesc),      
       ScannerAiMeta  = generate_scanner(1024,  FamilyLinks),
       
       ScannerMetaInfo = generate_scanner(?META_INFO_BATCH,  MetaInfo),      
@@ -515,8 +515,11 @@ process_hbase_meta_fact(Fact, Table)->
       Name = list_to_atom( binary_to_list( base64:decode(Name64) ) ),
       Count = get_column(Columns, <<"description:count">>),
       Func = get_column(Columns,<<"description:hash_function">>),
-      ?DEBUG("~p got meta info of fact ~p ~n",[{?MODULE,?LINE}, {Name, Count, Func } ]),
-      ets:insert(Table, {Name, list_to_integer(Count), Func }),
+      Cloud_key  =  list_to_binary("description:" ++   ?CLOUD_KEY),
+      Cloud = get_column(Columns, Cloud_key),
+      
+      ?DEBUG("~p got meta info of fact ~p ~n",[{?MODULE,?LINE}, {Name, Count, Func, Cloud } ]),
+      ets:insert(Table, {Name, list_to_integer(Count), Func, Cloud  }),
       Table
 .
 
@@ -531,7 +534,7 @@ get_column(Columns, Find)->
 			       unicode:characters_to_list( base64:decode( Value64 ) );
 			_-> I
 		    end
-		end,"", Columns)
+		end, "", Columns)
 .
 
 process_code(<<"">>, _Table ) ->
@@ -648,13 +651,14 @@ get_indexed_records(PartKey, IndexTable) ->
 .
 
 
+
+
 get_indexed_records(PartKey, IndexTable, 1) when is_atom(IndexTable)->
       get_indexed_records( PartKey, atom_to_list(IndexTable), 1 )
 ;
 get_indexed_records(PartKey, IndexTable, 1) ->
-
      ?DEBUG("~p got index ~n",[{?MODULE,?LINE}  ]),
-     fact_hbase_thrift:get_existed_key_custom(IndexTable, ?FAMILY, PartKey, default)    
+     fact_hbase_thrift:get_key_custom(IndexTable, ?FAMILY, PartKey, default)    
 ;
 get_indexed_records(PartKey, IndexTable, 0) when is_atom(IndexTable)->
       get_indexed_records( PartKey, atom_to_list(IndexTable) )
@@ -713,7 +717,6 @@ process_key_data(Meta)->
 process_indexed_hbase(Table, ProtoType, {hbase_exception, not_found}, TreeEts)->
 
     NameSpace = common:get_logical_name( TreeEts ),
-%     converter_monitor:stat('search_index',  Table , NameSpace, ProtoType, false ),
     receive
         {PidReciverResult, get_pack_of_facts}->
             PidReciverResult !  [];
@@ -763,6 +766,18 @@ process_indexed_hbase(Table, ProtoType,  [NewKey| NewPreRes] , TreeEts)->
 	end,
 	exit(normal)
 .
+
+
+%%TODO implement for the REST
+custom_get_key(Table,  Family, Key)->
+         custom_get_key(Table,  Family, Key, default) 
+        
+.
+custom_get_key(Table,  Family, Key, FunProcess)->
+         fact_hbase_thrift:get_key_custom(Table, Family, Key, FunProcess) 
+        
+.
+        
 
 hbase_get_key(Table,  Key)->
       { Hbase_Res, Host } = get_rand_host(),
@@ -1195,15 +1210,13 @@ add_new_fact([ Name | ProtoType ] , Pos, TreeEts,  1)->
                   converter_monitor:stat(add, Name , NameSpace , ProtoType, Res ),
  		  Res;  
 	      {CountParams1, _HashFunction } ->
-		  ?DEBUG("~p params have not matched with exists~p",[{?MODULE,?LINE}, {CountParams1,CountParams } ]),
-		  false
-		  ;
+		  ?DEBUG("~p params have not matched with exists ~p ~n", [{?MODULE,?LINE}, {CountParams1,CountParams } ]),
+		  false;
 	      false -> 
 		  ?DEBUG("~p create new table ~p ~n",[{?MODULE,?LINE}, RealName ]),
 		  create_new_fact_table(RealName),
 		  ?DEBUG("~p store meta info  ~n",[{?MODULE,?LINE} ]),
-
-		  ets:insert( common:get_logical_name(TreeEts, ?META), {Name, CountParams, "md5"} ),
+		  ets:insert( common:get_logical_name(TreeEts, ?META), {Name, CountParams, "md5", ""} ),
 		  store_meta_fact(Name,  common:get_logical_name(TreeEts, ?META_FACTS) , [
 					  {"count" ,integer_to_list( CountParams) }, 
 					  {"hash_function","md5" },
@@ -1361,7 +1374,7 @@ check_params_facts(Name, TreeEts) when is_list(Name)->
 check_params_facts(Name, TreeEts) ->
 
      case ets:lookup( common:get_logical_name(TreeEts, ?META), Name  ) of
-	  [ {Name, Count, HashFunction }  ] -> {Count, HashFunction};
+	  [ {Name, Count, HashFunction, _ }  ] -> {Count, HashFunction};
 	  []-> false
      end
 .
@@ -1458,7 +1471,7 @@ delete_all_fact(Name, TreeEts )->
 
 delete_all_fact(Name, TreeEts, 0 )->
     true;
-delete_all_fact(Name, TreeEts, 1 )->
+delete_all_fact([Name, CloudTable ], TreeEts, 1 )->
     NameSpace = common:get_logical_name(TreeEts),
 
     RealName = common:get_logical_name(TreeEts, Name),
@@ -1469,7 +1482,10 @@ delete_all_fact(Name, TreeEts, 1 )->
     TableListIndex = lists:map(  fun({_Name, TableIndex, _})->
                                     TableIndex
                             end, ListIndex),
-    Table2Delete =  [RealName| TableListIndex],
+    Table2Delete = case CloudTable of
+                        [] -> [RealName| TableListIndex];
+                        _ -> [RealName, CloudTable | TableListIndex]
+                   end, 
     case catch lists:foreach( fun delete_table/1, Table2Delete) of
          ok ->
                 converter_monitor:stat(abolish,  Name ,NameSpace, {}, true ),
@@ -1508,8 +1524,8 @@ delete_table(TableName)->
                                 ?DEBUG("~p process delete data with ~n ~p ~n~n~n",[{?MODULE,?LINE}, TableName ] ),
                                 true;
                         Res ->
-                            ?WAIT("~p got from hbase ~p for table ~p  ",[?LINE,Res,  TableName]),
-                             throw({hbase_exception, { {delete, TableName}, Res} })
+                                ?WAIT("~p got from hbase ~p for table ~p  ",[?LINE,Res,  TableName]),
+                                throw({hbase_exception, { {delete, TableName}, Res} })
 
         end
 

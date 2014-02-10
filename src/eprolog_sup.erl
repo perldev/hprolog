@@ -12,7 +12,7 @@ init([]) ->
         Statistic = {"monitor",
         {
              converter_monitor, start_link, [  ]},
-             permanent, infinity, worker , [ converter_monitor]
+             permanent, infinity, worker , [ converter_monitor ]
         },
         ThriftPool = {"thrift_connection_pool",
              {thrift_connection_pool, start_link, [  ] },

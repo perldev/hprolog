@@ -5,7 +5,6 @@
 
 -export([start/0,start/1,server/1]).
 
--import(lists, [foldl/3,foreach/2]).
 -compile(export_all).
 -include("prolog.hrl").
 
@@ -23,28 +22,19 @@ api_start_anon(Prefix, FileName)->
 .
 
 
-
-
 api_start(Prefix)->
     prolog:create_inner_structs(Prefix),
    ?INCLUDE_HBASE( Prefix )
 .
 
 start(Prefix)-> 
-%     inets:start(),
-%     crypto:start(),
-%     ?LOG_APPLICATION,
-%     case lists:member(converter_monitor, global:registered_names() ) of
-% 	  false -> converter_monitor:start_link();
-% 	  true  -> do_nothing
-%     end,
     case prolog:create_inner_structs(Prefix) of
          true->   case (catch ?INCLUDE_HBASE( Prefix ) ) of
                     true-> io:format("~p namespace was loaded ~n",[Prefix]);
                     Res ->io:format("unable to load namespace ~p  ~n",[Res])
                   end;
          already->
-                  io:format("~p  names is already loaded ~n",[Prefix])
+                    io:format("~p  names is already loaded ~n",[Prefix])
             
     end,
     server(Prefix) 
@@ -53,138 +43,87 @@ start(Prefix)->
 server(Prefix) ->
     io:fwrite("Prolog Shell V~s (abort with ^G)\n",
 	      [erlang:system_info(version)]),
-    TreeEts = ets:new(tree_processes,[ public, set,named_table,{ keypos, 2 } ] ),   
-    ets:insert(TreeEts, {system_record,?PREFIX, Prefix}),    
-    server_loop(TreeEts, ?TRACE_OFF).
+    server_loop(Prefix, ?TRACE_OFF).
 
 %% A simple Prolog shell similar to a "normal" Prolog shell. It allows
 %% user to enter goals, see resulting bindings and request next
 %% solution.
 
-server_loop(TreeEts, TraceOn) ->
+server_loop(NameSpace, TraceOn) ->
     process_flag(trap_exit, true),
     case erlog_io:read('| ?- ') of
 	{ok,halt} -> ok;
 	{ok, trace_on}->
 	      io:fwrite("trace on Yes~n"),  
-	      server_loop(TreeEts, ?TRACE_ON)
+	      server_loop(NameSpace, ?TRACE_ON)
 	;
 	{ok, nl}->
 	       io:fwrite("~n"),  
-	       server_loop(TreeEts, TraceOn);
+	       server_loop(NameSpace, TraceOn);
 	{ok, stat}->
 	       io:fwrite("todo this is ~n"),  
-	       server_loop(TreeEts, TraceOn);
+	       server_loop(NameSpace, TraceOn);
 	{ok, listing}->
 	      io:fwrite("listing is ~n"),  
-	      Code = get_code_memory(TreeEts),
+	      Code = get_code_memory(NameSpace),
 	      io:fwrite("~s ~n", [Code]),   
-	      server_loop(TreeEts, TraceOn)
+	      server_loop(NameSpace, TraceOn)
 	;
 	{ok, trace_off}->
 	    io:fwrite("trace off Yes~n"),    
-	    server_loop(TreeEts, ?TRACE_OFF)
+	    server_loop(NameSpace, ?TRACE_OFF)
 	;
 	
 	{ok, debug_on}->
 	    io:fwrite("debug on Yes~n"),  
-	    server_loop(TreeEts, ?DEBUG_ON)
+	    server_loop(NameSpace, ?DEBUG_ON)
 	;
 	{ok, debug_off}->
 	    io:fwrite("debug off Yes~n"),  
-
-	    server_loop(TreeEts, ?DEBUG_OFF)
-	;
-	
+	    server_loop(NameSpace, ?DEBUG_OFF);
 	{ok,Files} when is_list(Files) ->
 	    lists:foreach(fun(File)->
-			      case catch(prolog:compile(TreeEts, File)) of
+			      case catch(prolog:compile(NameSpace, File)) of
 				  ok ->
 				      io:fwrite(atom_to_list(File) ++ " Yes~n");
 				  Error ->
 				      io:fwrite(atom_to_list(File) ++ " Error: ~p~n", [Error])
 			      end
 			    end, Files),
-             server_loop(TreeEts, TraceOn)
-	 ;
+             server_loop(NameSpace, TraceOn);
 	 {ok, Goal = {':-',_,_ } } ->
 		io:fwrite("syntax error may be you want use assert ~p ~n",[Goal]),
-		server_loop(TreeEts, TraceOn);
+		server_loop(NameSpace, TraceOn);
 
 	{ok,Goal} ->
-	      io:fwrite("Goal : ~p~n", [Goal]),
-%%TODO  process body if we use  complain request
-%% solution make temp aim with updated variables
-	       {TempAim, _ShellContext } =  make_temp_aim(Goal), 
-	       ?DEBUG("TempAim : ~p~n", [TempAim]),
-	      
-	       prolog_trace:trace_on(TraceOn, TreeEts ),              
-
-	       ?DEBUG("~p make temp aim ~p ~n",[ {?MODULE,?LINE}, TempAim]),
-	       StartTime = erlang:now(),
-	       ?START_COUNTER(TreeEts),
-	       Pid =  spawn( ?MODULE, aim_spawn,[start, self(), Goal, TreeEts] ),	      
-               process_prove(Pid, TempAim, Goal,  StartTime ),
+	       io:fwrite("Goal : ~p~n", [Goal]),                 
+               StartTime = erlang:now(),
+	       Pid =  prolog:call(Goal, TraceOn, NameSpace  ),      
+               process_prove(Pid, Goal,  StartTime ),
 % 	       clean(tree_processes),%%%[this is very bad design or solution
-	       prolog:clean_tree(TreeEts),
                Pid! finish,
-
-% 	       ets:insert(TreeEts, {system_record, ?AIM_COUNTER, 0}),
-	       server_loop(TreeEts, TraceOn);
-
+	       server_loop(NameSpace, TraceOn);
 	{error,P = {_, Em, E }} ->
-	    io:fwrite("Error: ~p~n", [P]),
-	    server_loop(TreeEts, TraceOn);
+	       io:fwrite("Error: ~p~n", [P]),
+	       server_loop(NameSpace, TraceOn);
 	{error,P} ->
-            io:fwrite("Error during parsing: ~p~n", [P]),
-            server_loop(TreeEts, TraceOn)
+               io:fwrite("Error during parsing: ~p~n", [P]),
+               server_loop(NameSpace, TraceOn)
     end.
 
-    
-aim_spawn(start, Pid, Goal, TreeEts  )->
-                process_flag(trap_exit, true),
-                ?DEBUG("~p start aim ~p~n",[{?MODULE,?LINE},Goal ]),
-                Res = ( catch prolog:aim( finish, ?ROOT, Goal,  dict:new(), 1, TreeEts, ?ROOT) ),
-                Pid ! Res,
-                receive 
-                    {next, NewPrev} ->
-                        aim_spawn(NewPrev, Pid, Res, TreeEts );
-                    finish ->
-                        exit(normal);
-                    Signal->
-                          ?DEBUG("~p exit signal ~p~n",[{?MODULE,?LINE},Signal ]),
-                          Pid ! {enexpected, Signal},
-                          exit(normal)
-                end;
-aim_spawn(Prev, Pid, Goal, TreeEts  )->
-                ?DEBUG("~p next aim ~p~n",[{?MODULE,?LINE}, {Prev,Goal} ]),
-                Res = (catch prolog:next_aim(Prev, TreeEts )),
-                Pid ! Res,
-                receive 
-                    { next, NewPrev } ->
-                        ?DEBUG("~p normal signal ~p~n",[{?MODULE,?LINE}, Prev ]),
-                        aim_spawn(NewPrev, Pid, Res, TreeEts );
-                    finish ->
-                        exit(normal);
-                    Signal ->
-                          ?DEBUG("~p exit signal ~p~n",[{?MODULE,?LINE},Signal ]),
-                           Pid ! {enexpected, Signal},
-                           exit(normal)
-                end
-.
-                
+           
                 
                 
     
-process_prove(Pid,   TempAim , Goal, StartTime)->
+process_prove(Pid,    Goal, StartTime)->
       receive  
-	     {'EXIT', FromPid, Reason}->
+	    {'EXIT', FromPid, Reason}->
 		  ?DEBUG("~p exit aim ~p~n",[{?MODULE,?LINE}, {FromPid,Reason} ]),
 		  io:fwrite("Error~n ~p",[{Reason,FromPid}]),
 		  FinishTime = erlang:now(),
 		  io:fwrite(" elapsed time ~p ~n", [ timer:now_diff(FinishTime, StartTime)*0.000001 ] );           
             {true, SomeContext, Prev} ->
-                  ?DEBUG("~p got from prolog shell aim ~p~n",[{?MODULE,?LINE} ,{TempAim, Goal, dict:to_list(SomeContext)} ]),
+                  ?DEBUG("~p got from prolog shell aim ~p~n",[{?MODULE,?LINE} ,{Goal, dict:to_list(SomeContext)} ]),
                   FinishTime = erlang:now(),
                   New = prolog_matching:bound_body( 
                                         Goal, 
@@ -196,18 +135,15 @@ process_prove(Pid,   TempAim , Goal, StartTime)->
                                         
                   lists:foreach(fun shell_var_match/1, dict:to_list(NewLocalContext) ),
                   ?SYSTEM_STAT(tree_processes, {0,0,0}),
-                  Count = ?GET_AIM_COUNT(tree_processes),
-                  
-                  io:fwrite(" elapsed time ~p next solution ~p process varients ~p ~n", [ timer:now_diff(FinishTime, StartTime)*0.000001,Prev, Count] ),
+                  io:fwrite(" elapsed time ~p next solution ~p process varients ~n", [ timer:now_diff(FinishTime, StartTime)*0.000001,Prev] ),
                   Line = io:get_line(': '),
                   case string:chr(Line, $;) of
                        0 ->
                           io:fwrite("Yes~n");
                        _ ->
                          ?DEBUG("~p send next to pid ~p",[{?MODULE,?LINE}, {Pid, Goal, Prev} ]),
-                         ?START_COUNTER(tree_processes),
                          Pid ! {next, Prev},
-                         process_prove(Pid,  TempAim , Goal,  erlang:now() )              
+                         process_prove(Pid,   Goal,  erlang:now() )              
                   end;        
 	    Res ->
 	           
@@ -276,13 +212,13 @@ make_temp_complex_aim( Goal,  Context )->
 
 get_hbase_meta_code_html(Prefix)->
 
-        %          add_new_rule(Tree = { ':-' ,ProtoType, BodyRule}, Pos )->
+%          add_new_rule(Tree = { ':-' ,ProtoType, BodyRule}, Pos )->
 %          ?DEBUG("~p new rule to hbase  ~p ~n",[ {?MODULE,?LINE}, Tree ] ),
 %          [ Name | _ProtoType ] = tuple_to_list(ProtoType),
-            %%if non hbase it can be non existed
+%          if non hbase it can be non existed
            case  catch ets:tab2list( common:get_logical_name(Prefix, ?META) ) of        
             {'EXIT', _ }-> <<"">>;
-            Meta-> lists:foldl(fun( {Name,Count,_Hash}, In  )->
+            Meta-> lists:foldl(fun( {Name,Count,_Hash, _}, In  )->
                                 ?DEBUG(" meta fact  ~p~n", [{Name,Count}]),
 
                                 LName = atom_to_list(Name),
@@ -305,7 +241,7 @@ get_hbase_meta_code(Prefix)->
                 ets:tab2list( common:get_logical_name(Prefix, ?META) ) of
             {'EXIT', _ }-> <<"">>;
             Meta ->
-                lists:foldl(fun( {Name,Count,_Hash}, In  )->
+                lists:foldl(fun( {Name,Count,_Hash, _}, In  )->
                                 ?DEBUG(" meta fact  ~p\n", [{Name,Count}]),
 
                                 LName = atom_to_list(Name),

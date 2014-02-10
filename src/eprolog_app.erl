@@ -10,6 +10,7 @@ start(_StartType, _StartArgs) ->
    
         
 start()->
+  application:start(asn1),
   inets:start(),
   crypto:start(),
   application:start(lager),

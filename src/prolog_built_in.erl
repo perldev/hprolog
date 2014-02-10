@@ -1,5 +1,5 @@
 -module(prolog_built_in).
--export([inner_defined_aim/6,delete_fact/4, inner_to_var/3]).
+-export([inner_defined_aim/6,delete_fact/4, inner_to_var/3, worker_linked_rules/3,start_child_links/2]).
 -include("prolog.hrl").
 
       
@@ -296,7 +296,20 @@ inner_defined_aim(_NextBody, PrevIndex ,{ 'asserta', Body = {':-', _ProtoType, _
      {true, Context}
     
 ;
-
+inner_defined_aim(NextBody, PrevIndex, 
+                  Body = {add_index_fact, _FactName, _IndexName, hash_one_hbase, _},
+                  Context, _Index, TreeEts) ->
+        {add_index_fact, FactName, IndexName, hash_one_hbase, IndexList} = prolog_matching:bound_body(Body, Context),
+        Res =  add_index_hash_one_hbase(FactName, IndexName, IndexList, TreeEts),
+        {Res, Context}
+       
+;
+inner_defined_aim(NextBody, PrevIndex, Body = {drop_index_fact, _FactName, _IndexName}, Context, _Index, TreeEts) ->
+        {drop_index_fact, FactName, IndexName} = prolog_matching:bound_body(Body, Context),
+        Res =  drop_index_hash_one_hbase(FactName, IndexName, TreeEts),
+        {Res, Context}
+       
+;
 
 inner_defined_aim(NextBody, PrevIndex ,{ 'assertz', Body   }, Context, Index, TreeEts  ) when is_tuple(Body)->
       inner_defined_aim(NextBody, PrevIndex , { 'assert', Body   }, Context, Index, TreeEts   )
@@ -582,6 +595,60 @@ inner_defined_aim(NextBody, PrevIndex ,Body = {read_str, X }, Context, _Index, T
              Res
     end
 ;
+inner_defined_aim(NextBody, PrevIndex, Body = {start_cloud, _FactName, _CloudName  }, Context, _Index, TreeEts)->
+     {_, FactName, CloudName } = prolog_matching:bound_body( Body, Context),     
+     case  { is_atom(FactName),is_list(CloudName)  } of       
+           {true, true}->
+                MetaTable = common:get_logical_name(TreeEts, ?META_FACTS),
+                MetaTableEts = common:get_logical_name(TreeEts, ?META),
+                 ResCloud  = eprolog_cloud:start_cloud(FactName, CloudName, MetaTable, MetaTableEts  ),
+                {ResCloud, Context};
+            _->
+                throw( { instantiation_error, {start_cloud, FactName, CloudName} } )      
+     end
+;
+inner_defined_aim(NextBody, PrevIndex, Body = {stop_cloud, _FactName }, Context, _Index, TreeEts)->
+
+     {_, FactName } = prolog_matching:bound_body( Body, Context),     
+     case   is_atom(FactName) of
+           true ->
+                MetaTable = common:get_logical_name(TreeEts, ?META_FACTS),
+                MetaTableEts = common:get_logical_name(TreeEts, ?META),
+                ResCloud  = eprolog_cloud:stop_cloud(FactName, MetaTable, MetaTableEts ),
+                {ResCloud, Context};
+           _ ->
+                throw( { instantiation_error, stop_cloud,  FactName } )       
+
+     end
+;
+inner_defined_aim(NextBody, PrevIndex, Body = {'cloud', _FactName, _Entity, _Result }, Context, _Index, TreeEts)->
+
+     {_, FactName, Entity, Result } = prolog_matching:bound_body( Body, Context),     
+     case  { prolog_matching:is_var(Entity),is_atom(FactName)  } of
+           {true, _} -> 
+                throw( { instantiation_error, Body,  Entity } );            
+           {_, false} -> 
+                throw( { instantiation_error, Body,  FactName } );       
+           {_, true}->
+                ResCloud  = eprolog_cloud:cloud_entity(FactName, Entity, TreeEts),
+                prolog_matching:var_match( Result, ResCloud, Context )
+     end
+;
+inner_defined_aim(NextBody, PrevIndex, Body = {'cloud_counters', _FactName, _Entity, _Result }, Context, _Index, TreeEts)->
+
+     {_, FactName, Entity, Result } = prolog_matching:bound_body( Body, Context),     
+     case  { prolog_matching:is_var(Entity),is_atom(FactName)  } of
+           {true, _} -> 
+                throw( { instantiation_error, Body,  Entity } );            
+           {_, false} -> 
+                throw( { instantiation_error, Body,  FactName } );       
+           {_, true}->
+                ResCloud  = eprolog_cloud:cloud_entity_counters(FactName, Entity, TreeEts),
+                prolog_matching:var_match( Result, ResCloud, Context )
+     end
+;
+
+
 inner_defined_aim(NextBody, PrevIndex ,Body = { soundex, _X, _Res }, Context, _Index, TreeEts)->
      {_, X1, X2 } = prolog_matching:bound_body( Body, Context),     
      case  soundex_rus:start(X1) of
@@ -830,10 +897,8 @@ add_fact(Context, Body, last, TreeEts,  1)->
 %                   link_fact( BodyBounded, TreeEts ),
                     fact_hbase:add_new_fact( BodyBounded, last, TreeEts)
       end,
-      ?DEBUG(" add ~p  yes ~n",[BodyBounded ]),
-      
-      Res = worker_linked_rules(BodyBounded, TreeEts),
-      ?WAIT(" add ~p  result is ~p ~n",[Body, Res ]),
+      ?DEV_DEBUG(" add ~p  yes ~n",[BodyBounded ]),
+      start_child_links(TreeEts, BodyBounded),
       {true,Context}
 ;
 add_fact(Context, Body, first,TreeEts, 1)->
@@ -849,9 +914,8 @@ add_fact(Context, Body, first,TreeEts, 1)->
             {false, _}->
                     fact_hbase:add_new_fact(BodyBounded, first, TreeEts)
       end,
-      ?LOG(" add ~p  yes ~n",[BodyBounded ]),
-      Res = worker_linked_rules(BodyBounded, TreeEts),
-      ?WAIT(" add ~p  result is ~p ~n",[BodyBounded, Res ]),
+      ?DEV_DEBUG(" add ~p  yes ~n",[BodyBounded ]),
+      start_child_links(TreeEts, BodyBounded),
       {true, Context}
 ;      
 add_fact(Context, Body, last, TreeEts, 0)->
@@ -922,9 +986,15 @@ inner_abolish({'/', Name, Arity }, TreeEts) when is_atom(Name), is_integer(Arity
                                     prolog:memory2hbase( NameSpace1, NameSpace1),
                                     true
                        end;
-                [ {Name, Arity, _HashFunction }  ] -> 
-                        ets:delete(MetaTable, Name),
-                        fact_hbase:delete_all_fact(Name, TreeEts );               
+                [ {Name, Arity, _HashFunction, CloudTable }  ] -> 
+                         %%delete links, indexes info, weights for links 
+                         fact_hbase:delete_all_fact([Name, CloudTable], TreeEts ),
+                         ets:delete(MetaTable, Name),
+                         %%delete links, indexes info, weights for links 
+                         ets:delete(common:get_logical_name(TreeEts, ?META_LINKS), Name ),
+                         ets:delete(common:get_logical_name(TreeEts, ?HBASE_INDEX), Name ),  
+                         ets:delete(common:get_logical_name(TreeEts, ?META_WEIGHTS), Name ),                         
+                         true;
                  _-> true
                 
              end
@@ -1099,32 +1169,26 @@ not_compare(_One, _Two) ->
 .
 
 %%working with linked facts this is the first step for implementation expert dynamic  system
-worker_linked_rules(Body, OutTree)->
+%% in background
+worker_linked_rules(Body, Prefix, Hbase)->
 
-
-      ?WAIT("~p out table  ~p ~n",[{?MODULE,?LINE},  ets:tab2list(OutTree) ]),
       TreeEts = ets:new(some_name ,[set, public, { keypos, 2 } ]),
-      Prefix = ets:lookup(OutTree, ?PREFIX),
-      Hbase = ets:lookup(OutTree, hbase),
-
       ets:insert(TreeEts, Prefix),
       ets:insert(TreeEts, Hbase),
       ets:insert(TreeEts, {system_record, ?DEBUG_STATUS, false}), %%turn off debugging      
-      
-
-      FactName = erlang:element(1,Body ),
-      
+      FactName = erlang:element(1,Body ),      
       ProtoType = tuple_to_list( common:my_delete_element(1, Body) ),
       List = ets:lookup( common:get_logical_name(TreeEts, ?META_LINKS) , FactName),
       ?WAIT("~p temp table add  ~p ~n",[{?MODULE,?LINE},   List ]),
-      
+
       Res = foldl_linked_rules(FactName, List, TreeEts, ProtoType),
-      ets:delete(TreeEts),
+      
+      [ {_, _Arity, _HashFunction, CloudName } ] = ets:lookup( common:get_logical_name(TreeEts, ?META) , FactName),
+      ResultOfWorkCloud  = eprolog_cloud:process_cloud(Body, CloudName  ),
+      ?WAIT("~p cloud work  ~p ~n",[{?MODULE,?LINE},   ResultOfWorkCloud ]),
       Res
 .
 
-%  Res = (catch prolog:aim( finish, ?ROOT, Goal,  dict:new(), 
-%                                                 1, tree_processes, ?ROOT) ),
 foldl_linked_rules(FactName, [], _TreeEts, _ProtoType)->
     ?WAIT("~p finish add  ~p ~p ~n",[{?MODULE,?LINE},  FactName, true]),
     true
@@ -1176,9 +1240,93 @@ repeat(Index, Count, Module ,Func, Params )->
     end
 .
 
+%%TODO add deleting indexes to abolish 
 
 
+drop_index_hash_one_hbase(FactName, IndexName, TreeEts) 
+        when is_atom(IndexName) and is_atom(FactName) ->
 
+        TableName = common:get_logical_name(TreeEts, ?HBASE_INDEX),
+        FactTableName = common:get_logical_name(TreeEts, ?META),
+        case ets:lookup(FactTableName, FactName ) of
+                [] -> 
+                        throw({index_drop_exception, { fact_not_existed, FactName } } ); 
+                _  ->        
+                        Indexes = ets:lookup( TableName, FactName),       
+                        case lists:keysearch(IndexName, 2, Indexes) of
+                                                false -> 
+                                                        throw({index_drop_exception,  index_not_existed  } ); 
+                                                {value, Tuple } ->
+                                                        Key = atom_to_list(FactName),
+                                                        MetaTable = common:get_logical_name(TreeEts, ?META_FACTS) ,
+                                                        IndexNameL = atom_to_list(IndexName),
+                                                        fact_hbase:del_key(Key, MetaTable, "cache", IndexNameL ),
+                                                        fact_hbase:delete_table(IndexNameL),
+                                                        ets:delete_object(TableName, Tuple),
+                                                        true
+                         end
+        end
+;
+drop_index_hash_one_hbase(FactName, IndexName, TreeEts) ->
+        throw({index_add_exception,  invalid_params } )
+.
+
+start_child_links(TreeEts, BodyBounded)->
+       Prefix  = ets:lookup(TreeEts, ?PREFIX),
+       Hbase  = ets:lookup(TreeEts, hbase),
+       ?DEV_DEBUG("~p start child linked process ~p ~n",[{?MODULE,?LINE}, BodyBounded ]),
+       ChildSpec = { 
+                make_ref(),
+                {simple_background_process,
+                 start_link, [temporary ,?MODULE, worker_linked_rules, [BodyBounded, Prefix, Hbase] ] },
+                 temporary,
+                 ?DEFAULT_TIMEOUT,
+                 worker,
+                [simple_background_process] },
+       ResultOfStart = supervisor:start_child(eprolog_sup, ChildSpec),
+       ?DEV_DEBUG("~p start child linked process is ~p ~n",[{?MODULE,?LINE}, ResultOfStart ])
+.
+
+%%TODO adding functionality for building index for existed table
+add_index_hash_one_hbase(_FactName, _IndexName, [], TreeEts) ->
+        throw({index_add_exception,  invalid_params } ); 
+add_index_hash_one_hbase(FactName, IndexName, IndexList, TreeEts) 
+        when is_atom(IndexName) and is_atom(FactName) and is_list(IndexList)->
+ 
+        TableName = common:get_logical_name(TreeEts, ?HBASE_INDEX),
+        FactTableName = common:get_logical_name(TreeEts, ?META),
+        IndexValue = join_as_string(",",IndexList),
+        case ets:lookup(FactTableName, FactName ) of
+                [] -> 
+                        throw({index_add_exception, { fact_not_existed, FactName } } ); 
+                _  ->        
+                        Indexes = ets:lookup( TableName, FactName),       
+                        case { lists:keysearch(IndexList, 3, Indexes),
+                               lists:keysearch(IndexList, 2, Indexes) } of
+                                {false, false} -> 
+                                     fact_hbase:create_new_fact_table(IndexName),
+                                     ets:insert(TableName, {FactName,IndexName,IndexList  }),
+                                     fact_hbase:store_meta_fact(FactName, 
+                                                                        common:get_logical_name(TreeEts, ?META_FACTS) ,
+                                                                        [ 
+                                                                                { atom_to_list(IndexName), IndexValue } 
+                                                                        ],
+                                                       "cache"  ),
+                                     true;
+                                _->      
+                                 throw({index_add_exception, { index_existed, IndexName } } )                                   
+                        end
+       end
+;
+add_index_hash_one_hbase(FactName, IndexName, IndexList, TreeEts) ->
+        throw({index_add_exception,  invalid_params } )
+.
+
+join_as_string(Div, List)->
+        [_|String] =   lists:foldl(fun(E, Accum)-> 
+                                        Accum ++ Div ++ integer_to_list(E)
+                                    end, [], List ),
+                                    String.
  
  
     

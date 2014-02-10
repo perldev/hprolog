@@ -3,9 +3,14 @@
 -include("prolog.hrl").
 
 -export([console_write/2, web_console_write/2, console_write_unicode/2,
-          web_console_read/1, web_console_writenl/2,
-         console_get_char/1, check_source/1, console_read/1, console_nl/1,generate_id/0, get_logical_name/1,member_tail/2 ]).
+         web_console_read/1, web_console_writenl/2,
+         console_get_char/1, check_source/1,
+         inner_to_atom/1, console_read/1,
+         console_nl/1, generate_id/0, 
+         get_logical_name/1,member_tail/2, prolog_term_to_jlist/1, json_to_term_list/1 ]).
 
+         
+         
          
          
 member_tail(Item, [])->
@@ -25,14 +30,6 @@ check_source(TreeEts)->
 .
 
          
-         
-return_count(TreeEts)->
-
-    case catch ets:lookup(TreeEts, aim_counter) of
-        []->0;
-        [{_,_, Count}]-> Count
-    end
-.
 
 regis_io_server(TreeEts, Io)->
     ets:insert(TreeEts, {system_record, ?IO_SERVER, Io} )
@@ -157,6 +154,9 @@ inner_to_list(E)  when is_binary(E)->
 inner_to_list(E) ->
   E.  
 
+  
+
+  
   
 inner_to_int(E) when is_float(E)->
   erlang:round(E) 
@@ -291,9 +291,11 @@ process_card(Card)->
 	[Head,$*,F,S]
 .
 
+
 list_to_unicode(List)->
       lists:map(fun to_unicode/1, List )
 .
+
 to_unicode(E) when is_integer(E)->
       integer_to_list(E);
 to_unicode(E) when is_float(E)->
@@ -304,7 +306,35 @@ to_unicode(E) when is_binary(E)->
       unicode:characters_to_list(E);
 to_unicode(E) when is_list(E)->
       E.
+      
+prolog_term_to_jlist(List)->
+        lists:map(fun list_and_atom_binary/1, List )
+.
 
+list_and_atom_binary(E) when is_list(E)->
+        unicode:characters_to_binary(E)
+;
+list_and_atom_binary(E) when is_atom(E)->
+        unicode:characters_to_binary( atom_to_list(E))
+;
+list_and_atom_binary(E) when is_number(E)->
+        E
+.
+      
+json_to_term_list(List)->
+        lists:map(fun json_elem_to_list/1, List )
+.
+json_elem_to_list(E) when is_binary(E)->
+        unicode:characters_to_list(E)
+;
+
+json_elem_to_list(E) ->
+        E
+.
+
+
+      
+      
 prepare_log(Base) ->
         File = make_filename(Base),
         case filelib:ensure_dir(File) of

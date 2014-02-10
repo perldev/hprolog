@@ -177,24 +177,22 @@ start_converter()->
 
     
     
-    
-%%update statistic of     
--ifdef(USE_HBASE).
-
 update_hbase_stat(Fun)->
-%       NameSpaces = fact_hbase:get_list_namespaces(),
-      Stat = ets:tab2list(?STAT),
-      Fun("~p update  stat of hbase ~p ~n",[ {?MODULE,?LINE},  Stat ]),
-      lists:foldl(fun process_stat/2,  Fun, Stat  ),	 
-      ets:delete_all_objects(?STAT).
-      
--else.
+       Res =  application:get_env(eprolog, use_hbase),
+       update_hbase_stat(Fun, Res)
+.
+    
 
-update_hbase_stat(_Fun)->
-	ets:delete_all_objects(?STAT).
+update_hbase_stat(Fun, {ok, yes})->
+%       NameSpaces = fact_hbase:get_list_namespaces(),
+        Stat = ets:tab2list(?STAT),
+        Fun("~p update  stat of hbase ~p ~n",[ {?MODULE,?LINE},  Stat ]),
+        lists:foldl(fun process_stat/2,  Fun, Stat  ),	 
+        ets:delete_all_objects(?STAT);
+update_hbase_stat(_Fun, _)->
+        ets:delete_all_objects(?STAT).
 
    
--endif.
 
 find_shortes(LongName, Prefixes) when is_atom(LongName) ->
   find_shortes(atom_to_list(LongName), Prefixes);
