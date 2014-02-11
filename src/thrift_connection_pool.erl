@@ -173,7 +173,7 @@ handle_cast( { reconnect,  Key, Reason }, MyState) ->
                                     { noreply, MyState} 
                     end;
               [] -> 
-                { noreply, MyState} 
+                    { noreply, MyState} 
          end
 ;        
 handle_cast( Undef, MyState) ->
