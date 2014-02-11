@@ -218,12 +218,20 @@ get_hbase_meta_code_html(Prefix)->
 %          if non hbase it can be non existed
            case  catch ets:tab2list( common:get_logical_name(Prefix, ?META) ) of        
             {'EXIT', _ }-> <<"">>;
-            Meta-> lists:foldl(fun( {Name,Count,_Hash, _}, In  )->
-                                ?DEBUG(" meta fact  ~p~n", [{Name,Count}]),
+            Meta-> lists:foldl(fun( {Name,Count,_Hash, Cloud}, In  )->
+                                ?DEBUG(" meta fact  ~p~n", [{Name, Count}]),
 
                                 LName = atom_to_list(Name),
                                 LCount = integer_to_list(Count),
-                                V2 = list_to_binary("<strong>%"++LName++ "</strong> arity  - "++ LCount ++ ". <br/>") ,
+                                V2 = case Cloud of
+                                          ""->
+                                                list_to_binary("<strong>%" ++ LName ++ "</strong>  arity  - "
+                                                        ++ LCount ++ ". <br/>");
+                                          _ ->
+                                                list_to_binary("<strong>%"++LName++ "</strong>  arity  - "
+                                                        ++ LCount ++ " existed cloud - "++ Cloud ++" .<br/>")
+                                               
+                                     end,
                                 <<In/binary, V2/binary>>
                         end, <<>>, Meta  )
            end
@@ -233,7 +241,7 @@ get_hbase_meta_code_html(Prefix)->
 
 get_hbase_meta_code(Prefix)->
 
-        %          add_new_rule(Tree = { ':-' ,ProtoType, BodyRule}, Pos )->
+%          add_new_rule(Tree = { ':-' ,ProtoType, BodyRule}, Pos )->
 %          ?DEBUG("~p new rule to hbase  ~p ~n",[ {?MODULE,?LINE}, Tree ] ),
 %          [ Name | _ProtoType ] = tuple_to_list(ProtoType),
             %%if non hbase it can be non existed
@@ -241,12 +249,18 @@ get_hbase_meta_code(Prefix)->
                 ets:tab2list( common:get_logical_name(Prefix, ?META) ) of
             {'EXIT', _ }-> <<"">>;
             Meta ->
-                lists:foldl(fun( {Name,Count,_Hash, _}, In  )->
+                lists:foldl(fun( {Name,Count,_Hash, Cloud}, In  )->
                                 ?DEBUG(" meta fact  ~p\n", [{Name,Count}]),
 
                                 LName = atom_to_list(Name),
                                 LCount = integer_to_list(Count),
-                                V2 = list_to_binary("% "++LName++ " arity  - "++ LCount ++ ". \n") ,
+                                V2 = case Cloud of
+                                          ""->
+                                                list_to_binary("% "++LName++ " arity  - "++ LCount ++ ". \n");
+                                          _ ->
+                                                list_to_binary("% " ++ LName ++ " arity  - " ++ 
+                                                                LCount ++ " existed cloud - " ++ Cloud ++ " . \n")
+                                     end,
                                 <<In/binary, V2/binary>>
                         end, <<>>, Meta  )
             end
@@ -259,8 +273,11 @@ get_code_memory(Prefix)->
 	   Rules = ets:tab2list(common:get_logical_name(Prefix, ?RULES) ),
 	   MetaCode = get_hbase_meta_code(Prefix),
 	   RulesCode = lists:foldl(fun process_inner/2, <<>> , Rules  ),
-	   FormatedCode1 = binary:replace(RulesCode,[<<" , ">>],<<"   ,        \n">>, [ global ] ),
-	   FormatedCode = binary:replace(FormatedCode1,[<<":-">>],<<" :-\n">>, [ global ] ),
+	   %%simple formating
+	   FormatedCode1 = binary:replace(RulesCode,[<<" , ">>],<<",\n">>, [ global ] ),
+           FormatedCode2 = binary:replace(FormatedCode1,[<<",">>],<<", ">>, [ global ] ),
+	   FormatedCode = binary:replace(FormatedCode2,[<<":-">>],<<":-\n">>, [ global ] ),
+	   
 	   ResBin = << "\n", MetaCode/binary,FormatedCode/binary >>,
 	   binary_to_list(ResBin).
 
@@ -274,45 +291,48 @@ process_inner({Name, ProtoType ,Body }, In)->
                                 RestoreTree = {':-', RestoreTree1, Body },
                                 PrologCode =  lists:flatten( erlog_io:write1( RestoreTree ) ),
                                 ?DEBUG(" restore code  ~p\n", [PrologCode]),
-                                V2 = list_to_binary( PrologCode++".\n\n\n\n" ),
+                                V2 = list_to_binary( PrologCode++".\n\n" ),
                                 <<In/binary, V2/binary>>
 ;
 process_inner({Name, Body }, In)->
                                 RestoreTree = {':-', Name, Body },
                                 PrologCode =  lists:flatten( erlog_io:write1( RestoreTree ) ),
                                 ?DEBUG(" restore code  ~p\n", [PrologCode]),
-                                V2 = list_to_binary( PrologCode++".\n\n\n\n" ),
+                                V2 = list_to_binary( PrologCode++".\n\n" ),
                                 <<In/binary, V2/binary>>
 .
 	
 get_code_memory_html(Prefix)->
 	   Rules = ets:tab2list(common:get_logical_name(Prefix, ?RULES) ),
            MetaCode = get_hbase_meta_code_html(Prefix),
-
-	
-	    RulesCode = lists:foldl(fun process_inner_html/2, <<>> , Rules  ),
-	   FormatedCode1 = binary:replace(RulesCode,[<<" , ">>],<<"&nbsp;&nbsp;&nbsp;&nbsp;<strong>,</strong><br/>">>, [ global ] ),
-	   FormatedCode = binary:replace(FormatedCode1,[<<":-">>],<<"</strong>:-<br/>">>, [ global ] ),
+	   RulesCode = lists:foldl(fun process_inner_html/2, <<>> , Rules  ),
+% 	   FormatedCode1 = binary:replace(RulesCode,[<<" , ">>],<<"&nbsp;&nbsp;&nbsp;&nbsp;<strong>,</strong><br/>">>, [ global ] ),
+% 	   FormatedCode = binary:replace(FormatedCode1,[<<":-">>],<<"</strong>:-<br/>">>, [ global ] ),
+	   
+           %%a few formattings     
+	   FormatedCode1 = binary:replace(RulesCode,[<<" , ">>],<<"<strong>,</strong><br/>">>, [ global ] ),
+           FormatedCode2 = binary:replace(FormatedCode1,[<<",">>],<<", ">>, [ global ] ),
+           FormatedCode = binary:replace(FormatedCode2,[<<":-">>],<<"</strong>:-<br/>">>, [ global ] ),
+	   
 	   ResBin = << "<br/>", MetaCode/binary, FormatedCode/binary >>,
 	   ResBin.
 	   
 	   
 process_inner_html( {Name, ProtoType ,Body }, In  )->
-                RestoreTree1 =  list_to_tuple( 
+                                RestoreTree1 =  list_to_tuple( 
                                      [Name|tuple_to_list(ProtoType) ] 
                                 ),
                                 RestoreTree = {':-', RestoreTree1, Body },
                                 PrologCode =  lists:flatten( erlog_io:write1( RestoreTree ) ),
                                 ?DEBUG(" restore code  ~p~n", [PrologCode]),
-                                V2 = list_to_binary( PrologCode++".<br/><br/><br/><strong>" ),
+                                V2 = list_to_binary( PrologCode++".<br/><br/>" ),
                                 <<In/binary, V2/binary>>;
               
 process_inner_html( {Name, Body }, In  )->
-            
                                 RestoreTree = {':-', Name, Body },
                                 PrologCode =  lists:flatten( erlog_io:write1( RestoreTree ) ),
                                 ?DEBUG(" restore code  ~p~n", [PrologCode]),
-                                V2 = list_to_binary( PrologCode++".<br/><br/><br/><strong>" ),
+                                V2 = list_to_binary( PrologCode++".<br/><br/>" ),
                                 <<In/binary, V2/binary>>. 
 	   
  
