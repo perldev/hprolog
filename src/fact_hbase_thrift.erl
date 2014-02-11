@@ -167,13 +167,13 @@ stor_new_fact(Table, ProtoType)->
                             end ,
                             {[],1},  ProtoType ),
     Key = fact_hbase:generate_key(ProtoType),
-    Agrs = [Table , Key, Mutation, dict:new() ],
-    ?DEBUG("~p put data  in ~p  ~n", [{?MODULE,?LINE}, Agrs ]),
+    Args = [Table , Key, Mutation, dict:new() ],
+    ?DEBUG("~p put data  in ~p  ~n", [{?MODULE,?LINE}, Args ]),
     
     {KeyC, Connection} = thrift_connection_pool:get_free(),
     Time = now(),
      case catch 
-        thrift_client:call(Connection, mutateRow, Agrs )
+        thrift_client:call(Connection, mutateRow, Args )
         of
 
         { NewConnection, {ok,ok} } ->
@@ -185,12 +185,39 @@ stor_new_fact(Table, ProtoType)->
              %%%reconnection !!!??
              thrift_connection_pool:reconnect(KeyC, Error),
 %              
+             Count = application:get_env(eprolog, thrift_reconnect_times),
              
              ?DEBUG("puting data ~p error result: ~p ~n", [{Table, ProtoType},Error]),
-             throw( {hbase_exception, Error} )         
-     end
-  
+             ResError = {hbase_exception, Error},
+             stor_new_fact(0, Count, ResError, Args)
+     end  
 . 
+stor_new_fact(0, undefined, ResError, Args)->
+        throw(ResError);
+stor_new_fact(Count, {ok, Count}, ResError, Args)->
+        throw(ResError); 
+        
+stor_new_fact(Index, Count, ResError, Args)->
+     {KeyC, Connection} = thrift_connection_pool:get_free(),
+     Time = now(),
+     case catch 
+        thrift_client:call(Connection, mutateRow, Args )
+        of
+
+        { NewConnection, {ok,ok} } ->
+                ?DEBUG("~p put data  in ~p  ~n", [{?MODULE,?LINE}, timer:now_diff(now(), Time ) ]),
+                thrift_connection_pool:return({KeyC, NewConnection}),
+                true
+            ;
+        Error -> 
+             %%%reconnection !!!??
+             thrift_connection_pool:reconnect(KeyC, Error),             
+             ?DEBUG("puting data ~p error result: ~p ~p  ~n", [Args,Index, Error]),
+             ResError = {hbase_exception, Error},
+             stor_new_fact(Index + 1, Count, ResError, Args)
+     end.
+
+
 put_key(Table, Key, Family, Key2, Value)->
     {KeyC, Connection} = thrift_connection_pool:get_free(),
     Time = now(),
