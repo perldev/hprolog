@@ -25,7 +25,7 @@
 
 -define(USE_HBASE,1).
 
--define(LOAD_LOG,1).
+%-define(LOAD_LOG,1).
 
 
 %-define(ENABLE_LOG,1).
@@ -135,8 +135,8 @@
 -ifdef(USE_HBASE).
 -define('INCLUDE_HBASE'(X),  fact_hbase:load_rules2ets(X) ).
 
--define('THRIFT_POOL'(Str, Pars ),   lager:warning(Str, Pars) ).
--define('THRIFT_LOG'(Str, Pars ),   lager:warning(Str, Pars) ).
+-define('THRIFT_POOL'(Str, Pars ), true  ).% lager:warning(Str, Pars) ).
+-define('THRIFT_LOG'(Str, Pars ),  true ).%lager:warning(Str, Pars) ).
 
 -else.
 -define('THRIFT_POOL'(Str, Pars ),   true ).
