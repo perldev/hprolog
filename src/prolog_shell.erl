@@ -310,11 +310,11 @@ get_code_memory_html(Prefix)->
 % 	   FormatedCode = binary:replace(FormatedCode1,[<<":-">>],<<"</strong>:-<br/>">>, [ global ] ),
 	   
            %%a few formattings     
-	   FormatedCode1 = binary:replace(RulesCode,[<<" , ">>],<<"<strong>,</strong><br/>">>, [ global ] ),
+	   FormatedCode1 = binary:replace(RulesCode,[<<" , ">>],<<",<br/>">>, [ global ] ),
            FormatedCode2 = binary:replace(FormatedCode1,[<<",">>],<<", ">>, [ global ] ),
            FormatedCode = binary:replace(FormatedCode2,[<<":-">>],<<"</strong>:-<br/>">>, [ global ] ),
 	   
-	   ResBin = << "<br/>", MetaCode/binary, FormatedCode/binary >>,
+	   ResBin = << "<br/>", MetaCode/binary,  FormatedCode/binary >>,
 	   ResBin.
 	   
 	   
@@ -325,14 +325,14 @@ process_inner_html( {Name, ProtoType ,Body }, In  )->
                                 RestoreTree = {':-', RestoreTree1, Body },
                                 PrologCode =  lists:flatten( erlog_io:write1( RestoreTree ) ),
                                 ?DEBUG(" restore code  ~p~n", [PrologCode]),
-                                V2 = list_to_binary( PrologCode++".<br/><br/>" ),
+                                V2 = list_to_binary("<strong>" ++ PrologCode++".<br/><br/>" ),
                                 <<In/binary, V2/binary>>;
               
 process_inner_html( {Name, Body }, In  )->
                                 RestoreTree = {':-', Name, Body },
                                 PrologCode =  lists:flatten( erlog_io:write1( RestoreTree ) ),
                                 ?DEBUG(" restore code  ~p~n", [PrologCode]),
-                                V2 = list_to_binary( PrologCode++".<br/><br/>" ),
+                                V2 = list_to_binary( "<strong>" ++ PrologCode++".<br/><br/>" ),
                                 <<In/binary, V2/binary>>. 
 	   
  
