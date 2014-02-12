@@ -25,7 +25,7 @@
 
 -define(USE_HBASE,1).
 
-%-define(LOAD_LOG,1).
+-define(LOAD_LOG,1).
 
 
 %-define(ENABLE_LOG,1).

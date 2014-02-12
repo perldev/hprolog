@@ -9,7 +9,8 @@
          get_key_custom/4,
          get_error_key_custom/7,
          get_key/4, 
-         put_key/5, 
+         put_key/5,
+         
          get_data/7,
          test_get_regions/0,
          generate_scanner/5,
@@ -19,7 +20,13 @@
          create_filter4all_values/3,
          del_key/4,
          del_key/2,
-         stor_new_fact/2
+         stor_new_fact/2,
+         %% for repeats
+         del_key_noside/4,
+         del_key_noside/2,
+         put_key_noside/5,
+         low_get_key_noside/4,
+         get_key_noside/4
          ]).
 
 -include_lib("thrift/src/hbase_types.hrl").
@@ -110,8 +117,47 @@ process_one_record(ProtoType, Family, Data)->
 %                     {<<"params:7">>,{tCell,<<"2600"...>>,1374507319687}},
 %                     {<<"params:8">>,{tCell,<<...>>,...}},
 %                     {<<"params:9">>,{tCell,...}}]},
-%%TODO WATCH by all mappers
+
+default_repeat(Error,  {Module, Func, Params} )->
+        Count = application:get_env(eprolog, thrift_reconnect_times),
+        repeat({hbase_exception, Error}, 0, {Module, Func, Params}, Count )       
+.
+
+repeat(Res, Count, {Module, Func, Params}, undefined )->
+       throw({hbase_exception, { {repeats, 0 },Res} })
+;
+repeat(_Res, Count, {Module, Func, Params}, {ok,Count} )->
+       case erlang:apply(Module, Func, Params ) of
+                {hbase_exception, not_found} -> {hbase_exception, not_found};
+                {hbase_exception, Unexpected} -> 
+                        throw({hbase_exception, { {repeats,Count },Unexpected} });
+                Result ->
+                        Result
+       
+       end
+;
+repeat(_Res, Index, {Module, Func, Params}, Count)->
+        case erlang:apply(Module, Func, Params) of
+                {hbase_exception, not_found} -> {hbase_exception, not_found};
+                {hbase_exception, Unexpected} -> 
+                        repeat(Unexpected, Index+1, {Module, Func, Params}, Count);
+                Result ->
+                        Result
+        end
+.
+
 del_key(Key, TableName, Family, Col)->
+
+     case del_key_noside(Key, TableName, Family, Col)  of
+        {hbase_exception, Error} -> 
+             %%%reconnection !!!??
+             default_repeat(Error, {?MODULE, del_key_noside,  [ Key, TableName, Family, Col] });
+        Result ->
+               Result     
+     end
+.
+
+del_key_noside(Key, TableName, Family, Col)->
     {KeyC, Connection} = thrift_connection_pool:get_free(),
     Time = now(),
      case catch 
@@ -128,11 +174,22 @@ del_key(Key, TableName, Family, Col)->
              %%%reconnection !!!??
              thrift_connection_pool:reconnect(KeyC, Error),
              ?DEBUG("~p deleting key ~p error result: ~p ~n", [{?MODULE,?LINE},{TableName, KeyC, Family},Error]),
-             throw( {hbase_exception, Error} )         
+             {hbase_exception, Error}
      end
 .
 
 del_key(TableName, Key )->
+     case del_key_noside(Key, TableName)  of
+        {hbase_exception, Error} -> 
+             %%%reconnection !!!??
+            default_repeat(Error, {?MODULE, del_key_noside,  [TableName, Key] });
+        Result ->
+               Result             
+     end.
+
+             
+
+del_key_noside(TableName, Key )->
     {KeyC, Connection} = thrift_connection_pool:get_free(),
     Time = now(),
      case catch 
@@ -148,7 +205,8 @@ del_key(TableName, Key )->
              %%%reconnection !!!??
              thrift_connection_pool:reconnect(KeyC, Error),
              ?DEBUG("~p deleting key ~p error result: ~p ~n", [ {?MODULE,?LINE}, {TableName, Key}, Error ]),
-             throw( {hbase_exception, Error} )         
+             {hbase_exception, Error}
+             
      end
 .    
 
@@ -186,12 +244,12 @@ stor_new_fact(Table, ProtoType)->
              thrift_connection_pool:reconnect(KeyC, Error),
 %              
              Count = application:get_env(eprolog, thrift_reconnect_times),
-             
              ?DEBUG("puting data ~p error result: ~p ~n", [{Table, ProtoType},Error]),
-             ResError = {hbase_exception, Error},
+             ResError = {hbase_exception, Error},             
              stor_new_fact(0, Count, ResError, Args)
      end  
 . 
+
 stor_new_fact(0, undefined, ResError, Args)->
         throw(ResError);
 stor_new_fact(Count, {ok, Count}, ResError, Args)->
@@ -213,12 +271,23 @@ stor_new_fact(Index, Count, ResError, Args)->
              %%%reconnection !!!??
              thrift_connection_pool:reconnect(KeyC, Error),             
              ?DEBUG("puting data ~p error result: ~p ~p  ~n", [Args,Index, Error]),
-             ResError = {hbase_exception, Error},
+             ResError = {hbase_exception, { { repeats,  Index }, Error } },
              stor_new_fact(Index + 1, Count, ResError, Args)
      end.
 
-
 put_key(Table, Key, Family, Key2, Value)->
+     case put_key_noside(Table, Key, Family, Key2, Value) of
+        {hbase_exception, Error} -> 
+             %%%reconnection !!!??
+             default_repeat(Error, {?MODULE, put_key_noside,  [Table, Key, Family, Key2, Value] });
+         Result ->
+                Result
+     end
+  
+.
+     
+     
+put_key_noside(Table, Key, Family, Key2, Value)->
     {KeyC, Connection} = thrift_connection_pool:get_free(),
     Time = now(),
      case catch 
@@ -235,12 +304,30 @@ put_key(Table, Key, Family, Key2, Value)->
              %%%reconnection !!!??
              thrift_connection_pool:reconnect(KeyC, Error),
              ?DEBUG("~p puting key ~p error result: ~p ~n", [{?MODULE,?LINE},{Table, Key, Family, Key2, Value},Error]),
-             throw( {hbase_exception, Error} )         
+             {hbase_exception, Error}  
      end
   
 .
 
+
+
 low_get_key(Table, Key, Family,  SecondKey)->
+       {KeyC, Connection} = thrift_connection_pool:get_free(),
+%      thrift_client:call(State, getRowWithColumns, 
+%         ["pay","0faf51ea7ba2292dd69f6ec66b1e4ba9",["params"],dict:new()]).
+        Time = now(),
+        case low_get_key_noside(Table, Key, Family,  SecondKey) of
+             Res = {hbase_exception, not_found}-> Res;
+                   {hbase_exception, Error}-> 
+                        default_repeat(Error, {?MODULE, low_get_key_noside, 
+                                       [Table, Key, Family,  SecondKey] });
+             Result ->
+                   Result
+        end.
+
+
+
+low_get_key_noside(Table, Key, Family,  SecondKey)->
     
        {KeyC, Connection} = thrift_connection_pool:get_free(),
 %      thrift_client:call(State, getRowWithColumns, 
@@ -254,17 +341,18 @@ low_get_key(Table, Key, Family,  SecondKey)->
                 ?DEBUG("~p fetch : data ~p in ~p  ~n", [{?MODULE,?LINE}, Data,  timer:now_diff(now(), Time ) ]),
                 thrift_connection_pool:return({KeyC, NewState}),
 %                 {ok,[{tCell,<<"P2497386422">>,1373889743539}]}}
-                [{tCell,Val, _TimeStamp}] = Data,
+                [{tCell, Val, _TimeStamp}] = Data,
                 unicode:characters_to_list(Val)
             ;
         Error -> 
              %%%reconnection !!!??
              thrift_connection_pool:reconnect(KeyC, Error),
              ?DEBUG("get key ~p error result: ~p ~n", [{ Table, Family, Key}, Error]),
-             {hbase_exception, Error}          
+             {hbase_exception, Error}
         end
-
 .
+
+
 
 get_key_custom( Table, Family, Key, default)->
     get_key_custom( Table, Family, Key, fun process_one_record/1 )
@@ -288,7 +376,7 @@ get_key_custom( Table, Family, Key, FunProcess)->
             Error -> 
                 %%%reconnection !!!??
                 thrift_connection_pool:reconnect(KeyC, Error),
-                ?DEBUG("get key ~p error result: ~p ~p ~n", [{ Table, Family, Key}, Error]),
+                ?DEBUG("get key ~p error result: ~p ~n", [{ Table, Family, Key}, Error]),
                 Count = application:get_env(eprolog, thrift_reconnect_times),
                 get_error_key_custom(Error, 0,  Table, Family, Key, FunProcess, Count)  
                 
@@ -322,12 +410,23 @@ get_error_key_custom(_PrevRes, Index ,Table, Family, Key, FunProcess, Count)->
         end.        
         
         
-    
+
+
 get_key(ProtoType, Table, Family, Key)->
-    {KeyC, Connection} = thrift_connection_pool:get_free(),
+    case get_key_noside(ProtoType, Table, Family, Key) of
+         Res = {hbase_exception, not_found} -> Res;
+               {hbase_exception, Error} -> 
+                        default_repeat(Error, {?MODULE, get_key_noside,  [ProtoType, Table, Family, Key] });
+               Result -> 
+                        Result
+   end
+.
+
+get_key_noside(ProtoType, Table, Family, Key)->
+         {KeyC, Connection} = thrift_connection_pool:get_free(),
 %      thrift_client:call(State, getRowWithColumns, 
 %         ["pay","0faf51ea7ba2292dd69f6ec66b1e4ba9",["params"],dict:new()]).
-    Time = now(),
+        Time = now(),
         case catch thrift_client:call(Connection, getRowWithColumns, [ Table, Key, [Family], dict:new() ] ) of
         { NewState, [] } -> 
                     thrift_connection_pool:return({KeyC, NewState}),
@@ -338,15 +437,12 @@ get_key(ProtoType, Table, Family, Key)->
                 process_one_record(ProtoType,Family, Data)          
             ;
         Error -> 
-%         {'EXIT',{{badmatch,{{protocol,thrift_binary_protocol,{binary_protocol,{transport,thrift_buffered_transport,{buffered_transport,{transport,thrift_socket_transport,{data,#Port<0.12278>,infinity}},[]}},true,true}},{error,closed}}},[{thrift_client,send_function_call,3,[{file,"src/thrift_client.erl"},{line,83}]},{thrift_client,call,3,[{file,"src/thrift_client.erl"},{line,40}]},{fact_hbase_thrift,stor_new_fact,2,[{file,"src/fact_hbase_thrift.erl"},{line,175}]},{fact_hbase,add_new_fact,4,[{file,"src/fact_hbase.erl"},{line,1192}]},{prolog_built_in,add_fact,5,[{file,"src/prolog_built_in.erl"},{line,774}]},{prolog,aim,2,[{file,"src/prolog.erl"},{line,812}]},{prolog,loop,1,[{file,"src/prolog.erl"},{line,345}]},{api_erws_handler,shell_loop,3,[{file,"src/api_erws_handler.erl"},{line,328}]}]}}
-             %%%reconnection !!!??
-             thrift_connection_pool:reconnect(KeyC, Error),
-             ?DEBUG("get key ~p error result: ~p ~n", [{ Table, Family, Key}, Error]),
-             {hbase_exception, Error}          
-        end.
+                thrift_connection_pool:reconnect(KeyC, Error),
+                {hbase_exception, Error}
+        end
+.
 
-
-
+%TODO move this part to gen_fsm server
 finish_loop_hbase(State)->
     Pids = State#mapper_state.pids,
     ?THRIFT_LOG("starting killing  ~p~n",[Pids]),

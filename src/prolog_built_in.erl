@@ -1211,7 +1211,7 @@ foldl_linked_rules(FactName, [Head| Tail], TreeEts, ProtoType)->
 
 
 
-%TODO process the Hbase mistakes and timeouts
+%TODO process the Hbase mistakes and timeouts 
 repeat(Count, Module ,Func, Params )->
   repeat(0,Count, Module ,Func, Params )
 
@@ -1240,7 +1240,7 @@ repeat(Index, Count, Module ,Func, Params )->
     end
 .
 
-%%TODO add deleting indexes to abolish 
+%%TODO add deleting indexes to abolish  - TEST it
 
 
 drop_index_hash_one_hbase(FactName, IndexName, TreeEts) 

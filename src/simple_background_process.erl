@@ -1,5 +1,5 @@
 -module(simple_background_process).
-
+-include("prolog.hrl").
 -export([ start_link/4, temporary/3,restartable/3 ]).
 
 
@@ -15,7 +15,7 @@ start_link(Type,  Module,  Func, Params)->
 restartable(Module, Func, Params)->
         Res = receive 
                 start->
-                        erlang:apply(Module,Func,Params)
+                       ( catch erlang:apply(Module,Func,Params) )
               end,
         case Res of
              true ->
