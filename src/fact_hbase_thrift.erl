@@ -118,9 +118,9 @@ process_one_record(ProtoType, Family, Data)->
 %                     {<<"params:8">>,{tCell,<<...>>,...}},
 %                     {<<"params:9">>,{tCell,...}}]},
 
-default_repeat(Error,  Params = {Module, Func, Params} )->
+default_repeat(Error,  Params  )->
         Count = application:get_env(eprolog, thrift_reconnect_times),
-        repeat({hbase_exception, { {params, Params}, Error} }, 0, {Module, Func, Params}, Count )       
+        repeat({hbase_exception, { {params, Params}, Error} }, 0, Params, Count )       
 .
 
 repeat(Res, Count, Args  = {_Module, _Func, _Params}, undefined )->
@@ -173,13 +173,13 @@ del_key_noside(Key, TableName, Family, Col)->
         Error -> 
              %%%reconnection !!!??
              thrift_connection_pool:reconnect(KeyC, Error),
-             ?DEBUG("~p deleting key ~p error result: ~p ~n", [{?MODULE,?LINE},{TableName, KeyC, Family},Error]),
+             ?DEBUG("~p deleting key ~p error result: ~p ~n", [{?MODULE,?LINE},{TableName, Key, Family},Error]),
              {hbase_exception, Error}
      end
 .
 
 del_key(TableName, Key )->
-     case del_key_noside(Key, TableName)  of
+     case del_key_noside(TableName, Key)  of
         {hbase_exception, Error} -> 
              %%%reconnection !!!??
             default_repeat(Error, {?MODULE, del_key_noside,  [TableName, Key] });
