@@ -1,5 +1,39 @@
 -module(fact_hbase).
--compile(export_all).
+
+
+-export(
+[
+        get_list_namespaces/0,
+        hbase_low_get_key/4,
+        hbase_low_put_key/5,
+        delete_table/1,
+        del_key/4,
+        create_new_fact_table/1,
+        custom_get_key/4,
+        custom_get_key/3,
+        get_table_list/0,
+        start_recr/2,
+        generate_key/1,
+        delete_all_rules/1,
+        get_facts/1,
+        start_fact_process/3,
+        del_link_fact/3,
+        del_fact/2,
+        del_rule/2,
+        add_new_rule/3,
+        meta_info/2,
+        check_exist_table/1,
+        create_new_namespace/1,
+        add_link/4,
+        add_new_fact/3,
+        delete_all_fact/2,
+        store_meta_fact/4,
+        load_rules2ets/1,
+        fact_start_link/3
+]
+).
+
+
 
 -include("prolog.hrl").
 
@@ -139,8 +173,8 @@ delete_all_rules(Prefix)->
                          del_key(binary_to_list(E), RealTable)
                        end, Names)
 .
-get_list_of_rules([], Table, In )->
-    ?LOG("~p empty scanner ~p ~n",[{?MODULE,?LINE},Table]), 
+get_list_of_rules([], _Table, In )->
+    ?LOG("~p empty scanner ~p ~n",[{?MODULE,?LINE}]), 
     In
     
 ;
@@ -152,29 +186,31 @@ get_list_of_rules(Scanner, Table, In)->
                                       {timeout, ?DEFAULT_TIMEOUT }],
                                     [ {sync, true},{ body_format, binary } ] ) of
                     { ok, { {_NewVersion, 200, _NewReasonPhrase}, _NewHeaders, Text1 } } ->
-                            NewList = get_rules_name( Text1, Table ),
+                            NewList = get_rules_name( Text1 ),
                             get_list_of_rules(Scanner, Table, In ++ NewList );%% TODO another solution
                            
-                    { ok, { {_NewVersion, 204, _NewReasonPhrase}, _NewHeaders, Text1 } } ->
+                    { ok, { {_NewVersion, 204, _NewReasonPhrase}, _NewHeaders, _Text1 } } ->
                            In;
-                    Res ->
-                          ?DEBUG("~p got ~p ~n",[ {?MODULE,?LINE}, Res ] ),  
+                    _Res ->
+                          ?DEBUG("~p unexpected during scanning  ~p ~n",[ {?MODULE,?LINE}, {Table, In}  ] ),  
                           unlink ( spawn(?MODULE, delete_scanner,[Scanner]) ),
                           In   
         end
 .
 
 
-get_rules_name(<<"">>, _Table ) ->
+
+
+get_rules_name(<<"">> ) ->
       []
 ;   
-get_rules_name([], _Table ) ->
+get_rules_name([] ) ->
       []
 ;    
-get_rules_name(Code, Table ) when is_list(Code)->
-      get_rules_name(  list_to_binary(Code), Table )
+get_rules_name(Code ) when is_list(Code)->
+      get_rules_name(  list_to_binary(Code) )
 ;    
-get_rules_name(  Code,  Table )->
+get_rules_name(  Code )->
     Json = jsx:decode( Code ),
     ?DEBUG("~p got ~p ~n",[ {?MODULE,?LINE}, Json ] ),
     [{_Row, Rules }] = Json,
@@ -189,10 +225,17 @@ get_name(Elem)->
 .
 
 
+%TODO rewrite this for transaction mode 
+%% but if there are a lot of  information 
 
 
-get_cache_meta_info([], Table)->
-    ?LOG("~p empty scanner~n",[{?MODULE,?LINE}])
+-spec get_cache_meta_info([], atom() ) ->  nothing;
+                         (nonempty_list(), atom() ) -> true| false.
+
+                         
+get_cache_meta_info([], _Table)->
+    ?LOG("~p empty scanner~n",[{?MODULE,?LINE}]),
+    nothing
 ;
 get_cache_meta_info(Scanner, Table)->
 	?DEBUG("~p send to ~p ~n",[ { ?MODULE, ?LINE }, {Scanner } ] ),
@@ -207,8 +250,8 @@ get_cache_meta_info(Scanner, Table)->
                     { ok, { {_NewVersion, 200, _NewReasonPhrase}, _NewHeaders, Text1 } } ->
 			    process_cache_link( Text1, Table ),
 			    get_cache_meta_info(Scanner, Table);%% TODO another solution
-                    { ok, { {_NewVersion, 204, _NewReasonPhrase}, _NewHeaders, Text1 } } ->
-                           [];
+                    { ok, { {_NewVersion, 204, _NewReasonPhrase}, _NewHeaders, _Text1 } } ->
+                            true;
                     Res ->
 			    ?DEBUG("~p got ~p ~n",[ {?MODULE,?LINE}, Res ] ),  
 			     unlink ( spawn(?MODULE,delete_scanner,[Scanner]) ),
@@ -241,12 +284,11 @@ get_cache_meta_info(Scanner, Table)->
 %                                      {<<"timestamp">>,1364556199749},
 %                                      {<<"$">>,<<"MSwy">>}]]}]]}]
 	
-process_cache_link([], Table)-> 
-  []
+-spec process_cache_link(binary(), atom())->  nothing|true.	
+
+process_cache_link(<<>>, _Table)-> 
+  nothing
 ;	
-process_cache_link(Meta, Table)  when is_list(Meta)-> 
-  process_cache_link( list_to_binary(Meta), Table )
-;
 process_cache_link(Meta, Table)->
        ?DEBUG("~p got meta ~p ~n ",[ {?MODULE,?LINE}, Meta ] ),
        Json = jsx:decode( Meta ),
@@ -267,13 +309,17 @@ process_cache_link(Meta, Table)->
 					  ets:insert(Table, { RowName, Col, ListsMapInt })
 					end, 
 				      RowCells) 
-		      end, Cache )
+		      end, Cache ),
+	true
 .
 
 
+-spec get_link_meta_info( [], atom() ) -> nothing;
+                        ( nonempty_list(), atom())-> nothing|true.
 
-get_link_meta_info([], Table)->
-    ?LOG("~p empty scanner~n",[{?MODULE,?LINE}])
+get_link_meta_info([], _Table)->
+    ?LOG("~p empty scanner~n",[{?MODULE,?LINE}]),
+    nothing
 ;
 get_link_meta_info(Scanner, Table)->
 	 ?DEBUG("~p send to ~p ~n",[ {?MODULE,?LINE}, {Scanner } ] ),
@@ -289,11 +335,11 @@ get_link_meta_info(Scanner, Table)->
                     { ok, { {_NewVersion, 200, _NewReasonPhrase}, _NewHeaders, Text1 } } ->
 			    process_meta_link( Text1, Table ),
 			    get_link_meta_info(Scanner,  Table);%% TODO another solution
-                     { ok, { {_NewVersion, 204, _NewReasonPhrase}, _NewHeaders, Text1 } } ->
-                            [];
+                     { ok, { {_NewVersion, 204, _NewReasonPhrase}, _NewHeaders, _Text1 } } ->
+                            true;
                     Res ->
 			    ?DEBUG("~p got ~p ~n",[ {?MODULE,?LINE}, Res ] ),  
-			     unlink ( spawn(?MODULE,delete_scanner,[Scanner]) ),
+			    unlink ( spawn(?MODULE,delete_scanner,[Scanner]) ),
                             throw({'EXIT', {hbase_exception, Res} })        
 	end
 .
@@ -319,13 +365,11 @@ get_link_meta_info(Scanner, Table)->
 %                            {<<"timestamp">>,1361292801346},
 %                            {<<"$">>,
 %                             <<"ZmFjdDIoWCkgOi0gZmFjdDMoWCkgLCBmYWN0NShYMSkgLCBmYWN0NihYMSkuZmFjdDIoWCkgOi0gZmFjdDIoWCkgLCBmYWN0MyhYMSkgLCBmYWN0KFgxKS4=">>}]]}]]}]
+-spec process_meta_link(binary(), atom()) -> nothing| true.
 
-process_meta_link([], Table)-> 
+process_meta_link(<<>>, _Table)-> 
     ?LOG("~p empty links ",[ {?MODULE,?LINE}] ),
-    []
-;
-process_meta_link(Meta, Table)  when is_list(Meta)-> 
-  process_meta_link( list_to_binary(Meta), Table )
+    nothing
 ;
 process_meta_link(Meta, Table)->
        Json = jsx:decode( Meta ),
@@ -344,23 +388,21 @@ process_meta_link(Meta, Table)->
 					  ets:insert(Table, { RowName, Col, Val  })
 					end, RowCells) 
 					
-		      end, Links )
+		      end, Links ),
+        true
 .
 
+-spec process_meta_weights(binary(), atom())-> nothing| true.
+
 process_meta_weights(<<"">>, _Table )->
-     []
-; 
-process_meta_weights([], _Table )->
-     []
-; 
-process_meta_weights(Meta, Table ) when is_list(Meta)->
-      process_meta_weights(  list_to_binary(Meta), Table )
-;   
+     nothing
+;  
 process_meta_weights(Meta, Table )->
       Json = jsx:decode( Meta ),
       ?DEBUG("~p got meta ~p ~n",[ {?MODULE,?LINE}, Json ] ),
       [{_Row, Facts }] = Json,
-      lists:foldl(fun process_hbase_meta_weight_fact/2, Table, Facts )
+      lists:foldl(fun process_hbase_meta_weight_fact/2, Table, Facts ),
+      true
 .
 process_hbase_meta_weight_fact(Fact, Table)->
 %       [{<<"key">>,<<"aXA=">>},
@@ -377,8 +419,6 @@ process_hbase_meta_weight_fact(Fact, Table)->
       Popularity = get_column(Columns, <<"stat:facts_reqs">>),
       Weight = get_column(Columns, <<"stat:facts_w">>),
       Count = get_column(Columns, <<"stat:facts_count">>),
-
-      Func = get_column(Columns,<<"description:hash_function">>),
       ?DEBUG("~p got meta info of fact ~p ~n",[{?MODULE,?LINE}, {Name, Count, Weight, Popularity } ]),
       ets:insert(Table, {Name, common:inner_to_int(Count),
                                common:inner_to_int(Weight),  
@@ -387,9 +427,12 @@ process_hbase_meta_weight_fact(Fact, Table)->
 .
 
 
+-spec get_and_load_meta_weights([], atom())-> nothing;
+                               ( nonempty_list(), atom())-> nothing.
 
-get_and_load_meta_weights([], Table)->
-    ?LOG("~p empty scanner~n",[{?MODULE,?LINE}])
+get_and_load_meta_weights([], _Table)->
+    ?LOG("~p empty scanner~n",[{?MODULE,?LINE}]),
+    nothing
 ;
 get_and_load_meta_weights(Scanner, Table)->
          ?DEBUG("~p send to ~p ~n",[ {?MODULE,?LINE}, {Scanner } ] ),
@@ -404,8 +447,8 @@ get_and_load_meta_weights(Scanner, Table)->
                             process_meta_weights( Text1, Table ),
                             get_and_load_meta_weights(Scanner, Table);%% TODO another solution
                            
-                    { ok, { {_NewVersion, 204, _NewReasonPhrase}, _NewHeaders, Text1 } } ->
-                           [];
+                    { ok, { {_NewVersion, 204, _NewReasonPhrase}, _NewHeaders, _Text1 } } ->
+                           nothing;
                     Res ->
                             ?DEBUG("~p got ~p ~n",[ {?MODULE,?LINE}, Res ] ),  
                              unlink ( spawn(?MODULE,delete_scanner,[Scanner]) ),
@@ -414,9 +457,13 @@ get_and_load_meta_weights(Scanner, Table)->
 .
 
 
+-spec get_meta_facts([], atom())-> nothing;
+                    ( nonempty_list(), atom() )->true.
+                    
 
-get_meta_facts([], Table)->
-    ?LOG("~p empty scanner~n",[{?MODULE,?LINE}])
+get_meta_facts([], _Table)->
+    ?LOG("~p empty scanner~n",[{?MODULE,?LINE}]),
+    nothing
 ;
 get_meta_facts(Scanner, Table)->
 	 ?DEBUG("~p send to ~p ~n",[ {?MODULE,?LINE}, {Scanner } ] ),
@@ -431,8 +478,8 @@ get_meta_facts(Scanner, Table)->
 			    process_meta( Text1, Table ),
 			    get_meta_facts(Scanner, Table);%% TODO another solution
 			   
-                    { ok, { {_NewVersion, 204, _NewReasonPhrase}, _NewHeaders, Text1 } } ->
-                           [];
+                    { ok, { {_NewVersion, 204, _NewReasonPhrase}, _NewHeaders, _Text1 } } ->
+                           true;
                     Res ->
                             ?DEBUG("~p got ~p ~n",[ {?MODULE,?LINE}, Res ] ),  
                              unlink ( spawn(?MODULE,delete_scanner,[Scanner]) ),
@@ -440,9 +487,14 @@ get_meta_facts(Scanner, Table)->
 	end
 .
 
-get_and_load_rules([], Table )->
-    ?LOG("~p empty scanner ~p ~n",[{?MODULE,?LINE},Table]), []
-    
+
+
+-spec get_and_load_rules([], atom())-> nothing;
+                    ( nonempty_list(), atom() )->true.
+                    
+get_and_load_rules([], _Table )->
+    ?LOG("~p empty scanner ~p ~n",[{?MODULE,?LINE}]),
+    nothing
 ;
 get_and_load_rules(Scanner, Table)->
 	 ?DEBUG("~p send to ~p ~n",[ {?MODULE,?LINE}, {Scanner } ] ),
@@ -455,11 +507,11 @@ get_and_load_rules(Scanner, Table)->
 			    process_code( Text1, Table ),
 			    get_and_load_rules(Scanner, Table);%% TODO another solution
 			   
-                    { ok, { {_NewVersion, 204, _NewReasonPhrase}, _NewHeaders, Text1 } } ->
-                           [];
+                    { ok, { {_NewVersion, 204, _NewReasonPhrase}, _NewHeaders, _Text1 } } ->
+                           true;
                     Res ->
                             ?DEBUG("~p got ~p ~n",[ {?MODULE,?LINE}, Res ] ),  
-                             unlink ( spawn(?MODULE,delete_scanner,[Scanner]) ),
+                            unlink ( spawn(?MODULE,delete_scanner,[Scanner]) ),
                             throw({'EXIT', {hbase_exception, Res} })         
 	end
 .
@@ -516,14 +568,40 @@ process_hbase_meta_fact(Fact, Table)->
       Count = get_column(Columns, <<"description:count">>),
       Func = get_column(Columns,<<"description:hash_function">>),
       Cloud_key  =  list_to_binary("description:" ++   ?CLOUD_KEY),
+      Cloud_key_rule  =  list_to_binary("description:" ++   ?CLOUD_RULE),
       Cloud = get_column(Columns, Cloud_key),
+      Cloud_rule = get_column(Columns, Cloud_key_rule, atom),
       
-      ?DEBUG("~p got meta info of fact ~p ~n",[{?MODULE,?LINE}, {Name, Count, Func, Cloud } ]),
-      ets:insert(Table, {Name, list_to_integer(Count), Func, Cloud  }),
+      ?DEBUG("~p got meta info of fact ~p ~n",[{?MODULE,?LINE}, {Name, Count, Func, Cloud, Cloud_rule } ]),
+      
+      ets:insert(Table, #meta_info{name = Name, 
+                                   arity = list_to_integer(Count), 
+                                   hash_function = Func,
+                                   cloud = Cloud, 
+                                   cloud_decomposition = Cloud_rule  }),
       Table
 .
 
 get_column(Columns, Find)->
+       get_column(Columns, Find, list). 
+       
+get_column(Columns, Find, atom)->
+
+    Res = lists:foldl(fun(List, I)->
+                    { value, { _ ,Val64 } } = lists:keysearch( <<"column">>, 1, List  ),
+                    Val = base64:decode(Val64),
+                    case Val of
+                        Find -> 
+                               { value, { _ ,Value64 } } = lists:keysearch( <<"$">>, 1, List  ),
+                               unicode:characters_to_list( base64:decode( Value64 ) );
+                        _-> I
+                    end
+                end, "", Columns),
+    case  Res of
+        "" -> "";
+        _ -> list_to_atom(Res)
+    end;
+get_column(Columns, Find, list)->
     
     lists:foldl(fun(List, I)->
 		    { value, { _ ,Val64 } } = lists:keysearch( <<"column">>, 1, List  ),
@@ -537,23 +615,24 @@ get_column(Columns, Find)->
 		end, "", Columns)
 .
 
-process_code(<<"">>, _Table ) ->
+-spec process_code(<<>>, atom())->[];
+                  (binary(), atom())-> true.
+
+process_code(<<>>, _Table ) ->
       []
-;   
-process_code([], _Table ) ->
-      []
-;    
-process_code(Code, Table ) when is_list(Code)->
-      process_code(  list_to_binary(Code), Table )
-;    
+;      
 process_code(  Code,  Table )->
     Json = jsx:decode( Code ),
     ?DEBUG("~p got ~p ~n",[ {?MODULE,?LINE}, Json ] ),
     [{_Row, Rules }] = Json,
-    lists:foldl(fun process_hbase_rule/2,  Table ,Rules )
+    lists:foldl(fun process_hbase_rule/2,  Table, Rules ),
+    true
 .
+
+-spec process_hbase_rule(binary(), atom())-> atom().
+                  
 process_hbase_rule(Elem,  Table)->
-      [{_Key, RuleName},{_Cell, Columns }] = Elem,
+      [{_Key, _RuleName},{_Cell, Columns }] = Elem,
       ?DEBUG("~p find rule  ~p ~n",[ {?MODULE,?LINE}, Columns ] ),
 
       [ [ _Column, _TimeStamp, {<<"$">>, Code64 } ] ] = Columns,
@@ -567,34 +646,45 @@ process_hbase_rule(Elem,  Table)->
       lists:foldl(fun compile_patterns/2,  Table,  CodeList)
 .
 
+-spec compile_patterns(binary(), atom())-> atom().
+
 compile_patterns(<<>>,  Table)->
     Table
-
 ;
 compile_patterns( OnePattern,  Table )->
       NewBinary = binary:replace(OnePattern,[<<"#%=#">> ], <<"=..">>, [ global ] ),
       HackNormalPattern =  <<NewBinary/binary, " . ">>,
       ?DEBUG("~p begin process one pattern   ~p ~n",[ {?MODULE,?LINE}, HackNormalPattern ] ),
-     {ok, Terms , L1} = erlog_scan:string( unicode:characters_to_list(HackNormalPattern) ),
+     {ok, Terms , _L1} = erlog_scan:string( unicode:characters_to_list(HackNormalPattern) ),
      Res =  erlog_parse:term(Terms),
-     fill_rule_tree(Res,  Table),
-     Table
+     fill_rule_tree(Res,  Table)
 .
+
+-spec fill_rule_tree(tuple(), atom())-> atom().
+
 fill_rule_tree({  ok , Rule  = {':-',ProtoType, Body} },  Table )->
      Name  = element(1, ProtoType),
      Args =  common:my_delete_element(1, ProtoType),
      ?DEBUG("~p compile rule ~p~n",[{?MODULE,?LINE}, Rule  ]),
-     ets:insert( Table,  { Name, Args, Body } )
+     ets:insert( Table,  { Name, Args, Body } ),
+     Table
 ;
-fill_rule_tree( Rule, _Table )->
-     ?WAIT("~p compile rule error ~p~n",[{?MODULE,?LINE}, Rule  ])
+fill_rule_tree( Rule, Table )->
+     ?WAIT("~p compile rule error ~p~n",[{?MODULE,?LINE}, Rule  ]),
+     Table
 
 .
+
+
+-spec start_fact_process( tuple(), atom(), pid()) -> false|true. 
 
 start_fact_process( Aim, TreeEts, ParentPid)->
       spawn( ?MODULE, fact_start_link, [ Aim, TreeEts, ParentPid] )
 .
 %%TODO add rest call to find all facts and rules 
+
+-spec fact_start_link( tuple(), atom(), pid()) -> false|true. 
+
 fact_start_link( Aim,  TreeEts, ParentPid )->
       monitor(process, ParentPid),
       ?DEBUG("~p begin find in facts ~p ~n",[{?MODULE,?LINE},  Aim ]),
@@ -608,9 +698,11 @@ fact_start_link( Aim,  TreeEts, ParentPid )->
                     false -> 
 			 ?DEBUG("~p delete on start ~p ~n",[{?MODULE,?LINE},  Name  ]),
 			 ParentPid ! {non_exist_exception, Name},
-			 exit(normal)
+			 false
       end
 .
+
+-spec fact_start_link_hbase( tuple(), atom(), pid()) -> false|true.
 
 fact_start_link_hbase( Aim,  TreeEts, ParentPid )->
 
@@ -623,7 +715,7 @@ fact_start_link_hbase( Aim,  TreeEts, ParentPid )->
       process_flag(trap_exit, true),%%for deleting scanners
       NameTable =  common:get_logical_name(TreeEts, Name ),  
       case check_params_facts(Name, TreeEts) of
-	  {CountParams, HashFunction} ->
+	  {CountParams, _HashFunction} ->
 		 case  check_index(ProtoType, Name, TreeEts) of
 		       []->
 			      start_process_loop_hbase(Name, ProtoType, TreeEts);
@@ -633,25 +725,27 @@ fact_start_link_hbase( Aim,  TreeEts, ParentPid )->
                                                     ProtoType,
                                                     [PartKey],
                                                     TreeEts);
-		       {IndexTable , PartKey } ->
+		       {IndexTable, PartKey } ->
 			      ?DEBUG("~p got index ~p ~n",[{?MODULE,?LINE}, { {IndexTable, Name} , PartKey } ]),
 		              PreRes = get_indexed_records(PartKey, atom_to_list(IndexTable) ),             
 			      process_indexed_hbase(atom_to_list(NameTable), ProtoType,  PreRes,  TreeEts)
 		end;
-	  Res ->
-	      ?DEBUG("~p count  params not matched ~p ~n",[{?MODULE,?LINE}, {Res, CountParams } ]),
-	      ParentPid ! arity_exception	
+	  _Res ->
+	      ?DEBUG("~p arity of  params  is not matched ~p ~n",[{?MODULE,?LINE}, CountParams  ]),
+	      ParentPid ! arity_exception,
+	      false 
       end
 .
 
 
-get_indexed_records(PartKey, IndexTable) ->
+-spec get_indexed_records( nonempty_list(), nonempty_list() ) -> tuple().
 
+
+get_indexed_records(PartKey, IndexTable) ->
       get_indexed_records( PartKey, IndexTable,?USE_THRIFT )
 .
 
-
-
+-spec get_indexed_records( nonempty_list(), nonempty_list(), integer() ) -> list()|tuple().
 
 get_indexed_records(PartKey, IndexTable, 1) when is_atom(IndexTable)->
       get_indexed_records( PartKey, atom_to_list(IndexTable), 1 )
@@ -675,7 +769,7 @@ get_indexed_records(PartKey, IndexTable, 0)->
 				  ?LOG("~p got indexed keys ~p ~n",[ {?MODULE,?LINE}, Text1 ] ),
 				  Res = process_key_data(Text1),
 				  Res;
-		           { ok, { {_NewVersion, 404, _NewReasonPhrase}, _NewHeaders, Text1 } } ->
+		           { ok, { {_NewVersion, 404, _NewReasonPhrase}, _NewHeaders, _Text1 } } ->
                                  [];
 			  Res ->
 				  ?LOG("~p got unexpected ~p ~n",[ {?MODULE,?LINE}, Res ] ),
@@ -691,20 +785,19 @@ get_indexed_records(PartKey, IndexTable, 0)->
 %                                      {<<"timestamp">>,1364553734408},
 %                                      {<<"$">>,
 %                                       <<"ZTVjMDc5YTg0MmM5MTg5YzRiZjkyMGFiMzZiZTQ3ZDU=">>}]]} ]]  }] 
-process_key_data(<<"">>)->
+
+
+-spec process_key_data( <<>> )->[];
+                      ( binary() )->list().
+                      
+process_key_data(<<>>)->
     []
-;
-process_key_data([])->
-    []
-;
-process_key_data(Text1) when is_list(Text1)->
-    process_key_data( list_to_binary(Text1) )
 ;
 process_key_data(Meta)->
        ?DEBUG("~p got indexed keys ~p ~n ",[ {?MODULE,?LINE}, Meta ] ),
        Json = jsx:decode( Meta ),
        ?DEBUG("~p got  json is ~p ~n",[ {?MODULE,?LINE}, Json ] ),
-        [ { _Row, [ [ Key, { Cell, Vals }  ] ] } ] = Json, 
+        [ { _Row, [ [ _Key, { _Cell, Vals }  ] ] } ] = Json, 
 	lists:map(fun(Elem)->
  		        ?DEBUG("~p read ~p ", [{?MODULE,?LINE}, Elem ] ), 
 			    Val = unicode:characters_to_list( get_val(Elem, <<"$">> ) ) ,
@@ -714,36 +807,45 @@ process_key_data(Meta)->
 
 
 %%TODO gather mistake of key invalid
-process_indexed_hbase(Table, ProtoType, {hbase_exception, not_found}, TreeEts)->
 
-    NameSpace = common:get_logical_name( TreeEts ),
+-spec process_indexed_hbase(list(), list(), {hbase_exception, not_found}, atom())-> true;
+                           (list(), list(), tuple(), atom())-> false;
+                           (list(), list(), [], atom())-> true;
+                           (list(), list(), nonempty_list(), atom())-> true.
+
+process_indexed_hbase(_Table, _ProtoType, {hbase_exception, not_found}, _TreeEts)->
+
     receive
         {PidReciverResult, get_pack_of_facts}->
             PidReciverResult !  [];
          Some ->     
-            ?LOG("~p got unexpected ~p ~n",[{?MODULE,?LINE}, Some ])
-    end    
+            ?LOG("~p got unexpected ~p ~n",[{?MODULE,?LINE}, Some ]),
+            throw({hbase_exception, {unexpected_behavior, Some} })
+    end,
+    true
 ;
-process_indexed_hbase(Table, ProtoType, {hbase_exception, Reason}, TreeEts)->
+process_indexed_hbase(_Table, _ProtoType, {hbase_exception, Reason}, _TreeEts)->
 
-    NameSpace = common:get_logical_name( TreeEts ),
 %     converter_monitor:stat('search_index',  Table , NameSpace, ProtoType, false ),
     receive
         {PidReciverResult, get_pack_of_facts}->
             PidReciverResult !  {hbase_exception, Reason};
          Some ->     
-
-            ?LOG("~p got unexpected ~p ~n",[{?MODULE,?LINE}, Some ])
-    end    
+            ?LOG("~p got unexpected ~p ~n",[{?MODULE,?LINE}, Some ]),
+             throw({hbase_exception, {unexpected_behavior, Some} })
+    end,
+    false
 ;
 
-process_indexed_hbase(Table, ProtoType, [], TreeEts)->
+process_indexed_hbase(_Table, _ProtoType, [], _TreeEts)->
     receive
         {PidReciverResult, get_pack_of_facts}->
             PidReciverResult !  [];
          Some -> 
-            ?LOG("~p got unexpected ~p ~n",[{?MODULE,?LINE}, Some ])
-    end    
+            ?LOG("~p got unexpected ~p ~n",[{?MODULE,?LINE}, Some ]),
+            throw({hbase_exception, {unexpected_behavior, Some} })
+    end,
+    true
 ;
 process_indexed_hbase(Table, ProtoType,  [NewKey| NewPreRes] , TreeEts)->
     	?WAIT("~p regis  wait  hbase   indexed fact  ~n",[{?MODULE,?LINE} ]),
@@ -752,53 +854,37 @@ process_indexed_hbase(Table, ProtoType,  [NewKey| NewPreRes] , TreeEts)->
 		  ?WAIT("~p GOT  wait in hbase indexed ~n",[{?MODULE,?LINE} ]),
                    Row =  hbase_get_key(ProtoType, Table, ?FAMILY, NewKey),
                    ?DEBUG("~p got row  ~p  ~n",[{?MODULE,?LINE}, Row ]),
-		    PidReciverResult ! Row,
+		   PidReciverResult ! Row,
 		   process_indexed_hbase(Table, ProtoType,  NewPreRes, TreeEts);
-            {'EXIT', From, Reason} ->
-                  ?WAIT("~p GOT  exit in fact hbase ~p ~n",[{?MODULE,?LINE}, ProtoType ]),
-                  ?LOG("~p got exit signal  ~p ~n",[{?MODULE,?LINE}, {From, Reason} ]);
-            {'DOWN', MonitorRef, Type, Object, Info} ->
-                  ?WAIT("~p GOT  exit in fact hbase ~p ~n",[{?MODULE,?LINE}, ProtoType ]),
-                  ?LOG("~p got monitor exit signal   ~p ~n",[{?MODULE,?LINE}, {Object, Info} ]);
+            {'EXIT', _From, _Reason} ->
+                  true;
+            {'DOWN', _MonitorRef, _Type, _Object, _Info} ->
+                  true;
             Some ->%%may be finish
                   ?WAIT("~p GOT  wait in fact hbase ~p ~n",[{?MODULE,?LINE}, ProtoType ]),
-                  ?LOG("~p got unexpected ~p ~n",[{?MODULE,?LINE}, Some ])
-	end,
-	exit(normal)
+                  ?LOG("~p got unexpected ~p ~n",[{?MODULE,?LINE}, Some ]),
+                  throw({hbase_exception, {unexpected_behavior, Some} })
+	end
 .
 
 
-%%TODO implement for the REST
+
+-spec custom_get_key(nonempty_list(), nonempty_list(), nonempty_list() ) -> tuple()| list().
+
+
 custom_get_key(Table,  Family, Key)->
          custom_get_key(Table,  Family, Key, default) 
         
 .
+
+-spec custom_get_key(nonempty_list(), nonempty_list(), nonempty_list(), atom() ) -> tuple()| list().
+
 custom_get_key(Table,  Family, Key, FunProcess)->
          fact_hbase_thrift:get_key_custom(Table, Family, Key, FunProcess) 
         
 .
         
 
-hbase_get_key(Table,  Key)->
-      { Hbase_Res, Host } = get_rand_host(),
-       case catch  httpc:request( get, 
-				    { Hbase_Res++Table++"/"++Key++"/",
-				    [ {"Accept","application/json"}, {"Host", Host }]},
-				    [ {connect_timeout,?DEFAULT_TIMEOUT },
-				      {timeout, ?DEFAULT_TIMEOUT }
-				    ],
-				    [ {sync, true},{ body_format, binary } ] ) of
-                    { ok, { {_NewVersion, 200, _NewReasonPhrase}, _NewHeaders, Text1 } } ->  
-			    Result = process_key_data( Text1),
-			    Result ;
-			   
-                    Res -> 
-			    ?DEBUG("~p  got  through key   return ~p ~n  ~p  ~n",
-				    [{?MODULE,?LINE},
-				    { Table,  Key}, Res ]),
-                            {hbase_exception, Res}
-	end
-.
 
 hbase_get_key(ProtoType, Table, Family, Key)->
     hbase_get_key(ProtoType, Table, Family, Key, ?USE_THRIFT).
@@ -1177,8 +1263,7 @@ add_link(ASourceFact, AForeignFact, ARuleName, TreeEts )->
                                    "application/x-www-form-urlencoded",Body },
                                    [ {connect_timeout,?DEFAULT_TIMEOUT }, {timeout, ?DEFAULT_TIMEOUT }  ],
                                 [ {sync, true}, {headers_as_is, true } ] ) of
-			 { ok, { {_NewVersion, 200, _NewReasonPhrase}, _NewHeaders, Text1 } } ->
-			    	?DEBUG("~p process data with ~n ~p ~n~n~n",[{?MODULE,?LINE}, {Text1} ] ),
+			 { ok, { {_NewVersion, 200, _NewReasonPhrase}, _NewHeaders, _Text1 } } ->
 				true;
                         Res ->
                             ?WAIT("~p got from hbase ~p ",[?LINE,Res]),
@@ -1216,7 +1301,9 @@ add_new_fact([ Name | ProtoType ] , Pos, TreeEts,  1)->
 		  ?DEBUG("~p create new table ~p ~n",[{?MODULE,?LINE}, RealName ]),
 		  create_new_fact_table(RealName),
 		  ?DEBUG("~p store meta info  ~n",[{?MODULE,?LINE} ]),
-		  ets:insert( common:get_logical_name(TreeEts, ?META), {Name, CountParams, "md5", ""} ),
+		  ets:insert( common:get_logical_name(TreeEts, ?META), #meta_info{name = Name, 
+                                                                                  arity = CountParams,
+                                                                                  hash_function = "md5"} ),
 		  store_meta_fact(Name,  common:get_logical_name(TreeEts, ?META_FACTS) , [
 					  {"count" ,integer_to_list( CountParams) }, 
 					  {"hash_function","md5" },
@@ -1279,8 +1366,7 @@ put_key_body(Name, Key, MakeCellSet, 0 )->
                                    "application/x-www-form-urlencoded",SendBody },
                                    [ {connect_timeout,?DEFAULT_TIMEOUT },{timeout, ?DEFAULT_TIMEOUT }  ],
                                 [ {sync, true}, {headers_as_is, true } ] ) of
-			 { ok, { {_NewVersion, 200, _NewReasonPhrase}, _NewHeaders, Text1 } } ->
-			    	?DEBUG("~p process data with ~n ~p ~n~n~n",[{?MODULE,?LINE}, {Text1} ] ),
+			 { ok, { {_NewVersion, 200, _NewReasonPhrase}, _NewHeaders, _Text1 } } ->
 				true;
                         Res ->
                             ?WAIT("~p got from hbase ~p ~n",[?LINE,{Res,Name,Body }]),
@@ -1374,7 +1460,7 @@ check_params_facts(Name, TreeEts) when is_list(Name)->
 check_params_facts(Name, TreeEts) ->
 
      case ets:lookup( common:get_logical_name(TreeEts, ?META), Name  ) of
-	  [ {Name, Count, HashFunction, _ }  ] -> {Count, HashFunction};
+	  [ #meta_info{ arity  = Count,  hash_function = HashFunction }  ] -> {Count, HashFunction};
 	  []-> false
      end
 .
@@ -1520,8 +1606,7 @@ delete_table(TableName)->
         case catch  httpc:request( delete, { Hbase_Res ++ TableName ++ "/schema"  ,
                                                 []}, [{connect_timeout,?DEFAULT_TIMEOUT }, {timeout, ?DEFAULT_TIMEOUT }],
                                 [ {sync, true}, {headers_as_is, true } ] ) of
-                         { ok, { {_NewVersion, 200, _NewReasonPhrase}, _NewHeaders, Text1 } } ->
-                                ?DEBUG("~p process delete data with ~n ~p ~n~n~n",[{?MODULE,?LINE}, TableName ] ),
+                         { ok, { {_NewVersion, 200, _NewReasonPhrase}, _NewHeaders, _Text1 } } ->
                                 true;
                         Res ->
                                 ?WAIT("~p got from hbase ~p for table ~p  ",[?LINE,Res,  TableName]),
@@ -1544,8 +1629,7 @@ del_key(Key, TableName, Family, Col, 0 )->
 	case catch  httpc:request( delete, { Hbase_Res ++ TableName ++ "/" ++ Key ++ "/" ++ Family ++ ":" ++ Col ,
 						[]}, [{connect_timeout,?DEFAULT_TIMEOUT }, {timeout, ?DEFAULT_TIMEOUT }],
                                 [ {sync, true}, {headers_as_is, true } ] ) of
-			 { ok, { {_NewVersion, 200, _NewReasonPhrase}, _NewHeaders, Text1 } } ->
-			    	?DEBUG("~p process delete data with ~n ~p ~n~n~n",[{?MODULE,?LINE}, Key ] ),
+			 { ok, { {_NewVersion, 200, _NewReasonPhrase}, _NewHeaders, _Text1 } } ->
 				true;
                         Res ->
                             ?WAIT("~p got from hbase ~p for key ~p  ",[?LINE,Res, {Key, TableName}]),
@@ -1575,7 +1659,6 @@ del_key(Key, TableName , 0 )->
 				  [ {connect_timeout,?DEFAULT_TIMEOUT }, {timeout, ?DEFAULT_TIMEOUT }  ],
                                 [ {sync, true}  ] ) of
 			 { ok, { {_NewVersion, 200, _NewReasonPhrase}, _NewHeaders, Text1 } } ->
-			    	?DEBUG("~p process delete data with ~n ~p ~n~n~n",[{?MODULE,?LINE}, Key ] ),
 				true;
                         Res ->
                             ?WAIT("~p got from hbase ~p for key ~p  ",[?LINE, Res , {Key, TableName}]),
@@ -1606,8 +1689,7 @@ store_new_rule(Key, Body, LTableName)->
                                    "application/x-www-form-urlencoded",
                                    XmlBody }, [ {connect_timeout,?DEFAULT_TIMEOUT },{timeout, ?DEFAULT_TIMEOUT }  ],
                                 [ {sync, true}, {headers_as_is, true } ] ) of
-			 { ok, { {_NewVersion, 200, _NewReasonPhrase}, _NewHeaders, Text1 } } ->
-			    	?DEBUG("~p process data with ~n ~p ~n~n~n",[{?MODULE,?LINE}, {Text1} ] ),
+			 { ok, { {_NewVersion, 200, _NewReasonPhrase}, _NewHeaders, _Text1 } } ->
 				true;
                         Res ->
                             ?WAIT("~p got from hbase ~p ",[?LINE,Res]),
@@ -1625,7 +1707,6 @@ get_table_list()->
 						{timeout, ?DEFAULT_TIMEOUT }  ],
 				    [ {sync, true} ] ) of
 			 { ok, { {_NewVersion, 200, _NewReasonPhrase}, _NewHeaders, Text1 } } ->
-			    	?DEBUG("~p process data with ~n ~p ~n~n~n",[{?MODULE,?LINE}, {Text1} ] ),
 				 string:tokens(Text1, "\n");
                         Res ->
                             ?DEBUG("~p got from hbase ~p ",[?LINE,Res]),
@@ -1711,11 +1792,9 @@ create_new_meta_table( LTableName )->
                                   "application/x-www-form-urlencoded", Body },
                                   [ {connect_timeout,?DEFAULT_TIMEOUT }, {timeout, ?DEFAULT_TIMEOUT }  ],
                                  [ {sync, true}, {headers_as_is, true } ] ) of
-		      { ok, { { _NewVersion, 200, _NewReasonPhrase}, _NewHeaders, Text1 } } -> 
-			       ?DEBUG("~p create new  table  ~p ~n~n~n",[{?MODULE,?LINE}, {TableName} ] ),
+		      { ok, { { _NewVersion, 200, _NewReasonPhrase}, _NewHeaders, _Text1 } } -> 
 				true;
-                      { ok, { { _NewVersion, 201, _NewReasonPhrase}, _NewHeaders, Text1 } } -> 
-                               ?DEBUG("~p create new  table  ~p ~n~n~n",[{?MODULE,?LINE}, {TableName} ] ),
+                      { ok, { { _NewVersion, 201, _NewReasonPhrase}, _NewHeaders, _Text1 } } -> 
                                 true;
                       Res ->
                             ?WAIT("~p got from hbase ~p ",[?LINE,Res]),
@@ -1743,11 +1822,9 @@ create_new_fact_table( LTableName )->
                                   "application/x-www-form-urlencoded", Body },
                                   [ {connect_timeout,?DEFAULT_TIMEOUT }, {timeout, ?DEFAULT_TIMEOUT }  ],
                                  [ {sync, true}, {headers_as_is, true } ] ) of
-		      { ok, { { _NewVersion, 200, _NewReasonPhrase}, _NewHeaders, Text1 } } -> 
-			       ?DEBUG("~p create new  table  ~p ~n~n~n",[{?MODULE,?LINE}, {TableName} ] ),
+		      { ok, { { _NewVersion, 200, _NewReasonPhrase}, _NewHeaders, _Text1 } } -> 
 				true;
-                      { ok, { { _NewVersion, 201, _NewReasonPhrase}, _NewHeaders, Text1 } } -> 
-                               ?DEBUG("~p create new  table  ~p ~n~n~n",[{?MODULE,?LINE}, {TableName} ] ),
+                      { ok, { { _NewVersion, 201, _NewReasonPhrase}, _NewHeaders, _Text1 } } -> 
                                 true;
                       Res ->
                             ?WAIT("~p got from hbase ~p ",[?LINE,Res]),
@@ -1789,8 +1866,7 @@ store_new_fact(LTableName, LProtoType, 0)->
                                    "application/x-www-form-urlencoded",Body },
                                    [ {connect_timeout,?DEFAULT_TIMEOUT },{timeout, ?DEFAULT_TIMEOUT }  ],
                                 [ {sync, true}, {headers_as_is, true } ] ) of
-			 { ok, { {_NewVersion, 200, _NewReasonPhrase}, _NewHeaders, Text1 } } ->
-			    	?DEBUG("~p process data with ~n ~p ~n~n~n",[{?MODULE,?LINE}, Text1 ] ),
+			 { ok, { {_NewVersion, 200, _NewReasonPhrase}, _NewHeaders, _Text1 } } ->
 				true;
                         Res ->
                             ?WAIT("~p got from hbase ~p ~n",[?LINE,{Res,LTableName, LProtoType }]),
@@ -1835,8 +1911,7 @@ store_meta_fact(Name, MetaTable, LProtoType, Type)->
                                    Body }, [ {connect_timeout,?DEFAULT_TIMEOUT },
 					      {timeout, ?DEFAULT_TIMEOUT }  ],
                                 [ {sync, true}, { headers_as_is, true } ] ) of
-			 { ok, { {_NewVersion, 200, _NewReasonPhrase}, _NewHeaders, Text1 } } ->
-			    	?DEBUG("~p process data with ~n ~p ~n~n~n",[{?MODULE,?LINE}, {Text1} ] ),
+			 { ok, { {_NewVersion, 200, _NewReasonPhrase}, _NewHeaders, _Text1 } } ->
 				true;
                         Res ->
                             ?WAIT("~p got from hbase ~p ",[?LINE,Res]),
@@ -1872,35 +1947,7 @@ generate_key(ProtoType)->
 
 
     
-get_list_facts()->
-      
-	{Hbase_Res, Host } = get_rand_host(),
-	case catch  httpc:request( get, { Hbase_Res,[ {"Accept","application/json"}, {"Host", Host}]},
-				    [ {connect_timeout,?DEFAULT_TIMEOUT },
-				      {timeout, ?DEFAULT_TIMEOUT }],
-				    [ {sync, true},
-                                      { body_format, binary } ] ) of
-                    { ok, { {_NewVersion, 200, _NewReasonPhrase}, _NewHeaders, Text1 } } ->
-			    	?DEBUG("~p process data with ~n ~p ~n~n~n",[{?MODULE,?LINE}, {Text1} ] ),
-% 			    	[ {<<"table">>,
-% 				      [ 
-%       				 [ {<<"name">>,<<"pay">>} ],
-% 				         [ {<<"name">>,<<"table">>} ]
-% 				      ]
-%       			 }
-% 				]
-				[{ Tale, ListTables }] = jsx:decode(   Text1  ),
-				?DEBUG("~p got data with ~n ~p ~n~n~n",[{?MODULE,?LINE}, ListTables ] ),
-				lists:map(fun([Elem])-> Elem end, ListTables );
-% 				{"table":[{"name":"pay"},{"name":"table"}]}
-		     Res ->
-			   ?DEBUG("~p got ~p try reach tables again ~n",[ {?MODULE,?LINE}, Res ] ),
-                           get_list_facts()
-                           
-	end
 
-
-.
 
 
 get_val_simple(E, Key)->
@@ -1980,7 +2027,7 @@ delete_scanner(Scanner)->
 				    [ {connect_timeout,?DEFAULT_TIMEOUT },
 				      {timeout, ?DEFAULT_TIMEOUT } ],
 				    [ {sync, true} ] ) of
-                    { ok, { {_NewVersion, 200, _NewReasonPhrase}, _NewHeaders, Text1 } } ->
+                    { ok, { {_NewVersion, 200, _NewReasonPhrase}, _NewHeaders, _Text1 } } ->
 			    ?LOG("~p delete normal scanner ~p ~n",[ {?MODULE,?LINE}, Scanner ] ),
 			    exit(normal);
 			   
@@ -2093,8 +2140,7 @@ hbase_low_put_key(Table, Key, Family, Key2, Value, 0)->
                                    "application/x-www-form-urlencoded",Body },
                                    [ {connect_timeout,?DEFAULT_TIMEOUT }, {timeout, ?DEFAULT_TIMEOUT }  ],
                                 [ {sync, true}, {headers_as_is, true } ] ) of
-			 { ok, { {_NewVersion, 200, _NewReasonPhrase}, _NewHeaders, Text1 } } ->
-			    	?DEBUG("~p process data with ~n ~p ~n~n~n",[{?MODULE,?LINE}, {Text1} ] ),
+			 { ok, { {_NewVersion, 200, _NewReasonPhrase}, _NewHeaders, _Text1 } } ->
 				true;
                         Res ->
                             ?WAIT("~p got from hbase ~p ",[?LINE,Res]),
