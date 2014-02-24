@@ -95,7 +95,7 @@ server_loop(NameSpace, TraceOn) ->
 	{ok, Goal} ->
 	        io:fwrite("Goal : ~p~n", [Goal]),                 
                 StartTime = erlang:now(),
-	        WorkResult =  prolog:call(Goal, TraceOn, NameSpace  ),      
+	        WorkResult =  (catch prolog:call(Goal, TraceOn, NameSpace  ) ),      
                 process_prove(WorkResult, Goal,  StartTime ),
 	        server_loop(NameSpace, TraceOn);
 	{error,P = {_, Em, E }} ->
@@ -111,14 +111,10 @@ server_loop(NameSpace, TraceOn) ->
                 
     
 process_prove(WorkResult, Goal, StartTime)->
-      case  WorkResult of   
-	    {'EXIT', FromPid, Reason}->
-		  ?DEBUG("~p exit aim ~p~n",[{?MODULE,?LINE}, {FromPid,Reason} ]),
-		  io:fwrite("Error~n ~p",[{Reason,FromPid}]),
-		  FinishTime = erlang:now(),
-		  io:fwrite(" elapsed time ~p ~n", [ timer:now_diff(FinishTime, StartTime)*0.000001 ] );           
-            {SomeContext, Descriptor } ->
-                  ?DEBUG("~p got from prolog shell aim ~p~n",[{?MODULE,?LINE} ,{Goal, dict:to_list(SomeContext)} ]),
+      ?DEBUG("~p result ~p~n",[{?MODULE,?LINE}, WorkResult ]),
+      case  WorkResult of    
+            {true, SomeContext, Descriptor } ->
+                  ?DEBUG("~p got from prolog shell aim ~p~n",[{?MODULE,?LINE} ,{Goal, SomeContext } ]),
                   FinishTime = erlang:now(),
                   New = prolog_matching:bound_body( Goal, SomeContext ),
                   ?DEBUG("~p temp  shell context ~p previouse key ~p ~n",[?LINE , New, Descriptor ]),
@@ -136,9 +132,14 @@ process_prove(WorkResult, Goal, StartTime)->
                           NewWorkResult = prolog:next(Descriptor),
                           process_prove(NewWorkResult,   Goal,  erlang:now() )              
                   end;        
-	    Res ->
-		   io:fwrite("No ~p~n",[Res]),FinishTime = erlang:now(),
-    		   io:fwrite(" elapsed time ~p ~n", [ timer:now_diff(FinishTime, StartTime)*0.000001 ] )
+	    false ->
+		   io:fwrite("No ~n",[]),FinishTime = erlang:now(),
+    		   io:fwrite(" elapsed time ~p ~n", [ timer:now_diff(FinishTime, StartTime)*0.000001 ] );
+            Exception ->
+                  ?DEBUG("~p exit aim ~p~n",[{?MODULE,?LINE}, Exception ]),
+                  io:fwrite("Error~n ~p~n",[Exception]),
+                  FinishTime = erlang:now(),
+                  io:fwrite(" elapsed time ~p ~n", [ timer:now_diff(FinishTime, StartTime)*0.000001 ] )
     		   
      end
 .

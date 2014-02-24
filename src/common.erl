@@ -25,7 +25,7 @@ member_tail(Item, [_|Tail])->
 check_source(TreeEts)->
     case ets:lookup(TreeEts, hbase) of
         [] -> 0;
-        [{system_record, hbase, A}]-> A
+        [{system_record, hbase, _A}]-> 1
     end
 .
 

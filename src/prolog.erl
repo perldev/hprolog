@@ -314,11 +314,13 @@ call(Goal, Tracing,   NameSpace, OperationLimit)->
           {ok, Child} =  proc_spawn(self(), Goal, Tracing,   NameSpace, OperationLimit ),
           receive 
                 false ->
+                        finish({Child, undefined}), 
                         false;
                 {true, Context, Prev} ->
                         ?DEBUG("~p result of  ~p ~n",[ {?MODULE,?LINE}, {Context, Prev} ]),
-                        {Context, {Child, Prev} };
+                        {true, Context, {Child, Prev} };
                 Unexpected ->
+                        finish({Child, undefined}), 
                         throw( Unexpected )          
           end
 .
@@ -368,6 +370,7 @@ aim_spawn(start, BackPid, Goal, TreeEts, Limit  )->
                     {next, NewPrev} ->
                         aim_spawn(NewPrev, BackPid, Res, TreeEts, Limit );
                     finish ->
+                        ?DEBUG("~p finish signal ~n",[{?MODULE,?LINE} ]),
                         clean_tree(TreeEts), 
                         exit(normal);
                     Signal->
@@ -385,6 +388,7 @@ aim_spawn(Prev, BackPid, Goal, TreeEts, Limit  )->
                         ?DEBUG("~p normal signal ~p~n",[{?MODULE,?LINE}, Prev ]),
                         aim_spawn(NewPrev, BackPid, Res, TreeEts, Limit );
                     finish ->
+                        ?DEBUG("~p finish signal ~n",[{?MODULE,?LINE} ]),
                         clean_tree(TreeEts), 
                         exit(normal);
                     Signal ->
