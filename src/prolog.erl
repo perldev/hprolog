@@ -127,8 +127,11 @@ only_rules_delete_inner(Prefix)->
         ets:delete_all_objects(common:get_logical_name(Prefix, ?DYNAMIC_STRUCTS))
 .
 
+
+
 % Set a process as heir. The heir will inherit the table if the owner terminates. The message {'ETS-TRANSFER',tid(),FromPid,HeirData} will
 %  | {heir,none}
+
 create_inner_structs(Prefix, HeirPid)->
     put(?DYNAMIC_STRUCTS, common:get_logical_name(Prefix, ?DYNAMIC_STRUCTS) ),
     case ets:info(common:get_logical_name(Prefix, ?DYNAMIC_STRUCTS)) of    
@@ -145,7 +148,6 @@ create_inner_structs(Prefix, HeirPid)->
          _ -> already
          
     end
-    %%statistic is common
 .
 
 create_inner_structs(Prefix)->
@@ -295,11 +297,11 @@ var_generator_name(Name)->
 
 %% simple way for using prolog  in you application
 call(Goal)->
-   call(Goal, 0,  "").
+   call(Goal, 0,  default).
    
    
 call(Goal, Tracing)->
-        call(Goal, Tracing,  "").
+        call(Goal, Tracing,  default).
 
 
 call(Goal, Tracing,   NameSpace)->
@@ -314,6 +316,7 @@ call(Goal, Tracing,   NameSpace, OperationLimit)->
                 false ->
                         false;
                 {true, Context, Prev} ->
+                        ?DEBUG("~p result of  ~p ~n",[ {?MODULE,?LINE}, {Context, Prev} ]),
                         {Context, {Child, Prev} };
                 Unexpected ->
                         throw( Unexpected )          
@@ -323,7 +326,7 @@ call(Goal, Tracing,   NameSpace, OperationLimit)->
 next({Pid, Prev})->
          Pid ! {next, Prev}.
 
-finish(Pid)->
+finish({Pid,Prev})->
         Pid ! finish.
         
 
@@ -347,7 +350,13 @@ start_aim_spawn( BackPid, Goal, Tracing, NameSpace, Limit )->
          process_flag(trap_exit, true),
          ?DEBUG("~p start aim ~p~n",[{?MODULE,?LINE},Goal ]),
          TreeEts = ets:new(tree_processes,[ public, set, named_table,{ keypos, 2 } ] ),   
-         ets:insert(TreeEts, {system_record,?PREFIX, NameSpace}),            
+         case NameSpace of
+              default->
+                 ets:insert(TreeEts, {system_record,?PREFIX, NameSpace});
+              _Name ->
+                 ets:insert(TreeEts, {system_record,?PREFIX, NameSpace}),
+                 ets:insert(TreeEts, {system_record, hbase, NameSpace} )
+         end,     
          prolog_trace:trace_on(Tracing, TreeEts),              
          aim_spawn(start, BackPid, Goal, TreeEts, Limit). 
 %% must bee

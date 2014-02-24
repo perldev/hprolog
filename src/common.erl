@@ -228,6 +228,9 @@ get_logical_name(Prefix)->
     RealPrefix
 .
 
+get_logical_name(default, Name) ->
+     Name 
+;
 get_logical_name(Prefix, Name) when is_list(Name), is_list(Prefix) ->
      Prefix ++ Name 
 ;

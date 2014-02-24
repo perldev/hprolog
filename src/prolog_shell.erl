@@ -3,13 +3,11 @@
 %%% Purpose : A simple  shell.
 -module(prolog_shell).
 
--export([start/0,start/1,server/1]).
+-export([start/0,start_big/1,server/1]).
 
 -compile(export_all).
 -include("prolog.hrl").
 
-
-start() -> start("").
 
 
 
@@ -27,7 +25,12 @@ api_start(Prefix)->
    ?INCLUDE_HBASE( Prefix )
 .
 
-start(Prefix)-> 
+start()-> 
+    prolog:create_inner_structs(default),
+    server(default) 
+.
+
+start_big(Prefix)-> 
     case prolog:create_inner_structs(Prefix) of
          true->   case (catch ?INCLUDE_HBASE( Prefix ) ) of
                     true-> io:format("~p namespace was loaded ~n",[Prefix]);
@@ -68,74 +71,72 @@ server_loop(NameSpace, TraceOn) ->
 	      io:fwrite("~s ~n", [Code]),   
 	      server_loop(NameSpace, TraceOn);
 	{ok, trace_off}->
-	    io:fwrite("trace off Yes~n"),    
-	    server_loop(NameSpace, ?TRACE_OFF);
+	      io:fwrite("trace off Yes~n"),    
+	      server_loop(NameSpace, ?TRACE_OFF);
 	{ok, debug_on}->
-	    io:fwrite("debug on Yes~n"),  
-	    server_loop(NameSpace, ?DEBUG_ON);
+	      io:fwrite("debug on Yes~n"),  
+	      server_loop(NameSpace, ?DEBUG_ON);
 	{ok, debug_off}->
-	    io:fwrite("debug off Yes~n"),  
-	    server_loop(NameSpace, ?DEBUG_OFF);
+	      io:fwrite("debug off Yes~n"),  
+	      server_loop(NameSpace, ?DEBUG_OFF);
 	{ok,Files} when is_list(Files) ->
-                lists:foreach(fun(File)->
+              lists:foreach(fun(File)->
                                         case catch(prolog:compile(NameSpace, File)) of
                                                 ok ->
-                                                io:fwrite(atom_to_list(File) ++ " Yes~n");
+                                                        io:fwrite(atom_to_list(File) ++ " Yes~n");
                                                 Error ->
-                                                io:fwrite(atom_to_list(File) ++ " Error: ~p~n", [Error])
+                                                        io:fwrite(atom_to_list(File) ++ " Error: ~p~n", [Error])
                                         end
                                 end, Files),
                 server_loop(NameSpace, TraceOn);
-	 {ok, Goal = {':-',_,_ } } ->
-		io:fwrite("syntax error may be you want use assert ~p ~n",[Goal]),
+	{ok, Goal = {':-',_,_ } } ->
+                io:fwrite("syntax error may be you want use assert ~p ~n",[Goal]),
 		server_loop(NameSpace, TraceOn);
-	{ok,Goal} ->
-	       io:fwrite("Goal : ~p~n", [Goal]),                 
-               StartTime = erlang:now(),
-	       Pid =  prolog:call(Goal, TraceOn, NameSpace  ),      
-               process_prove(Pid, Goal,  StartTime ),
-% 	       clean(tree_processes),%%%[this is very bad design or solution
-               Pid! finish,
-	       server_loop(NameSpace, TraceOn);
+	{ok, Goal} ->
+	        io:fwrite("Goal : ~p~n", [Goal]),                 
+                StartTime = erlang:now(),
+	        WorkResult =  prolog:call(Goal, TraceOn, NameSpace  ),      
+                process_prove(WorkResult, Goal,  StartTime ),
+	        server_loop(NameSpace, TraceOn);
 	{error,P = {_, Em, E }} ->
-	       io:fwrite("Error: ~p~n", [P]),
-	       server_loop(NameSpace, TraceOn);
+	        io:fwrite("Error: ~p~n", [P]),
+	        server_loop(NameSpace, TraceOn);
 	{error,P} ->
-               io:fwrite("Error during parsing: ~p~n", [P]),
-               server_loop(NameSpace, TraceOn)
+                io:fwrite("Error during parsing: ~p~n", [P]),
+                server_loop(NameSpace, TraceOn)
     end.
 
            
                 
                 
     
-process_prove(Pid,    Goal, StartTime)->
-      receive  
+process_prove(WorkResult, Goal, StartTime)->
+      case  WorkResult of   
 	    {'EXIT', FromPid, Reason}->
 		  ?DEBUG("~p exit aim ~p~n",[{?MODULE,?LINE}, {FromPid,Reason} ]),
 		  io:fwrite("Error~n ~p",[{Reason,FromPid}]),
 		  FinishTime = erlang:now(),
 		  io:fwrite(" elapsed time ~p ~n", [ timer:now_diff(FinishTime, StartTime)*0.000001 ] );           
-            {true, SomeContext, Prev} ->
+            {SomeContext, Descriptor } ->
                   ?DEBUG("~p got from prolog shell aim ~p~n",[{?MODULE,?LINE} ,{Goal, dict:to_list(SomeContext)} ]),
                   FinishTime = erlang:now(),
                   New = prolog_matching:bound_body( Goal, SomeContext ),
-                  ?DEBUG("~p temp  shell context ~p previouse key ~p ~n",[?LINE , New, Prev ]),
+                  ?DEBUG("~p temp  shell context ~p previouse key ~p ~n",[?LINE , New, Descriptor ]),
                   {true, NewLocalContext} = prolog_matching:var_match(Goal, New, dict:new()),                
                   lists:foreach(fun shell_var_match/1, dict:to_list(NewLocalContext) ),
                   ?SYSTEM_STAT(tree_processes, {0,0,0}),
-                  io:fwrite(" elapsed time ~p next solution ~p process varients ~n", [ timer:now_diff(FinishTime, StartTime)*0.000001,Prev] ),
+                  io:fwrite(" elapsed time ~p next solution ~p process varients ~n", [ timer:now_diff(FinishTime, StartTime)*0.000001,Descriptor] ),
                   Line = io:get_line(': '),
                   case string:chr(Line, $;) of
                        0 ->
-                          io:fwrite("Yes~n");
+                           io:fwrite("Yes~n"),
+                           prolog:finish(Descriptor);
                        _ ->
-                         ?DEBUG("~p send next to pid ~p",[{?MODULE,?LINE}, {Pid, Goal, Prev} ]),
-                         Pid ! {next, Prev},
-                         process_prove(Pid,   Goal,  erlang:now() )              
+                          ?DEBUG("~p send next to pid ~p",[{?MODULE,?LINE}, {Descriptor, Goal} ]),
+                          NewWorkResult = prolog:next(Descriptor),
+                          process_prove(NewWorkResult,   Goal,  erlang:now() )              
                   end;        
 	    Res ->
-	           
 		   io:fwrite("No ~p~n",[Res]),FinishTime = erlang:now(),
     		   io:fwrite(" elapsed time ~p ~n", [ timer:now_diff(FinishTime, StartTime)*0.000001 ] )
     		   
