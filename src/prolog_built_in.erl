@@ -4,7 +4,6 @@
 
       
 inner_to_var(List , X2, Context) when is_list(List)->
-        
        L = lists:map(fun(E)-> case is_atom(E) of true-> {E} end   end, List),
        prolog_matching:var_match(  X2, L, Context);
        
@@ -595,13 +594,13 @@ inner_defined_aim(NextBody, PrevIndex ,Body = {read_str, X }, Context, _Index, T
              Res
     end
 ;
-inner_defined_aim(NextBody, PrevIndex, Body = {start_cloud, _FactName, _CloudName  }, Context, _Index, TreeEts)->
-     {_, FactName, CloudName } = prolog_matching:bound_body( Body, Context),     
-     case  { is_atom(FactName),is_list(CloudName)  } of       
-           {true, true}->
+inner_defined_aim(NextBody, PrevIndex, Body = {start_cloud, _FactName, _CloudName, _CloudRule  }, Context, _Index, TreeEts)->
+     {_, FactName, CloudName, CloudRule } = prolog_matching:bound_body( Body, Context),     
+     case  { is_atom(FactName),is_list(CloudName), is_atom(CloudRule)  } of       
+           {true, true, true}->
                 MetaTable = common:get_logical_name(TreeEts, ?META_FACTS),
                 MetaTableEts = common:get_logical_name(TreeEts, ?META),
-                 ResCloud  = eprolog_cloud:start_cloud(FactName, CloudName, MetaTable, MetaTableEts  ),
+                ResCloud  = eprolog_cloud:start_cloud(FactName, CloudName, CloudRule, MetaTable, MetaTableEts  ),
                 {ResCloud, Context};
             _->
                 throw( { instantiation_error, {start_cloud, FactName, CloudName} } )      
@@ -651,7 +650,9 @@ inner_defined_aim(NextBody, PrevIndex, Body = {'cloud_counters', _FactName, _Ent
 
 inner_defined_aim(NextBody, PrevIndex ,Body = { soundex, _X, _Res }, Context, _Index, TreeEts)->
      {_, X1, X2 } = prolog_matching:bound_body( Body, Context),     
-     case  soundex_rus:start(X1) of
+     case  catch soundex_rus:start(X1) of
+            {'EXIT', Reason}->
+                throw({built_in_exception, X1, Reason });
             X when is_list(X) -> 
                 prolog_matching:var_match( X, X2, Context );                 
             B1 ->
@@ -1183,8 +1184,8 @@ worker_linked_rules(Body, Prefix, Hbase)->
 
       Res = foldl_linked_rules(FactName, List, TreeEts, ProtoType),
       
-      [ {_, _Arity, _HashFunction, CloudName } ] = ets:lookup( common:get_logical_name(TreeEts, ?META) , FactName),
-      ResultOfWorkCloud  = eprolog_cloud:process_cloud(Body, CloudName  ),
+      [ #meta_info{ cloud = CloudName, cloud_decomposition = CloudRule } ] = ets:lookup( common:get_logical_name(TreeEts, ?META) , FactName),
+      ResultOfWorkCloud  = eprolog_cloud:process_cloud(Body, CloudName, CloudRule, TreeEts  ),
       ?WAIT("~p cloud work  ~p ~n",[{?MODULE,?LINE},   ResultOfWorkCloud ]),
       Res
 .
@@ -1211,7 +1212,7 @@ foldl_linked_rules(FactName, [Head| Tail], TreeEts, ProtoType)->
 
 
 
-%TODO process the Hbase mistakes and timeouts 
+%TODO process the Hbase mistakes and timeouts
 repeat(Count, Module ,Func, Params )->
   repeat(0,Count, Module ,Func, Params )
 
