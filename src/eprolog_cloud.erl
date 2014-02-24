@@ -1,6 +1,6 @@
 -module(eprolog_cloud).
 
--export([cloud_entity/3, stop_cloud/3, start_cloud/4, process_cloud/2, cloud_entity_counters/3]).
+-export([cloud_entity/3, stop_cloud/3, start_cloud/5, process_cloud/4, cloud_entity_counters/3]).
 -include("prolog.hrl").
 -include_lib("thrift/src/hbase_types.hrl").
 
@@ -13,15 +13,15 @@ generate_key( _ )->
 .
 
 %%experimental feature
--spec process_cloud(tuple(), [] )-> true;
-                   (tuple(), nonempty_list() )-> true|false.
+-spec process_cloud(tuple(), [], any(), atom()  )-> true;
+                   (tuple(), nonempty_list(), atom(), atom() )-> true|false.
 
                    
 %%TODO adding functionality for big CLOUDS move it to separate tables of files
-process_cloud(Body, []  )->
+process_cloud(_Body, [], _RuleName, _Tree  )->
         true
 ;
-process_cloud(Body, TableName  )->
+process_cloud(Body, TableName, RuleName, _TreeEts  )->
         [_Name| ProtoType ] = tuple_to_list(Body),
         Key = generate_key(ProtoType),
         Value = jsx:encode( common:prolog_term_to_jlist(ProtoType) ),
@@ -51,15 +51,16 @@ stop_cloud(FactName, MetaTable, MetaTableEts)->
       end 
 .
         
--spec start_cloud(atom(), list(), list(), atom())-> true|false.
+-spec start_cloud(atom(), list(), atom(),  list(), atom())-> true|false.
 
-start_cloud(FactName, CloudName, MetaTable, MetaTableEts)->
+start_cloud(FactName, CloudName, CloudRule, MetaTable, MetaTableEts)->
       case ets:lookup(MetaTableEts, FactName) of
            []->  false;
            [{FactName, Arity, Hash_Function, []}]->
                  %%TODO  add transaction behaviour
                  Res = fact_hbase:create_new_fact_table( CloudName ),
                  fact_hbase:hbase_low_put_key(MetaTable, atom_to_list(FactName), "description", ?CLOUD_KEY, CloudName),
+                 fact_hbase:hbase_low_put_key(MetaTable, atom_to_list(FactName), "description", ?CLOUD_RULE, CloudRule),
                  ets:insert(MetaTableEts, {FactName, Arity, Hash_Function, CloudName} ),        
                  Res;
            [{FactName, Arity, Hash_Function, CloudName}]->

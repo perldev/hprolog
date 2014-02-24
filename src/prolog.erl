@@ -6,9 +6,8 @@
 %%This module provides prolog kernel work with parsed code before
 %%% code is presented as a tree using tuples
 
--export([call/1, call/2, call/3, start_aim_spawn/4]).
+-export([call/1, call/2, call/3, start_aim_spawn/5]).
 
-%   ets:insert(TreeEts,{ Index, BoundProtoType, TempSearch, RuleList, one, PrevIndex, Context, NextBody  }),
 -include("prolog.hrl").
 
 inner_meta_predicates(Name)->
@@ -76,7 +75,7 @@ inner_change_namespace(true, Name, TreeEts)->
             create_inner_structs(Name),
             ?INCLUDE_HBASE( Name );
         _ ->
-           nothing_do
+           nothing
     end,
     ets:insert(TreeEts,{system_record, ?PREFIX, Name}),
     true
@@ -137,7 +136,7 @@ create_inner_structs(Prefix, HeirPid)->
             ets:new(common:get_logical_name(Prefix, ?DYNAMIC_STRUCTS),[named_table, set, public, { heir,HeirPid, Prefix } ]),
             %TODO remove this
             ets:new(common:get_logical_name(Prefix, ?META_WEIGHTS),[named_table, set, public, { heir,HeirPid, Prefix }] ),
-            ets:new(common:get_logical_name(Prefix, ?META),[named_table, set, public, { heir,HeirPid, Prefix }]),
+            ets:new(common:get_logical_name(Prefix, ?META),[named_table, set, public, { heir,HeirPid, Prefix }, {keypos, 2} ]),
             ets:new(common:get_logical_name(Prefix, ?RULES),[named_table, bag, public, { heir,HeirPid, Prefix }]),
             ets:new(common:get_logical_name(Prefix, ?META_LINKS),[named_table, bag, public, { heir,HeirPid, Prefix }]),
             %the hbase database is for everything
@@ -175,12 +174,7 @@ ets_code_record_process({Name}, In)->
        PrologCode =  erlog_io:write1({':-', Name, true }),
        ?DEBUG("~p process ets code ~p~n",[{?MODULE,?LINE}, PrologCode  ]),  
        V2 = list_to_binary( lists:flatten(PrologCode)++"." ),
-       
-       <<In/binary, V2/binary >>
-
-
-
-.
+       <<In/binary, V2/binary >>.
 
 
 
@@ -294,42 +288,76 @@ bound_vars(Search, Context) ->
 
 .
 
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-
-
-
-
 %%TODO avoid this
 var_generator_name(Name)->
        { list_to_atom( Name ) }
 .
-%  Res = (catch prolog:aim( finish, ?ROOT, Goal,  dict:new(), 1, TreeEts, ?ROOT)),
 
-%% simple way for using prolog 
+%% simple way for using prolog  in you application
 call(Goal)->
    call(Goal, 0,  "").
    
    
 call(Goal, Tracing)->
         call(Goal, Tracing,  "").
-   
-call(Goal, Tracing,   NameSpace)->
-        spawn(?MODULE, start_aim_spawn, [ self(), Goal, Tracing,  NameSpace]).
 
-start_aim_spawn( BackPid, Goal, Tracing, NameSpace  )->
+
+call(Goal, Tracing,   NameSpace)->
+        OperationLimit  =  application:get_env(eprolog, max_operations_limit),
+        call(Goal, Tracing,   NameSpace, OperationLimit).
+        
+call(Goal, Tracing,   NameSpace, {ok, Count})->
+        call(Goal, Tracing,   NameSpace, Count);
+call(Goal, Tracing,   NameSpace, OperationLimit)->
+          {ok, Child} =  proc_spawn(self(), Goal, Tracing,   NameSpace, OperationLimit ),
+          receive 
+                false ->
+                        false;
+                {true, Context, Prev} ->
+                        {Context, {Child, Prev} };
+                Unexpected ->
+                        throw( Unexpected )          
+          end
+.
+
+next({Pid, Prev})->
+         Pid ! {next, Prev}.
+
+finish(Pid)->
+        Pid ! finish.
+        
+
+
+proc_spawn(Pid, Goal, Tracing,   NameSpace, Limit)->
+       ?DEV_DEBUG("~p start child linked process ~p ~n",[{?MODULE,?LINE}, Goal ]),
+       ChildSpec = { 
+                make_ref(),
+                {simple_background_process,
+                 start_link, [temporary ,?MODULE, start_aim_spawn, [Pid, Goal, Tracing,   NameSpace, Limit] ] },
+                 temporary,
+                 ?DEFAULT_TIMEOUT,
+                 worker,
+                [simple_background_process] },
+       supervisor:start_child(eprolog_sup, ChildSpec)
+       
+.      
+%         spawn_link(?MODULE, start_aim_spawn, [ self(), Goal, Tracing,  NameSpace]).
+
+start_aim_spawn( BackPid, Goal, Tracing, NameSpace, Limit )->
          process_flag(trap_exit, true),
          ?DEBUG("~p start aim ~p~n",[{?MODULE,?LINE},Goal ]),
          TreeEts = ets:new(tree_processes,[ public, set, named_table,{ keypos, 2 } ] ),   
          ets:insert(TreeEts, {system_record,?PREFIX, NameSpace}),            
          prolog_trace:trace_on(Tracing, TreeEts),              
-         aim_spawn(start, BackPid, Goal, TreeEts). 
-        %%%must bee
-aim_spawn(start, BackPid, Goal, TreeEts  )->
-                Res = ( catch prolog:aim( finish, ?ROOT, Goal,  dict:new(), 1, TreeEts, ?ROOT) ),
+         aim_spawn(start, BackPid, Goal, TreeEts, Limit). 
+%% must bee
+aim_spawn(start, BackPid, Goal, TreeEts, Limit  )->
+                
+                Res = ( catch prolog:aim( finish, ?ROOT, Goal,  dict:new(), 1, TreeEts, ?ROOT,  Limit) ),
                 BackPid ! Res,
                 receive 
                     {next, NewPrev} ->
-                        aim_spawn(NewPrev, BackPid, Res, TreeEts );
+                        aim_spawn(NewPrev, BackPid, Res, TreeEts, Limit );
                     finish ->
                         clean_tree(TreeEts), 
                         exit(normal);
@@ -339,37 +367,42 @@ aim_spawn(start, BackPid, Goal, TreeEts  )->
                           BackPid ! {unexpected, Signal},
                           exit(normal)
                 end;
-aim_spawn(Prev, BackPid, Goal, TreeEts  )->
+aim_spawn(Prev, BackPid, Goal, TreeEts, Limit  )->
                 ?DEBUG("~p next aim ~p~n",[{?MODULE,?LINE}, {Prev,Goal} ]),
                 Res = (catch prolog:next_aim(Prev, TreeEts )),
                 BackPid ! Res,
                 receive 
                     { next, NewPrev } ->
                         ?DEBUG("~p normal signal ~p~n",[{?MODULE,?LINE}, Prev ]),
-                        aim_spawn(NewPrev, BackPid, Res, TreeEts );
+                        aim_spawn(NewPrev, BackPid, Res, TreeEts, Limit );
                     finish ->
                         clean_tree(TreeEts), 
                         exit(normal);
                     Signal ->
-                          ?DEBUG("~p exit signal ~p~n",[{?MODULE,?LINE},Signal ]),
-                           BackPid ! {unexpected, Signal},
-                           clean_tree(TreeEts), 
-                           exit(normal)
+                        ?DEBUG("~p exit signal ~p~n",[{?MODULE,?LINE},Signal ]),
+                        BackPid ! {unexpected, Signal},
+                        clean_tree(TreeEts), 
+                        exit(normal)
                 end
 .
+
 %%TODO move clean tree to the supervisour
-
-    
 %%%just redesign to tail recursion    
-% prolog:aim( finish, ?ROOT, Goal,  dict:new(), 1, TreeEts, ?ROOT) )
-
-aim(NextBody, PrevIndex ,  MainBody , Context, Index, TreeEts, ?ROOT)->
-    
-    Call = [aim, default,  {NextBody, PrevIndex ,  MainBody , Context, Index, TreeEts, ?ROOT }],
+aim(NextBody, PrevIndex ,  MainBody , Context, Index, TreeEts, Parent, undefined)->
+    Call = [aim, default,  {NextBody, PrevIndex, MainBody, Context, Index, TreeEts, Parent }],
     loop(Call);
-aim(NextBody, PrevIndex ,  MainBody , Context, Index, TreeEts, Parent)->
-    aim(default, {NextBody, PrevIndex ,  MainBody , Context, Index, TreeEts, Parent }).
+aim(NextBody, PrevIndex ,  MainBody , Context, Index, TreeEts, Parent, Limit)->    
+    Call = [aim, default,  {NextBody, PrevIndex, MainBody, Context, Index, TreeEts, Parent }],
+    MaxIndex = 0, 
+    loop(Call, MaxIndex, Limit).
 
+loop(Res,  Limit, Limit )->
+    throw( {eprolog_exception, { max_operations_limit, Limit } });
+loop([aim, Type, Params],  Index, Limit )->
+    NewCall = aim( Type, Params  ),
+    loop(NewCall,  Index+1, Limit);
+loop(Res,  _Index, _Limit)->
+     Res.
     
     
 loop([aim, Type, Params] )->
@@ -487,7 +520,7 @@ aim(process_next_hbase, {[], T, TreeEts, Parent })->
         NewParams = {Parent, T#aim_record.prev_id, TreeEts},
         [aim, next_aim, NewParams];
         
-aim(process_next_hbase,{ [Res], T, TreeEts, Parent})->
+aim(process_next_hbase, { [Res], T, TreeEts, Parent})->
         %    Res = [{}]
         %%TODO remove this reorganization 
         NewIndex =  get_index(T#aim_record.id), % now(), %T#aim_record.id + 1,
@@ -510,7 +543,7 @@ aim(process_next_hbase,{ [Res], T, TreeEts, Parent})->
         ?TRACE2(T#aim_record.id, TreeEts, BoundProtoType, NewLocalContext),
         NewParams = { T#aim_record.next_leap , NewLocalContext, T#aim_record.id, NewIndex, TreeEts, Parent },
         [aim, conv3 , NewParams];
-aim(process_next_hbase,{ Unexpected, _T, TreeEts, _Parent})->
+aim(process_next_hbase, { Unexpected, _T, TreeEts, _Parent})->
         throw({'EXIT',unexpected_tree_leap, {Unexpected, TreeEts} } );
 
 aim(process_next, { false, T, TreeEts, Parent } )->        
@@ -538,7 +571,7 @@ aim(process_next, { {true, NewContext, true, Tail}, T, TreeEts, Parent })->
 
 
 
-aim(process_next,{ { true, NewContext, NextBody, Tail }, T, TreeEts, Parent })->
+aim(process_next, { { true, NewContext, NextBody, Tail }, T, TreeEts, Parent })->
          ?DEBUG("~p matching is rule ~p ~n",[{?MODULE,?LINE}, T ]),
          NewIndex = get_index(T#aim_record.id), % now() ,%T#aim_record.id + 1,         
 %          ?DEBUG("~p process RULE ~p ~n",[{?MODULE,?LINE},  {dict:to_list(NewContext), NextBody} ]),

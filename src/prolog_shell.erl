@@ -55,8 +55,7 @@ server_loop(NameSpace, TraceOn) ->
 	{ok,halt} -> ok;
 	{ok, trace_on}->
 	      io:fwrite("trace on Yes~n"),  
-	      server_loop(NameSpace, ?TRACE_ON)
-	;
+	      server_loop(NameSpace, ?TRACE_ON);
 	{ok, nl}->
 	       io:fwrite("~n"),  
 	       server_loop(NameSpace, TraceOn);
@@ -67,34 +66,29 @@ server_loop(NameSpace, TraceOn) ->
 	      io:fwrite("listing is ~n"),  
 	      Code = get_code_memory(NameSpace),
 	      io:fwrite("~s ~n", [Code]),   
-	      server_loop(NameSpace, TraceOn)
-	;
+	      server_loop(NameSpace, TraceOn);
 	{ok, trace_off}->
 	    io:fwrite("trace off Yes~n"),    
-	    server_loop(NameSpace, ?TRACE_OFF)
-	;
-	
+	    server_loop(NameSpace, ?TRACE_OFF);
 	{ok, debug_on}->
 	    io:fwrite("debug on Yes~n"),  
-	    server_loop(NameSpace, ?DEBUG_ON)
-	;
+	    server_loop(NameSpace, ?DEBUG_ON);
 	{ok, debug_off}->
 	    io:fwrite("debug off Yes~n"),  
 	    server_loop(NameSpace, ?DEBUG_OFF);
 	{ok,Files} when is_list(Files) ->
-	    lists:foreach(fun(File)->
-			      case catch(prolog:compile(NameSpace, File)) of
-				  ok ->
-				      io:fwrite(atom_to_list(File) ++ " Yes~n");
-				  Error ->
-				      io:fwrite(atom_to_list(File) ++ " Error: ~p~n", [Error])
-			      end
-			    end, Files),
-             server_loop(NameSpace, TraceOn);
+                lists:foreach(fun(File)->
+                                        case catch(prolog:compile(NameSpace, File)) of
+                                                ok ->
+                                                io:fwrite(atom_to_list(File) ++ " Yes~n");
+                                                Error ->
+                                                io:fwrite(atom_to_list(File) ++ " Error: ~p~n", [Error])
+                                        end
+                                end, Files),
+                server_loop(NameSpace, TraceOn);
 	 {ok, Goal = {':-',_,_ } } ->
 		io:fwrite("syntax error may be you want use assert ~p ~n",[Goal]),
 		server_loop(NameSpace, TraceOn);
-
 	{ok,Goal} ->
 	       io:fwrite("Goal : ~p~n", [Goal]),                 
                StartTime = erlang:now(),
@@ -125,14 +119,9 @@ process_prove(Pid,    Goal, StartTime)->
             {true, SomeContext, Prev} ->
                   ?DEBUG("~p got from prolog shell aim ~p~n",[{?MODULE,?LINE} ,{Goal, dict:to_list(SomeContext)} ]),
                   FinishTime = erlang:now(),
-                  New = prolog_matching:bound_body( 
-                                        Goal, 
-                                        SomeContext
-                                         ),
+                  New = prolog_matching:bound_body( Goal, SomeContext ),
                   ?DEBUG("~p temp  shell context ~p previouse key ~p ~n",[?LINE , New, Prev ]),
-
                   {true, NewLocalContext} = prolog_matching:var_match(Goal, New, dict:new()),                
-                                        
                   lists:foreach(fun shell_var_match/1, dict:to_list(NewLocalContext) ),
                   ?SYSTEM_STAT(tree_processes, {0,0,0}),
                   io:fwrite(" elapsed time ~p next solution ~p process varients ~n", [ timer:now_diff(FinishTime, StartTime)*0.000001,Prev] ),
@@ -218,7 +207,9 @@ get_hbase_meta_code_html(Prefix)->
 %          if non hbase it can be non existed
            case  catch ets:tab2list( common:get_logical_name(Prefix, ?META) ) of        
             {'EXIT', _ }-> <<"">>;
-            Meta-> lists:foldl(fun( {Name,Count,_Hash, Cloud}, In  )->
+            Meta-> lists:foldl(fun( #meta_info{ name = Name, arity = Count,  
+                                                cloud = Cloud,
+                                                cloud_decomposition = Cloud_rule }, In  )->
                                 ?DEBUG(" meta fact  ~p~n", [{Name, Count}]),
 
                                 LName = atom_to_list(Name),
@@ -229,7 +220,10 @@ get_hbase_meta_code_html(Prefix)->
                                                         ++ LCount ++ ". <br/>");
                                           _ ->
                                                 list_to_binary("<strong>%"++LName++ "</strong>  arity  - "
-                                                        ++ LCount ++ " existed cloud - "++ Cloud ++" .<br/>")
+                                                        ++ LCount ++ " existed cloud - "++ Cloud ++
+                                                        ", decomoposition  " ++ 
+                                                        Cloud_rule
+                                                        ++" .<br/>")
                                                
                                      end,
                                 <<In/binary, V2/binary>>
@@ -249,7 +243,9 @@ get_hbase_meta_code(Prefix)->
                 ets:tab2list( common:get_logical_name(Prefix, ?META) ) of
             {'EXIT', _ }-> <<"">>;
             Meta ->
-                lists:foldl(fun( {Name,Count,_Hash, Cloud}, In  )->
+                lists:foldl(fun( #meta_info{ name = Name, arity = Count, 
+                                             cloud = Cloud, 
+                                             cloud_decomposition = Cloud_rule }, In  )->
                                 ?DEBUG(" meta fact  ~p\n", [{Name,Count}]),
 
                                 LName = atom_to_list(Name),
@@ -259,7 +255,9 @@ get_hbase_meta_code(Prefix)->
                                                 list_to_binary("% "++LName++ " arity  - "++ LCount ++ ". \n");
                                           _ ->
                                                 list_to_binary("% " ++ LName ++ " arity  - " ++ 
-                                                                LCount ++ " existed cloud - " ++ Cloud ++ " . \n")
+                                                                LCount ++ " existed cloud - " ++ Cloud 
+                                                                        ++", decomoposition  " ++ 
+                                                                        Cloud_rule ++ "  . \n")
                                      end,
                                 <<In/binary, V2/binary>>
                         end, <<>>, Meta  )

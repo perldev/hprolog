@@ -1730,7 +1730,6 @@ check_exist_rule(TableName, Name) when is_integer(Name)->
  check_exist_rule(TableName, LName)
 ;
 check_exist_rule(TableName, LName)->
-   
     {Hbase_Res, Host } = get_rand_host(),
     Url =  Hbase_Res++TableName++"/"++LName++"/"++?FAMILY++":"++?CODE_COLUMN,
     ?DEBUG("~p check url ~p~n",[{?MODULE,?LINE},Url ]),
