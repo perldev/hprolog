@@ -2,7 +2,7 @@
 %%default count of pool to the thrift server
 %% wheather using thrift
 -define(USE_THRIFT, 1).
--define(SIMPLE_HBASE_ASSERT, 1). % common:check_source(TreeEts) ).
+-define(SIMPLE_HBASE_ASSERT, common:check_source(TreeEts) ).
 
 %-define(THRIFT_RECONNECT_TIMEOUT,130000).
 %-define(THRIFT_MAX_RECONNECT_COUNT, 10).
@@ -135,8 +135,8 @@
 -ifdef(USE_HBASE).
 -define('INCLUDE_HBASE'(X),  fact_hbase:load_rules2ets(X) ).
 
--define('THRIFT_POOL'(Str, Pars ), lager:warning(Str, Pars) ).
--define('THRIFT_LOG'(Str, Pars ),  lager:warning(Str, Pars) ).
+-define('THRIFT_POOL'(Str, Pars ), true).% lager:warning(Str, Pars) ).
+-define('THRIFT_LOG'(Str, Pars ), true). % lager:warning(Str, Pars) ).
 
 -else.
 -define('THRIFT_POOL'(Str, Pars ),   true ).
