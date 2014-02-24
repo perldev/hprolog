@@ -2,7 +2,7 @@
 %%default count of pool to the thrift server
 %% wheather using thrift
 -define(USE_THRIFT, 1).
--define(SIMPLE_HBASE_ASSERT,   common:check_source(TreeEts) ).
+-define(SIMPLE_HBASE_ASSERT, 1). % common:check_source(TreeEts) ).
 
 %-define(THRIFT_RECONNECT_TIMEOUT,130000).
 %-define(THRIFT_MAX_RECONNECT_COUNT, 10).
@@ -28,7 +28,7 @@
 -define(LOAD_LOG,1).
 
 
-%-define(ENABLE_LOG,1).
+-define(ENABLE_LOG,1).
 
 %%for connect prolog with web console
 -define(WEB,1).
@@ -135,8 +135,8 @@
 -ifdef(USE_HBASE).
 -define('INCLUDE_HBASE'(X),  fact_hbase:load_rules2ets(X) ).
 
--define('THRIFT_POOL'(Str, Pars ), true  ).% lager:warning(Str, Pars) ).
--define('THRIFT_LOG'(Str, Pars ),  true ).%lager:warning(Str, Pars) ).
+-define('THRIFT_POOL'(Str, Pars ), lager:warning(Str, Pars) ).
+-define('THRIFT_LOG'(Str, Pars ),  lager:warning(Str, Pars) ).
 
 -else.
 -define('THRIFT_POOL'(Str, Pars ),   true ).
@@ -211,11 +211,12 @@
 -define(RULES_TABLE,"rules").
 -define(META_FACTS,"meta").
 -define(CLOUD_KEY, "cloud").
+-define(CLOUD_RULE, "cloud_decomposition").
 -define(RABBIT_SPEED, 700).
 -define(SL_TIMER, 60000). %minute
 % pay(Re,"75000.00",Currency,Date,From_okpo,To_okpo,From_account,To_account,FromName,ToName,FromMfo,ToMfo, Desc,Ip).
 
--define(LIMIT,500). %% LIMIT and GET_FACT_PACK must be equal 
+-define(LIMIT, 500). %% LIMIT and GET_FACT_PACK must be equal 
 -define(GET_FACT_PACK, 1). 
 %%TODO realize algorithm for return first element, but in background continue process of receiveing data from hbase
 %%for example we return first element...and save to the memory 1024 records and in next call return from memory
@@ -236,6 +237,15 @@
 
 -define(AI_RULES, ai_rules_inner).
 -define(META, meta_facts).
+-record(meta_info,{
+                     name,
+                     arity,
+                     hash_function,
+                     cloud = "",
+                     cloud_decomposition = ""       
+                     }  
+                     ).
+
 -define(APPLICATION, application).
 
 
@@ -290,6 +300,19 @@
 
 -record(browscap, { browser = null, version = null, majorver = null, minorver = null, platform = null }).
 
+-define(AVALIBLE_ERL_MODULES,
+[
+        
+        
+
+]
+
+).
+
+
+
+
+
 -define(BUILTIN_PREDICATES,
 [
 'date_sub',     
@@ -310,10 +333,8 @@
 'start_cloud',
 'stop_cloud',
 'cloud_counters',
-
 'member_tail',
 'member',
-
 'once',
 'atom_length',
 'copy_term',
@@ -371,21 +392,21 @@
 'cos',
 'tan',
 'asin',
-acos ,
-atan ,
-atan2, %(X, Y) ,
-sinh ,
-cosh ,
-tanh ,
-asinh ,
-acosh ,
-atanh ,
-exp ,
-log ,
-log10 ,
-pow ,%(X, Y) ,
-sqrt ,
-pi %()
+'acos' ,
+'atan' ,
+'atan2', %(X, Y) ,
+'sinh' ,
+'cosh' ,
+'tanh' ,
+'asinh' ,
+'acosh' ,
+'atanh' ,
+'exp' ,
+'log' ,
+'log10' ,
+'pow' ,%(X, Y) ,
+'sqrt' ,
+'pi' %()
 
 ]
 
