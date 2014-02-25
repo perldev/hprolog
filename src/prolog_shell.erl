@@ -224,7 +224,7 @@ get_hbase_meta_code_html(Prefix)->
                                                 list_to_binary("<strong>%"++LName++ "</strong>  arity  - "
                                                         ++ LCount ++ " existed cloud - "++ Cloud ++
                                                         ", decomoposition  " ++ 
-                                                        Cloud_rule
+                                                       atom_to_list( Cloud_rule )
                                                         ++" .<br/>")
                                                
                                      end,
@@ -259,7 +259,7 @@ get_hbase_meta_code(Prefix)->
                                                 list_to_binary("% " ++ LName ++ " arity  - " ++ 
                                                                 LCount ++ " existed cloud - " ++ Cloud 
                                                                         ++", decomoposition  " ++ 
-                                                                        Cloud_rule ++ "  . \n")
+                                                                       atom_to_list( Cloud_rule ) ++ "  . \n")
                                      end,
                                 <<In/binary, V2/binary>>
                         end, <<>>, Meta  )

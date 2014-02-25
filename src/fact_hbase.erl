@@ -598,7 +598,7 @@ get_column(Columns, Find, atom)->
                     end
                 end, "", Columns),
     case  Res of
-        "" -> "";
+        "" -> undefined;
         _ -> list_to_atom(Res)
     end;
 get_column(Columns, Find, list)->

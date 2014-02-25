@@ -597,12 +597,12 @@ inner_defined_aim(NextBody, PrevIndex ,Body = {read_str, X }, Context, _Index, T
 inner_defined_aim(NextBody, PrevIndex, Body = {start_cloud, _FactName, _CloudName, _CloudRule  }, Context, _Index, TreeEts)->
      {_, FactName, CloudName, CloudRule } = prolog_matching:bound_body( Body, Context),     
      case  { is_atom(FactName),is_list(CloudName), is_atom(CloudRule)  } of       
-           {true, true, true}->
+           {true, true, true} ->
                 MetaTable = common:get_logical_name(TreeEts, ?META_FACTS),
                 MetaTableEts = common:get_logical_name(TreeEts, ?META),
                 ResCloud  = eprolog_cloud:start_cloud(FactName, CloudName, CloudRule, MetaTable, MetaTableEts  ),
                 {ResCloud, Context};
-            _->
+            _ ->
                 throw( { instantiation_error, {start_cloud, FactName, CloudName} } )      
      end
 ;
@@ -1200,7 +1200,7 @@ foldl_linked_rules(FactName, [Head| Tail], TreeEts, ProtoType)->
     prolog:clean_tree(TreeEts),
     RuleCall = list_to_tuple([Rule| ProtoType]),
     ?WAIT("~p start next rule ~p ~p ~n",[{?MODULE,?LINE}, Rule, FactName]),
-    
+    %%TODO change to call
     Res = repeat(3, prolog, aim, [finish, ?ROOT, RuleCall, dict:new(), 1, TreeEts, ?ROOT ]),
     
     
@@ -1213,8 +1213,8 @@ foldl_linked_rules(FactName, [Head| Tail], TreeEts, ProtoType)->
 
 
 %TODO process the Hbase mistakes and timeouts
-repeat(Count, Module ,Func, Params )->
-  repeat(0,Count, Module ,Func, Params )
+repeat(Count, Module, Func, Params )->
+  repeat(0,Count, Module, Func, Params )
 
 .
 

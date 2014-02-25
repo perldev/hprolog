@@ -242,7 +242,7 @@
                      arity,
                      hash_function,
                      cloud = "",
-                     cloud_decomposition = ""       
+                     cloud_decomposition = undefined      
                      }  
                      ).
 

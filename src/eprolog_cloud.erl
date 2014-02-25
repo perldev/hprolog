@@ -21,18 +21,24 @@ generate_key( _ )->
 process_cloud(_Body, [], _RuleName, _Tree  )->
         true
 ;
-process_cloud(Body, TableName, RuleName, _TreeEts  )->
+process_cloud(Body, TableName, RuleName, TreeEts  )->
         [_Name| ProtoType ] = tuple_to_list(Body),
         Key = generate_key(ProtoType),
+        NameSpace = common:get_logical_name(TreeEts),
+        {true, ResultDict, Descriptor}  =  prolog:call({RuleName, Body, {'___ResultList'} }, ?TRACE_OFF, NameSpace ),
+        prolog:finish(Descriptor),
         Value = jsx:encode( common:prolog_term_to_jlist(ProtoType) ),
+        ProtoTypeEntityList = prolog_matching:find_var_no(ResultDict, {'___ResultList'} ),
+        ?LOG("~p entities ~p ~n",[{?MODULE,?LINE}, ProtoTypeEntityList ]),
         lists:foreach(fun(Elem)->
-                                ?LOG("~p put elem to key ~p ~n",[{?MODULE,?LINE}, Elem]),
-                                Result  = fact_hbase:hbase_low_put_key(TableName, common:inner_to_list(Elem), ?FAMILY, Key, Value ),
-                                ?LOG("~p RESULT OF GATHERING CLOUD IS ~p ~n",[{?MODULE,?LINE}, Result ])
+                                LElem = common:inner_to_list(Elem),        
+                                ?LOG("~p put elem to key ~p ~n",[{?MODULE,?LINE}, {TableName, LElem , ?FAMILY, Key, Value }]),
+                                ResultAdd  = fact_hbase:hbase_low_put_key(TableName, LElem , ?FAMILY, Key, Value ),
+                                ?LOG("~p RESULT OF GATHERING CLOUD IS ~p ~n",[{?MODULE,?LINE}, ResultAdd ])
                       end,
-                      ProtoType
+                      ProtoTypeEntityList
         ),
-        true %%TODO remove this
+        true 
 .
 
 -spec stop_cloud(atom(), list(), atom())-> true|false.
@@ -40,13 +46,24 @@ process_cloud(Body, TableName, RuleName, _TreeEts  )->
 stop_cloud(FactName, MetaTable, MetaTableEts)->
       case ets:lookup(MetaTableEts, FactName) of
            []->  true;
-           [{FactName, Arity, Hash_Function, []}]->
+           [ #meta_info{cloud = []} ]->
                  true;
-           [{FactName, Arity, Hash_Function, CloudName}]->
+           [#meta_info{name = FactName, 
+                       arity = Arity, 
+                       hash_function = Hash_Function, 
+                       cloud = CloudName
+                       }]->
                  Res = fact_hbase:delete_table(CloudName),
                  %%TODO add transaction behaviour
                  fact_hbase:del_key( atom_to_list(FactName), MetaTable,  "description", ?CLOUD_KEY),
-                 ets:insert(MetaTableEts, {FactName, Arity, Hash_Function, ""} ),          
+                 fact_hbase:del_key( atom_to_list(FactName), MetaTable,  "description", ?CLOUD_RULE),
+                 ets:insert(MetaTableEts, 
+                            #meta_info{name = FactName, 
+                                       arity = Arity, 
+                                       hash_function = Hash_Function,
+                                       cloud = "",
+                                       cloud_decomposition = undefined
+                           }),                 
                  Res
       end 
 .
@@ -56,14 +73,26 @@ stop_cloud(FactName, MetaTable, MetaTableEts)->
 start_cloud(FactName, CloudName, CloudRule, MetaTable, MetaTableEts)->
       case ets:lookup(MetaTableEts, FactName) of
            []->  false;
-           [{FactName, Arity, Hash_Function, []}]->
+           [ #meta_info{name = FactName, 
+                                   arity = Arity, 
+                                   hash_function = Hash_Function,
+                                   cloud = []
+                        } ] ->
                  %%TODO  add transaction behaviour
+                 LCloudRule = atom_to_list( CloudRule ),
                  Res = fact_hbase:create_new_fact_table( CloudName ),
                  fact_hbase:hbase_low_put_key(MetaTable, atom_to_list(FactName), "description", ?CLOUD_KEY, CloudName),
-                 fact_hbase:hbase_low_put_key(MetaTable, atom_to_list(FactName), "description", ?CLOUD_RULE, CloudRule),
-                 ets:insert(MetaTableEts, {FactName, Arity, Hash_Function, CloudName} ),        
+                 fact_hbase:hbase_low_put_key(MetaTable, atom_to_list(FactName), "description", ?CLOUD_RULE,LCloudRule ),
+                 ets:insert(MetaTableEts, 
+                            #meta_info{name = FactName, 
+                                   arity = Arity, 
+                                   hash_function = Hash_Function,
+                                   cloud = CloudName,
+                                   cloud_decomposition = CloudRule
+                           }),      
                  Res;
-           [{FactName, Arity, Hash_Function, CloudName}]->
+           [#meta_info{name = FactName, 
+                       cloud = CloudName }]->
                  throw({instantiation_error, { already_existed_cloud, FactName, CloudName } })
       end 
 .
@@ -73,21 +102,20 @@ start_cloud(FactName, CloudName, CloudRule, MetaTable, MetaTableEts)->
 cloud_entity(FactName, Entity, MetaTable )->
         MetaTableEts = common:get_logical_name(MetaTable, ?META),
         case ets:lookup(MetaTableEts, FactName) of
-                [ {FactName, _Arity, _HashFunc, [] } ]->
+                [ #meta_info{ cloud = [] } ]->
                         false;
-                [ {FactName, _Arity, _HashFunc, CloudTable }]->
+                [ #meta_info{ cloud = CloudTable } ]->
                        fact_hbase:custom_get_key( CloudTable, ?FAMILY, Entity , fun process_cloud_entity/1 )
         end.        
 
 -spec cloud_entity_counters(atom(), list(), any() )-> list().
-
+%%%TODO implement this
 cloud_entity_counters(FactName, Entity, MetaTable)->
         MetaTableEts = common:get_logical_name(MetaTable, ?META),
-
         case ets:lookup(MetaTableEts, FactName) of
-                [ {FactName, _Arity, _HashFunc, [] } ]->
+                [ #meta_info{ cloud = [] } ]->
                         false;
-                [ {FactName, _Arity, _HashFunc, CloudTable }]->
+                [ #meta_info{ cloud = CloudTable } ]->
                         Res = fact_hbase:custom_get_key( CloudTable, ?FAMILY, Entity, fun process_cloud_entity/1),
                         Res
                 

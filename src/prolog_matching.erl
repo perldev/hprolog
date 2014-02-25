@@ -82,7 +82,7 @@ var_match({Operator, Var1, Var2  }, {Operator, Var3, Var4  } , Context )->
 						     {{Operator, Var1, Var2  }, {Operator, Var3, Var4 },
 						       dict:to_list(Context)} ]),
 
-     case   var_match(Var1, Var3 , Context) of
+     case var_match(Var1, Var3 , Context) of
 	  {false, _}->{false, Context};
 	  {true, NewContext}->
 			  case   var_match(Var2, Var4 , NewContext) of

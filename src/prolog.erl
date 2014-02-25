@@ -296,18 +296,24 @@ var_generator_name(Name)->
 .
 
 %% simple way for using prolog  in you application
+-spec call(tuple())-> false | {true, tuple(), { pid(), reference() }  }.
+
 call(Goal)->
-   call(Goal, 0,  default).
+   call(Goal, ?TRACE_OFF,  default).
    
-   
+-spec call(tuple(), atom() )-> false | {true, tuple(), { pid(), reference() }  }.
+  
 call(Goal, Tracing)->
         call(Goal, Tracing,  default).
 
+-spec call(tuple(), integer(), atom()  )-> false | {true, tuple(), { pid(), reference() }  }.
 
 call(Goal, Tracing,   NameSpace)->
         OperationLimit  =  application:get_env(eprolog, max_operations_limit),
         call(Goal, Tracing,   NameSpace, OperationLimit).
         
+-spec call(tuple(), integer(), atom(), tuple()|undefined|integer()   )-> false | {true, tuple(), { pid(), reference() }  }.        
+
 call(Goal, Tracing,   NameSpace, {ok, Count})->
         call(Goal, Tracing,   NameSpace, Count);
 call(Goal, Tracing,   NameSpace, OperationLimit)->
@@ -351,7 +357,7 @@ proc_spawn(Pid, Goal, Tracing,   NameSpace, Limit)->
 start_aim_spawn( BackPid, Goal, Tracing, NameSpace, Limit )->
          process_flag(trap_exit, true),
          ?DEBUG("~p start aim ~p~n",[{?MODULE,?LINE},Goal ]),
-         TreeEts = ets:new(tree_processes,[ public, set, named_table,{ keypos, 2 } ] ),   
+         TreeEts = ets:new(tree_processes,[ public, set, { keypos, 2 } ] ),   
          case NameSpace of
               default->
                  ets:insert(TreeEts, {system_record,?PREFIX, NameSpace});
