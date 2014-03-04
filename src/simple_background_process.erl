@@ -15,7 +15,7 @@ start_link(Type,  Module,  Func, Params)->
 restartable(Module, Func, Params)->
         Res = receive 
                 start->
-                       ( catch erlang:apply(Module,Func,Params) )
+                       ( catch erlang:apply(Module, Func, Params) )
               end,
         case Res of
              true ->
@@ -28,6 +28,6 @@ restartable(Module, Func, Params)->
 temporary(Module, Func, Params)->
         receive 
                 start->
-                        erlang:apply(Module,Func,Params)
+                        erlang:apply(Module, Func, Params)
         end,
         exit(normal).

@@ -1,7 +1,8 @@
 -module(prolog_built_in).
--export([inner_defined_aim/6,delete_fact/4, inner_to_var/3, worker_linked_rules/3,start_child_links/2]).
+-export([inner_defined_aim/6,delete_fact/4, inner_to_var/3, 
+         worker_linked_rules/3,start_child_links/2,
+         api_call/6 ]).
 -include("prolog.hrl").
-
       
 inner_to_var(List , X2, Context) when is_list(List)->
        L = lists:map(fun(E)-> case is_atom(E) of true-> {E} end   end, List),
@@ -14,9 +15,16 @@ inner_to_var(Atom, X2, Context) when is_atom(Atom) ->
 inner_to_var(_Atom, _X2, _Context) ->
        false.             
              
-             
-     
-
+api_call(NextBody, PrevIndex, {Module, CallFunc, ApiResult}, Context, Index, TreeEts)->
+       case {is_atom(Module), is_tuple(CallFunc), prolog_matching:is_var(ApiResult) } of
+                {true,  true,  positive} ->
+                       [Name|Params]  = tuple_to_list(CallFunc),
+                       Result = erlang:apply(Module, Name, Params ),
+                       NewContext =  prolog_matching:store_var( { ApiResult, Result }, Context),
+                       {true, NewContext};
+                _ -> throw({instantiation_error, {Module, CallFunc, ApiResult } })
+       end
+.
 
 
 
@@ -646,8 +654,6 @@ inner_defined_aim(NextBody, PrevIndex, Body = {'cloud_counters', _FactName, _Ent
                 prolog_matching:var_match( Result, ResCloud, Context )
      end
 ;
-
-
 inner_defined_aim(NextBody, PrevIndex ,Body = { soundex, _X, _Res }, Context, _Index, TreeEts)->
      {_, X1, X2 } = prolog_matching:bound_body( Body, Context),     
      case  catch soundex_rus:start(X1) of
@@ -966,9 +972,7 @@ delete_fact(TreeEts, Body, Context ,1)->
         end.
         
         
- %%abolish return always true       
--ifdef(USE_HBASE).
-        
+ %%abolish return always true               
 inner_abolish({'/', Name, Arity }, TreeEts) when is_atom(Name), is_integer(Arity) ->
        MetaTable = common:get_logical_name(TreeEts, ?META),
        RulesTable = common:get_logical_name(TreeEts, ?RULES), 
@@ -987,7 +991,7 @@ inner_abolish({'/', Name, Arity }, TreeEts) when is_atom(Name), is_integer(Arity
                                     prolog:memory2hbase( NameSpace1, NameSpace1),
                                     true
                        end;
-                [ {Name, Arity, _HashFunction, CloudTable }  ] -> 
+                [ #meta_info{ name = Name, arity = Arity, cloud = CloudTable}  ] -> 
                          %%delete links, indexes info, weights for links 
                          fact_hbase:delete_all_fact([Name, CloudTable], TreeEts ),
                          ets:delete(MetaTable, Name),
@@ -995,8 +999,7 @@ inner_abolish({'/', Name, Arity }, TreeEts) when is_atom(Name), is_integer(Arity
                          ets:delete(common:get_logical_name(TreeEts, ?META_LINKS), Name ),
                          ets:delete(common:get_logical_name(TreeEts, ?HBASE_INDEX), Name ),  
                          ets:delete(common:get_logical_name(TreeEts, ?META_WEIGHTS), Name ),                         
-                         true;
-                 _-> true
+                         true
                 
              end
 ;
@@ -1021,46 +1024,8 @@ inner_abolish(_, _TreeEts) ->
     true
 .
 
--else.
 
-inner_abolish({'/', Name, Arity }, TreeEts) when is_atom(Name), is_integer(Arity) ->
-        RulesTable = common:get_logical_name(TreeEts, ?RULES), 
-        case ets:lookup(RulesTable, Name) of
-                            [] -> true;
-                            RulesList  ->
-                                    NewRulesList = lists:filter(
-                                                    fun({_Name, ProtoType, _Body})->
-                                                        Arity  /= tuple_size(ProtoType)                                             
-                                                    end, RulesList   ),
-                                    ets:delete(RulesTable, Name),
-                                    ets:insert(RulesTable, NewRulesList),
-                                    true
-        end
-;
-inner_abolish(Name, TreeEts) when is_atom(Name) ->
-                RulesTable = common:get_logical_name(TreeEts, ?RULES), 
-                case ets:lookup(RulesTable, Name) of
-                            [] -> true;
-                            RulesList  ->
-                                    NewRulesList = lists:filter(
-                                                    fun(RuleBody )->
-                                                         2  /= tuple_size(RuleBody)
-                                                    end, RulesList   ),
-                                    ets:delete(RulesTable, Name),
-                                    ets:insert(RulesTable, NewRulesList),
-                                    true
-                                 
-               end
-
-;
-inner_abolish(_, _TreeEts) ->
-    true
-.
-
-
-
--endif.
-      
+%%TODO avoid of this
 is_rule({':-',_Proto, _Name })->
     true
 ;       
@@ -1100,8 +1065,7 @@ common_process_expr( Var ) when is_integer(Var)->
 ;
 common_process_expr( Body )->
       false
-      
-      .
+.
 
  
 %%%TODO think about it 

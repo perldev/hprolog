@@ -32,7 +32,7 @@
 -include_lib("thrift/src/hbase_types.hrl").
 -include("prolog.hrl").
 -record(mapper_state,
-        {pids, ets_buffer, ets_stat, out_speed, ets_buffer_size, process_size=0 }
+        {pids, ets_buffer, ets_stat, out_speed, ets_buffer_size, process_size=0, state_interval_timer}
     ).
 -record(
         mapper_config,{  ets_stat,
@@ -242,7 +242,6 @@ stor_new_fact(Table, ProtoType)->
         Error -> 
              %%%reconnection !!!??
              thrift_connection_pool:reconnect(KeyC, Error),
-%              
              Count = application:get_env(eprolog, thrift_reconnect_times),
              ?DEBUG("puting data ~p error result: ~p ~n", [{Table, ProtoType},Error]),
              ResError = {hbase_exception, { {params, Args}, Error } },             
@@ -328,7 +327,7 @@ low_get_key(Table, Key, Family,  SecondKey)->
 
 low_get_key_noside(Table, Key, Family,  SecondKey)->
     
-       {KeyC, Connection} = thrift_connection_pool:get_free(),
+        {KeyC, Connection} = thrift_connection_pool:get_free(),
 %      thrift_client:call(State, getRowWithColumns, 
 %         ["pay","0faf51ea7ba2292dd69f6ec66b1e4ba9",["params"],dict:new()]).
         Time = now(),
@@ -449,7 +448,8 @@ finish_loop_hbase(State)->
     lists:foreach(fun({Pid, ConnState, ScannerId } )-> 
                         Pid ! finish
                   end, Pids),
-      ?THRIFT_LOG("all have been killed ~n",[]),            
+    timer:cancel(State#mapper_state.state_interval_timer),
+    ?THRIFT_LOG("all have been killed ~n",[]),            
     ets:delete(State#mapper_state.ets_buffer),
 %             ets:insert(EtsStat, {disk_storage, Reference }),    
 %         ets:insert(EtsStat, {disk_name, DiskName }), 
@@ -457,7 +457,7 @@ finish_loop_hbase(State)->
             [{_, Value}]->
                 ?THRIFT_LOG("close buffer ~p~n",[Value]),
                 dets:close(Value),
-               [{_, File}] = ets:lookup(State#mapper_state.ets_stat,disk_name ),
+               [{_, File}] = ets:lookup(State#mapper_state.ets_stat, disk_name ),
                file:delete(File);
             []->
                 ?THRIFT_LOG("no disk buffer found ~n",[])
@@ -492,7 +492,7 @@ check_buffer_sync(EtsBuffer, EtsStat)->
                             ok
         end
 .   
-%%TODO more intellegent method of reading
+%%TODO more intelligent method of reading
 
 check_buffer(#mapper_config{ets_buffer = EtsBuffer, 
                             ets_stat = EtsStat,
@@ -518,7 +518,7 @@ check_buffer(#mapper_config{ets_buffer = EtsBuffer,
        
        ets:delete(EtsStat, prev_iter_size),
        ets:insert(EtsStat, {prev_iter_size, Count }),
-       io:format("~p prev size of buffer ~p ~n",[ {?MODULE,?LINE}, { PrevIterSize, Count } ]),
+       ?THRIFT_LOG("~p prev size of buffer ~p ~n",[ {?MODULE,?LINE}, { PrevIterSize, Count } ]),
        
        
 %%NOW WE USE ONLY ONE MAPPER
@@ -527,19 +527,19 @@ check_buffer(#mapper_config{ets_buffer = EtsBuffer,
        
        case Res of
             working ->
-                ?THRIFT_LOG("~p scanner is working now  ~n",[ {?MODULE,?LINE} ]),
+%                 ?THRIFT_LOG("~p scanner is working now  ~n",[ {?MODULE,?LINE} ]),
                 do_nothing;
              Now ->
                 Decide = timer:now_diff(Now1, Now) > IntervalInvokeScanner,
-                ?THRIFT_LOG("~p  im decide to work  ~p ~n",[ {?MODULE,?LINE}, {Decide, Count} ]),
+%                 ?THRIFT_LOG("~p  im decide to work  ~p ~n",[ {?MODULE,?LINE}, {Decide, Count} ]),
                 case {Decide, Count}  of
                      {true,_} ->
                             lists:foreach(fun({_, Pid})->  
-                                                            Pid ! continue_ping   %%%TODO WARNING process could be dead                                                 
+                                                Pid ! continue_ping   %%%TODO WARNING process could be dead                                                 
                                           end, Mappers );
                      {false, 0 }->
                              lists:foreach(fun({_, Pid})->  
-                                                            Pid ! continue_ping   %%%TODO WARNING process could be dead                                                 
+                                                Pid ! continue_ping   %%%TODO WARNING process could be dead                                                 
                                           end, Mappers );
                      _->
                         do_nothing
@@ -593,14 +593,14 @@ process_loop_hbase( start,    ProtoType, State = #mapper_state{ pids = [] } )->
                   ?THRIFT_LOG("~p got monitor exit signal   ~p ~n",[{?MODULE,?LINE}, {Object, Info} ]);
              {'EXIT',MapperPid,normal}->
                      ?THRIFT_LOG("~p GOT  exit from child hbase ~p ~n",[{?MODULE,?LINE}, MapperPid ]),
-                     process_loop_hbase( start,    ProtoType, State  );
+                     process_loop_hbase( start, ProtoType, State );
              Some ->%%may be finish
                      ?THRIFT_LOG("~p GOT  wait in fact hbase ~p ~n",[{?MODULE,?LINE}, ProtoType ]),
                      ?THRIFT_LOG("~p got unexpected but i must continue to listen ~p ~n",[{?MODULE,?LINE}, Some ]),
                      process_loop_hbase( start,    ProtoType, State  )
      end,
      finish_loop_hbase(State),
-     exit(normal)
+     exit(finished)
 
 ;
 process_loop_hbase(start,   ProtoType,  State )->
@@ -669,11 +669,9 @@ process_loop_hbase( {hbase_exception, Reason},  ProtoType, State)->
 ;
 
 process_loop_hbase(normal ,  ProtoType, State = #mapper_state{ets_buffer_size = 0, pids = []  } )->
-%        ?THRIFT_LOG("Records have been processed ~p~n~n",[State#mapper_state.process_size]),
         receive 
-            {PidReciverResult ,get_pack_of_facts} -> 
+            {PidReciverResult, get_pack_of_facts} -> 
                    ?THRIFT_LOG("~p send to client empty ~n",[{?MODULE,?LINE} ]),
- 
                    PidReciverResult !  [];
             Some ->
                   ?THRIFT_LOG("~p got unexpected ~p ~n",[{?MODULE,?LINE}, Some ])
@@ -687,10 +685,9 @@ process_loop_hbase(normal ,  ProtoType, State = #mapper_state{ets_buffer_size = 
 %%TODO adding supporting of adding data to the EtsBuffer from disk
 %%TODO share EtsBuffer with the prolog leap
 process_loop_hbase(normal ,  ProtoType, State)->
- ?THRIFT_LOG("~p GOT  wait thrift  hbase ~p ~n",[{?MODULE,?LINE}, ProtoType ]),
-%   ?THRIFT_LOG("Records have been processed ~p~n~n",[State#mapper_state.process_size]),
+  ?THRIFT_LOG("~p GOT  wait thrift  hbase ~p ~n",[{?MODULE,?LINE}, ProtoType ]),
   receive 
-            {PidReciverResult ,get_pack_of_facts} ->
+            {PidReciverResult, get_pack_of_facts} ->
                    Res =  get_buffer_value(State),
                    ?THRIFT_LOG("~p send to client ~p ~n",[{?MODULE,?LINE}, Res ]),
 
@@ -703,7 +700,8 @@ process_loop_hbase(normal ,  ProtoType, State)->
                    NewPids = lists:keydelete(From, 1,  State#mapper_state.pids),
                    process_loop_hbase( normal, 
                                       ProtoType,  
-                                      State#mapper_state{ets_buffer_size = ets:info(State#mapper_state.ets_buffer, size), pids=NewPids  } );
+                                      State#mapper_state{ets_buffer_size = ets:info(State#mapper_state.ets_buffer, size), 
+                                      pids = NewPids  } );
             {'EXIT', From, Reason} ->
                   ?THRIFT_LOG("~p GOT  exit in fact hbase ~p ~n",[{?MODULE,?LINE}, ProtoType ]),
                   ?THRIFT_LOG("~p got exit signal  ~p ~n",[{?MODULE,?LINE}, {From, Reason} ]),
@@ -719,7 +717,6 @@ process_loop_hbase(normal ,  ProtoType, State)->
     	           Pids =  State#mapper_state.pids,
 		   NewPids = lists:keydelete(SomePid, 1,  Pids),
 		   NewPids1 = [ {SomePid, NewState, NewId }  |NewPids],
-
   		  process_loop_hbase(normal ,  ProtoType, State#mapper_state{pids = NewPids1 } );
             finish ->
                   finish_loop_hbase(State),
@@ -732,10 +729,7 @@ process_loop_hbase(normal ,  ProtoType, State)->
                   process_loop_hbase( normal,  ProtoType, State);
             {finish, Pid}->
                   Pids =  State#mapper_state.pids, 
-                  
                   NewPids = lists:keydelete(Pid, 1,  Pids),
-%                   ets:insert(EtsStat, {worker, Pid} ),
-                  
                   process_loop_hbase( normal ,  ProtoType, State#mapper_state{pids = NewPids });
             Some ->%%may be finish
                   ?THRIFT_LOG("~p GOT  wait in fact hbase ~p ~n",[{?MODULE,?LINE}, ProtoType ]),
@@ -802,8 +796,7 @@ get_regions(Table)->
                     Res -> 
                             ?DEBUG("~p cant get region info ~p  ~n",
                                     [{?MODULE,?LINE},
-                                    Res ]),
-
+                                      Res ]),
                             throw({hbase_exception, Res})
         end
 .
@@ -823,27 +816,24 @@ test()->
 flash_stat(Pid, Config = #mapper_config{ets_stat = Ets, ets_buffer =  EtsBuffer})->
     List = ets:lookup(Ets, count_processed),
     Value = lists:foldl(fun({_, Val}, Acum)->
-                Acum + Val 
-                end, 0, List),
-    io:format("requests per second ~p~n",[Value]),
+                                Acum + Val 
+                        end, 0, List),
+   ?THRIFT_LOG("requests per second ~p~n",[Value]),
     [{_, Value1}] = ets:lookup(Ets, count_processed_all),
-    io:format("requests  all ~p~n",[Value + Value1]),
+    ?THRIFT_LOG("requests  all ~p~n",[Value + Value1]),
     Mappers =  ets:lookup(Ets, mappers) ,
     WorkSize = length(Mappers),
     Workers =  ets:lookup(Ets, workers) ,
-    WorkersAll =  ets:lookup(Ets, all_workers_launched) ,
-    io:format("working mappers ~p launched mappers ever ~n  ~p  ~n reducers ~p now ~n ~n",[ Workers, WorkersAll, WorkSize ]),
-    io:format("reducer state ~p ~n",[ process_info(Pid) ]),
-
+    WorkersAll =  ets:lookup(Ets, all_workers_launched),
+    ?THRIFT_LOG("working mappers ~p launched mappers ever ~n  ~p  ~n reducers ~p now ~n ~n", [ Workers, WorkersAll, WorkSize] ),    
+    ?THRIFT_LOG("reducer state ~p ~n",[ process_info(Pid) ]),
     ets:delete(Ets, count_processed_all),
     ets:insert(Ets, {count_processed_all, Value+Value1 }),
     ets:delete(Ets, count_processed),
     check_buffer(Config, Workers)
 .
 
-
 thrift_mappper(Acum, Conn)->
-    
     thrift_mappper(Conn, Acum, 1).
 thrift_mappper(Conn = #mapper_config{mapper_reconnect_count = MaxCount}, Acum,MaxCount)->   
     receive
@@ -853,7 +843,6 @@ thrift_mappper(Conn = #mapper_config{mapper_reconnect_count = MaxCount}, Acum,Ma
                     exit(hbase_exception)
     after Conn#mapper_config.mapper_reconnect_timeout ->
                     throw({hbase_exception, max_create_attempts})
-                    
     end;                            
 thrift_mappper(Conn, Acum, Count)->
         {Host, Port} = Conn#mapper_config.mapper_host, 
@@ -870,15 +859,13 @@ thrift_mappper(Conn, Acum, Count)->
                     exit(Pid, finish),
                     thrift_mappper(Conn, Acum, Count+1)
         end.           
-
-
+        
 thrift_mappper_low(PidReducer,  {Location, StartKey, EndKey},  Connection = #mapper_config{
                                                                                           ets_stat = EtsStat, 
                                                                                           ets_buffer = EtsBuffer,
                                                                                           table = Table,
                                                                                           prototype = ProtoType,
                                                                                           scanner_limit = Limit})->
-
                     { Host, Port  }  = Connection#mapper_config.mapper_host, 
                     { ok,   State }  = thrift_connection_pool:connect(Host, Port, [], hbase_thrift ),
                     ?THRIFT_LOG("connecting ~p ~n",[ State] ),             
@@ -886,11 +873,9 @@ thrift_mappper_low(PidReducer,  {Location, StartKey, EndKey},  Connection = #map
                     ?THRIFT_LOG(" generating filter  ~p ~n",[Filter] ),   
                     { State1, {ok, ScannerId} } = generate_scanner(Table, Limit , Filter, State, StartKey, EndKey),
                     %%START mappers
-                    ?THRIFT_LOG("~n ~p create scanner now i will be listening to it ~n",[{?MODULE,?LINE}]),
-               
+                    ?THRIFT_LOG("~n ~p create scanner now i will be listening to it ~n",[{?MODULE,?LINE}]),               
                     ets:insert( EtsStat, { workers, self() } ),
                     ets:insert( EtsStat, { all_workers_launched, { self(), ScannerId , Location } } ),
-                    
                     PidReducer !  {pong ,{ self(), State1, ScannerId  } },
                     ProtoRecord = #hbase_search_params{prototype = ProtoType, table = Table, filter = Filter},
                     get_data(Connection,  PidReducer, ScannerId, ProtoRecord, State1, 0, 0  )
@@ -901,7 +886,7 @@ start_process_loop_hbase(Name, ProtoType, TreeEts)->
         Table =  atom_to_list(common:get_logical_name(TreeEts, Name ) ) ,
         %Regions = get_regions(Table),        
         ?THRIFT_LOG("~p start_process_loop_hbase ~p ~n", [{?MODULE,?LINE}, {self(),Table, ProtoType, TreeEts} ] ),
-
+        
         EtsBuffer = ets:new(result_table, [set, public] ),
         EtsStat = ets:new(my_state, [ bag, public  ]),
         ets:insert(EtsStat, {count_processed_all, 0 }),    
@@ -928,10 +913,13 @@ start_process_loop_hbase(Name, ProtoType, TreeEts)->
                                                                           interval_invoke_scanner = IntervalInvokeScanner
                                                                           },
         {Pids, _ } =  lists:mapfoldl(fun thrift_mappper/2, Config, Regions ),
-        timer:apply_interval(1000, fact_hbase_thrift, flash_stat,[self(),Config  ]),
+         {ok, TRef} = timer:apply_interval(1000, fact_hbase_thrift, flash_stat,[self(), Config  ]),
         %%TODO add continue_ping to 
         ?DEBUG("~p starting listener  ALL for thrift connections ~p~n", [{?MODULE,?LINE}, self()] ),
-        process_loop_hbase(start,   ProtoType, #mapper_state{pids = Pids, ets_buffer = EtsBuffer, ets_stat = EtsStat } )
+        process_loop_hbase(start,   ProtoType, #mapper_state{pids = Pids, 
+                                                             ets_buffer = EtsBuffer,
+                                                             ets_stat = EtsStat, 
+                                                             state_interval_timer = TRef } )
 
 .
 %     0001c378c7e1965cfe540c249850c66c

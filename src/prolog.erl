@@ -123,8 +123,8 @@ only_rules_create_inner(Prefix, FileName)->
 
 
 only_rules_delete_inner(Prefix)->
-        ets:delete_all_objects(common:get_logical_name(Prefix, ?RULES) ),
-        ets:delete_all_objects(common:get_logical_name(Prefix, ?DYNAMIC_STRUCTS))
+        ets:delete_all_objects( common:get_logical_name(Prefix, ?RULES) ),
+        ets:delete_all_objects( common:get_logical_name(Prefix, ?DYNAMIC_STRUCTS) )
 .
 
 
@@ -331,8 +331,20 @@ call(Goal, Tracing,   NameSpace, OperationLimit)->
           end
 .
 
-next({Pid, Prev})->
-         Pid ! {next, Prev}.
+next({Child, Prev})->
+         Child ! {next, Prev},
+         receive 
+                false ->
+                        finish({Child, undefined}), 
+                        false;
+                {true, Context, Prev} ->
+                        ?DEBUG("~p result of  ~p ~n",[ {?MODULE,?LINE}, {Context, Prev} ]),
+                        {true, Context, {Child, Prev} };
+                Unexpected ->
+                        finish({Child, undefined}), 
+                        throw( Unexpected )          
+          end.
+         
 
 finish({Pid,Prev})->
         Pid ! finish.
@@ -344,15 +356,17 @@ proc_spawn(Pid, Goal, Tracing,   NameSpace, Limit)->
        ChildSpec = { 
                 make_ref(),
                 {simple_background_process,
-                 start_link, [temporary ,?MODULE, start_aim_spawn, [Pid, Goal, Tracing,   NameSpace, Limit] ] },
+                 start_link, [temporary, 
+                              ?MODULE,
+                              start_aim_spawn,
+                              [Pid, Goal, Tracing, NameSpace, Limit] ] },
                  temporary,
                  ?DEFAULT_TIMEOUT,
                  worker,
                 [simple_background_process] },
        supervisor:start_child(eprolog_sup, ChildSpec)
-       
 .      
-%         spawn_link(?MODULE, start_aim_spawn, [ self(), Goal, Tracing,  NameSpace]).
+
 
 start_aim_spawn( BackPid, Goal, Tracing, NameSpace, Limit )->
          process_flag(trap_exit, true),
@@ -698,6 +712,18 @@ aim(default, { NextBody, PrevIndex, '!', Context, Index , TreeEts, Parent })->
          NewParams = { NextBody, Context, Parent, Index , TreeEts, Parent }, 
          [aim, conv3 , NewParams ]
 ;
+%%% out module call api
+aim(default, { NextBody, PrevIndex,  {call, ProtoType = {':', _Module, _Call }, ApiResult},
+               Context, Index , TreeEts, Parent })->
+             {_, Module, CallFunc} = prolog_matching:bound_body(ProtoType, Context),      
+             ?TRACE(Index, TreeEts, {call, Module, CallFunc },  Context),
+             Res = prolog_built_in:api_call(NextBody, PrevIndex, 
+                                                         {Module, CallFunc, ApiResult}, 
+                                                         Context, Index, TreeEts),   
+             ?TRACE2(Index, TreeEts, ApiResult, Context),
+             NewParams = { Res, NextBody,  PrevIndex, Index, TreeEts, Parent },
+             [aim, process_builtin_pred,  NewParams]
+;
 % it is 'not' !!!
 aim(default,{ NextBody, PrevIndex, {'\\+', X}, Context, Index , TreeEts, Parent })->
       BodyBounded = prolog_matching:bound_body(X, Context),
@@ -713,19 +739,19 @@ aim(default,{ NextBody, PrevIndex, {'\\+', X}, Context, Index , TreeEts, Parent 
                        aim(conv3 ,{ NextBody, Context, PrevIndex, Index, TreeEts, Parent } )
       end 
 ;
-%%%for such lines  Body =~  fact(2),(fact(x), (fact(x1);fact(x3)) )
+%%%for such lines  Body =~  fact(2),(fact(x), (fact(x1);fact(x3)) ) 
 aim(default,{ NextBody, PrevIndex, Body = {',', _ProtoType, _Second }, Context, Index, TreeEts, Parent} )->
          
         ets:insert(TreeEts,
                 #aim_record{ id = Index,
-                      prototype = ?LAMBDA,
-                      temp_prototype = ?LAMBDA, 
-                      solutions = [ {?LAMBDA, Body }],
-                      next = one,
-                      prev_id = PrevIndex,
-                      context = Context,
-                      next_leap = NextBody,
-                      parent = Parent 
+                             prototype = ?LAMBDA,
+                             temp_prototype = ?LAMBDA, 
+                             solutions = [ {?LAMBDA, Body }],
+                             next = one,
+                             prev_id = PrevIndex,
+                             context = Context,
+                             next_leap = NextBody,
+                             parent = Parent 
                       }),                      
          NewParams = { Parent, Index, TreeEts },
          [aim, next_aim, NewParams] 

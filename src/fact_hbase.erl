@@ -687,7 +687,7 @@ start_fact_process( Aim, TreeEts, ParentPid)->
 
 fact_start_link( Aim,  TreeEts, ParentPid )->
       monitor(process, ParentPid),
-      ?DEBUG("~p begin find in facts ~p ~n",[{?MODULE,?LINE},  Aim ]),
+      ?DEBUG("~p begin find in facts parent ~p aim ~p ~n",[{?MODULE,?LINE}, ParentPid, Aim]),
       Name = element(1,Aim),%%from the syntax tree get name of fact
       ?WAIT("~p regis wait in fact ~p ~n",[{?MODULE,?LINE},{ Name, Aim } ]),
       NameSpace = common:get_logical_name( TreeEts),

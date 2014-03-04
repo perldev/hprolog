@@ -7,12 +7,24 @@
 tokens(Str) ->
 	%NormalString = re:replace(Str, "[\\,|\\<|\\.|\\>|\\/|\\?|\\;|\\:|\\'|\"|\|\\||\\[|\\{|\\]|\\}|\\~|\\`|\\!|\\@|\\#|\\$|\\%|\\^|\\&|\\*|\\(|\\)|\\_|\\%|\\(|\\)|\\-|\\=]+"," ",[global, {return, list},unicode]),
 	%string:tokens(NormalString, " "),
+
 	Data = re:replace(Str, "-", "", [global, {return, list},unicode]),
-	{match,List} = re:run(Data, "[а-я|-]+|[0-9]+|[a-z|-]+", [unicode, global,  {capture, all, list}]),
-	lists:concat(List)
-	%Str2 = re:replace(Str1, "[-]+","",[global, {return, list}]),
-	%%Str2 = del_space(Str1),
+	case catch re:run(Data, "[а-я|-]+|[0-9]+|[a-z|-]+", 
+                                  [unicode, global, {capture, all, list}])
+                                 of
+                {'EXIT', Reason} -> throw({exception, {Data,Str, Reason} }); 
+                ResData ->
+                tokens_match(ResData)
+        end
 .
+
+
+tokens_match({match,List})->
+        lists:concat(List);
+tokens_match(_)->
+        [].
+
+
 
 -spec to_lower(string()) -> string().
 to_lower(Str) ->

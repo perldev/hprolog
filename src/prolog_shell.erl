@@ -80,6 +80,7 @@ server_loop(NameSpace, TraceOn) ->
 	      io:fwrite("debug off Yes~n"),  
 	      server_loop(NameSpace, ?DEBUG_OFF);
 	{ok,Files} when is_list(Files) ->
+% 	http://censor.net.ua/resonance/272867/kuda_propali_15_mlrd_kitayiskogo_kredita
               lists:foreach(fun(File)->
                                         case catch(prolog:compile(NameSpace, File)) of
                                                 ok ->
@@ -98,10 +99,10 @@ server_loop(NameSpace, TraceOn) ->
 	        WorkResult =  (catch prolog:call(Goal, TraceOn, NameSpace  ) ),      
                 process_prove(WorkResult, Goal,  StartTime ),
 	        server_loop(NameSpace, TraceOn);
-	{error,P = {_, Em, E }} ->
+	{error, P = {_, Em, E }} ->
 	        io:fwrite("Error: ~p~n", [P]),
 	        server_loop(NameSpace, TraceOn);
-	{error,P} ->
+	{error, P} ->
                 io:fwrite("Error during parsing: ~p~n", [P]),
                 server_loop(NameSpace, TraceOn)
     end.
