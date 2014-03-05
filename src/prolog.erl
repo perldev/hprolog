@@ -474,7 +474,7 @@ aim(conv3, { Body, Context, PrevIndex, Index, TreeEts, ParentIndex } )-> %%last 
 ;       
 aim(next_in_current_leap, { T , TreeEts, ThatLocalContext, Prev })->
 %%we must check again cause ! inside in rule can cut another leaps
-     ?DEV_DEBUG("~p process next_in_current_leap ~p",[{?MODULE,?LINE}, T]),
+     ?DEV_DEBUG("~p process next_in_current_leap ~p",[{?MODULE,?LINE}, {T, ThatLocalContext}]),
      [NewT] = ets:lookup(TreeEts, T), 
      ets:insert(TreeEts, NewT#aim_record{ next = Prev}),
      NewIndex2 = get_index( Prev  ), 
@@ -712,17 +712,16 @@ aim(default, { NextBody, PrevIndex, '!', Context, Index , TreeEts, Parent })->
          NewParams = { NextBody, Context, Parent, Index , TreeEts, Parent }, 
          [aim, conv3 , NewParams ]
 ;
-%%% out module call api
-aim(default, { NextBody, PrevIndex,  {call, ProtoType = {':', _Module, _Call }, ApiResult},
+aim(default, { NextBody, PrevIndex,  {'call', ProtoType = {':', _Module, _Call }, ApiResult},
                Context, Index , TreeEts, Parent })->
              {_, Module, CallFunc} = prolog_matching:bound_body(ProtoType, Context),      
-             ?TRACE(Index, TreeEts, {call, Module, CallFunc },  Context),
-             Res = prolog_built_in:api_call(NextBody, PrevIndex, 
-                                                         {Module, CallFunc, ApiResult}, 
-                                                         Context, Index, TreeEts),   
-             ?TRACE2(Index, TreeEts, ApiResult, Context),
-             NewParams = { Res, NextBody,  PrevIndex, Index, TreeEts, Parent },
-             [aim, process_builtin_pred,  NewParams]
+%              ?TRACE(Index, TreeEts, {call, Module, CallFunc },  Context),
+             {true, NewContext} = prolog_built_in:api_call(Module, CallFunc, ApiResult, Context),   
+%              ?TRACE2(Index, TreeEts, ApiResult, NewContext),             
+             ?DEBUG("~p next body ~p ~n",[{?MODULE,?LINE}, { NextBody, NewContext, PrevIndex,  Index, TreeEts, Parent } ]),
+             
+             NewParams = { NextBody, NewContext, PrevIndex,  Index, TreeEts, Parent },
+             [aim, conv3, NewParams]             
 ;
 % it is 'not' !!!
 aim(default,{ NextBody, PrevIndex, {'\\+', X}, Context, Index , TreeEts, Parent })->
@@ -929,6 +928,7 @@ aim(default, {NextBody, PrevIndex, ProtoType, Context, Index, TreeEts, Parent })
 aim(default, {NextBody, PrevIndex, ProtoType, Context, Index, TreeEts, Parent })->
     Name = element(1,ProtoType),
     %%TODO rewrite using ets
+    ?DEBUG("~p inner aim ~p ~n",[{?MODULE,?LINE}, {ProtoType, Context}  ]),
     case inner_meta_predicates(Name) of
           true ->
             ?TRACE(Index, TreeEts, bound_aim(ProtoType, Context), Context),
@@ -948,15 +948,13 @@ aim(process_builtin_pred,{ {false, _Context}, _NextBody, PrevIndex, _NewIndex2, 
 %%%%TODO remove this
 aim(process_builtin_pred, { {true, Context}, NextBody, PrevIndex, NewIndex2, TreeEts, Parent })->               
          %%just for calculation
-%         Head = {next_aim_fork_pred, [ Parent, PrevIndex, TreeEts ]  },
-%         ?DEV_DEBUG("~p new head for stack pattern  ~p ~n",[{?MODULE,?LINE},  Head ]),
         NewParams = { NextBody, Context, PrevIndex, NewIndex2, TreeEts, Parent }, 
         [aim, conv3, NewParams ];
 %%WITH HBASE we do not work with facts without prototype
 %%Do not allow to make rule and facts
 
 aim(user_defined_aim, {NextBody, PrevIndex, ProtoType, Context, Index, TreeEts, Parent, 1}) when is_atom(ProtoType)->
-         
+           
          %% at first we will looking in inner database
          RulesTable = common:get_logical_name(TreeEts, ?RULES), 
          RuleList = ets:lookup(RulesTable, ProtoType),        

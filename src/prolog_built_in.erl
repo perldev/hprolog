@@ -1,7 +1,7 @@
 -module(prolog_built_in).
 -export([inner_defined_aim/6,delete_fact/4, inner_to_var/3, 
          worker_linked_rules/3,start_child_links/2,
-         api_call/6 ]).
+         api_call/4 ]).
 -include("prolog.hrl").
       
 inner_to_var(List , X2, Context) when is_list(List)->
@@ -15,13 +15,13 @@ inner_to_var(Atom, X2, Context) when is_atom(Atom) ->
 inner_to_var(_Atom, _X2, _Context) ->
        false.             
              
-api_call(NextBody, PrevIndex, {Module, CallFunc, ApiResult}, Context, Index, TreeEts)->
+api_call( Module, CallFunc, ApiResult, Context)->
        case {is_atom(Module), is_tuple(CallFunc), prolog_matching:is_var(ApiResult) } of
                 {true,  true,  positive} ->
                        [Name|Params]  = tuple_to_list(CallFunc),
                        Result = erlang:apply(Module, Name, Params ),
-                       NewContext =  prolog_matching:store_var( { ApiResult, Result }, Context),
-                       {true, NewContext};
+                       ?DEBUG("~p got from api, ~p match ~p ~n ",[{?MODULE,?LINE}, ApiResult, Result]),
+                       prolog_matching:var_match(ApiResult, Result, Context);
                 _ -> throw({instantiation_error, {Module, CallFunc, ApiResult } })
        end
 .
@@ -163,7 +163,7 @@ add_operator(_OrderStatus, _, _Name, _TreeEts  )->
 %%math function 
 
 
-inner_defined_aim(NextBody, PrevIndex ,Body = { pi,  _X2  }, Context, _Index, TreeEts  ) ->
+inner_defined_aim(NextBody, PrevIndex ,Body = { pi,  _  }, Context, _Index, TreeEts  ) ->
      {_, X1B } = prolog_matching:bound_body( Body, Context),     
      R = math:pi(),
      prolog_matching:var_match(X1B, R, Context)
@@ -288,21 +288,40 @@ inner_defined_aim(_NextBody, PrevIndex ,Body_ = { 'atom_length', Name, _Length  
         end   
 ;     
 %%%usual assert
-inner_defined_aim(NextBody, PrevIndex ,{ 'assertz', Body = {':-', _ProtoType, _Body1 }  }, Context, Index, TreeEts  ) ->
-  inner_defined_aim(NextBody, PrevIndex , { 'assert', Body   }, Context, Index, TreeEts   )
+inner_defined_aim(NextBody, PrevIndex ,{ 'assertz', Body   }, Context, Index, TreeEts  ) ->
+      BoundBody =  prolog_matching:bound_body(Body, Context),
+      inner_defined_aim(NextBody, PrevIndex , { '_assert', BoundBody   }, Context, Index, TreeEts   )
 ;
-inner_defined_aim(_NextBody, PrevIndex ,{ 'assert', Body = {':-', _ProtoType, _Body1 }  }, Context, _Index, TreeEts ) ->
-      BodyBounded = prolog_matching:bound_body(Body, Context),
+inner_defined_aim(NextBody, PrevIndex ,{ 'assert', Body   }, Context, Index, TreeEts  ) ->
+      BoundBody =  prolog_matching:bound_body(Body, Context),
+      inner_defined_aim(NextBody, PrevIndex , { '_assert', BoundBody   }, Context, Index, TreeEts   )
+;
+inner_defined_aim(NextBody, PrevIndex ,{ 'asserta', Body   }, Context, Index, TreeEts  ) ->
+      BoundBody =  prolog_matching:bound_body(Body, Context),
+      inner_defined_aim(NextBody, PrevIndex , { '_asserta', BoundBody   }, Context, Index, TreeEts   )
+;
+inner_defined_aim(_NextBody, PrevIndex ,{ '_assert', BodyBounded = {':-', _ProtoType, _Body1 }  }, Context, _Index, TreeEts ) ->
+      ?LOG("~p new rule ~p ~n",[{?MODULE,?LINE},BodyBounded ]),
       dynamic_new_rule(BodyBounded, last, TreeEts),
       {true, Context}
 
 ;
-inner_defined_aim(_NextBody, PrevIndex ,{ 'asserta', Body = {':-', _ProtoType, _Body1 }   }, Context, _Index, TreeEts  )->
-     BodyBounded = prolog_matching:bound_body(Body, Context),
+inner_defined_aim(_NextBody, PrevIndex ,{ '_asserta', BodyBounded = {':-', _ProtoType, _Body1 }   }, Context, _Index, TreeEts  )->
+     ?LOG("~p new rule ~p ~n",[{?MODULE,?LINE},BodyBounded ]),
      dynamic_new_rule(BodyBounded, first, TreeEts),
      {true, Context}
     
 ;
+inner_defined_aim(NextBody, PrevIndex ,{ '_assertz', Body   }, Context, Index, TreeEts  ) ->
+      inner_defined_aim(NextBody, PrevIndex , { '_assert', Body   }, Context, Index, TreeEts   )
+;
+inner_defined_aim(_NextBody, PrevIndex ,{ '_assert', Body   }, Context, _Index, TreeEts  )->     
+      add_fact(Context, Body, last, TreeEts, ?SIMPLE_HBASE_ASSERT)     
+;
+inner_defined_aim(_NextBody, PrevIndex ,{ '_asserta', Body   }, Context, _Index, TreeEts  ) ->
+      add_fact(Context, Body, first, TreeEts, ?SIMPLE_HBASE_ASSERT)
+;
+
 inner_defined_aim(NextBody, PrevIndex, 
                   Body = {add_index_fact, _FactName, _IndexName, hash_one_hbase, _},
                   Context, _Index, TreeEts) ->
@@ -318,15 +337,7 @@ inner_defined_aim(NextBody, PrevIndex, Body = {drop_index_fact, _FactName, _Inde
        
 ;
 
-inner_defined_aim(NextBody, PrevIndex ,{ 'assertz', Body   }, Context, Index, TreeEts  ) when is_tuple(Body)->
-      inner_defined_aim(NextBody, PrevIndex , { 'assert', Body   }, Context, Index, TreeEts   )
-;
-inner_defined_aim(_NextBody, PrevIndex ,{ 'assert', Body   }, Context, _Index, TreeEts  ) when is_tuple(Body)->     
-      add_fact(Context, Body, last, TreeEts, ?SIMPLE_HBASE_ASSERT)     
-;
-inner_defined_aim(_NextBody, PrevIndex ,{ 'asserta', Body   }, Context, _Index, TreeEts  ) when is_tuple(Body)->
-      add_fact(Context, Body, first, TreeEts, ?SIMPLE_HBASE_ASSERT)
-;
+
 % inner_defined_aim(_NextBody, PrevIndex, {'inner_retract___', Body }, Context, _index, TreeEts)->
 % %%only facts
 % %%TODO rules
@@ -890,16 +901,15 @@ inner_defined_aim(_NextBody, _PrevIndex , Body, _Context, _Index, TreeEts )->
 
   
 %%%TODO test various variants wheather worker_linked_rules is failed or dynamic_new_rule/add_new_fact was failed
-add_fact(Context, Body, last, TreeEts,  1)->
-      BodyBounded = prolog:bound_aim(Body, Context),
-      Name = erlang:element(1, Body),
+add_fact(Context, BodyBounded, last, TreeEts,  1)->
+      Name = erlang:element(1, BodyBounded),
       CheckResult = {is_deep_rule(Name, TreeEts), is_rule( BodyBounded )},
-      ?DEV_DEBUG("~p add fact ~p", [{?MODULE,?LINE}, {CheckResult,BodyBounded}]),
+      ?DEBUG("~p add fact ~p", [{?MODULE,?LINE}, {CheckResult,BodyBounded}]),
       case CheckResult of 
             { true,_ } -> 
-                    dynamic_new_rule(  {':-', Body, true }, last, TreeEts );
+                    dynamic_new_rule(  {':-', BodyBounded, true }, last, TreeEts );
             { false, true } -> 
-                    dynamic_new_rule(  {':-', Body, true }, last, TreeEts );       
+                    dynamic_new_rule(  {':-', BodyBounded, true }, last, TreeEts );       
             { false, false }->
 %                   link_fact( BodyBounded, TreeEts ),
                     fact_hbase:add_new_fact( BodyBounded, last, TreeEts)
@@ -908,9 +918,8 @@ add_fact(Context, Body, last, TreeEts,  1)->
       start_child_links(TreeEts, BodyBounded),
       {true,Context}
 ;
-add_fact(Context, Body, first,TreeEts, 1)->
-      BodyBounded = prolog:bound_aim(Body, Context),
-      Name = erlang:element(1, Body), 
+add_fact(Context, BodyBounded, first,TreeEts, 1)->
+      Name = erlang:element(1, BodyBounded), 
       CheckResult = {is_deep_rule(Name, TreeEts), is_rule( BodyBounded )},
       ?DEV_DEBUG("~p add fact ~p", [{?MODULE,?LINE}, {CheckResult,BodyBounded}]),
       case CheckResult of 
@@ -925,13 +934,11 @@ add_fact(Context, Body, first,TreeEts, 1)->
       start_child_links(TreeEts, BodyBounded),
       {true, Context}
 ;      
-add_fact(Context, Body, last, TreeEts, 0)->
-      BodyBounded = prolog:bound_aim(Body, Context),
+add_fact(Context, BodyBounded, last, TreeEts, 0)->
       dynamic_new_rule(  {':-', BodyBounded, true }, last, TreeEts ),
       {true, Context}
 ;
-add_fact(Context, Body, first, TreeEts, 0)->
-      BodyBounded = prolog:bound_aim(Body, Context),
+add_fact(Context, BodyBounded, first, TreeEts, 0)->
       dynamic_new_rule(  {':-', BodyBounded, true }, first, TreeEts ),
       {true, Context}
 . 

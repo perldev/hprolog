@@ -80,7 +80,6 @@ server_loop(NameSpace, TraceOn) ->
 	      io:fwrite("debug off Yes~n"),  
 	      server_loop(NameSpace, ?DEBUG_OFF);
 	{ok,Files} when is_list(Files) ->
-% 	http://censor.net.ua/resonance/272867/kuda_propali_15_mlrd_kitayiskogo_kredita
               lists:foreach(fun(File)->
                                         case catch(prolog:compile(NameSpace, File)) of
                                                 ok ->

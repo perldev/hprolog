@@ -1,7 +1,7 @@
 -module(random_tree).
 
 
--export([entropy/1, uniquecounts/1, buildtree/5, buildtree/4, 
+-export([entropy/1, uniquecounts/1, buildtree/5, buildtree/3, 
         search_best/5, has_attr/2, devide/2, test1/1, check_tree/3, check/2]).
 
 -record(learn_record, 
@@ -19,7 +19,7 @@ test1(File)->
 %                      <<"-">>,<<"!">>,<<"?">>,
 %                      ],
         Rows = lists:map(fun process_csv/1  ,Result),
-        Tree =  buildtree(Rows, 0, 100, 1),
+        Tree =  buildtree(Rows,  100, 1),
         Tree        
 .
 
@@ -92,10 +92,11 @@ to_record( [ First, Second  ] )->
          #learn_record{result = First, attr = Attrs}.
 
 
-buildtree( Rows, Index, MaxDeep, UniqId )->
+         
+buildtree(Rows,  MaxDeep, UniqId )->
         Records = lists:map(fun to_record/1, Rows),
         Cols = get_word_facts_freq(Records),
-        Tree =  buildtree(Cols, Records, Index, MaxDeep, true ),
+        Tree =  buildtree(Cols, Records, 0, MaxDeep, true ),
         %%TODO  you can avoid this using variaty of index
         RuleName =  list_to_atom("random_tree_check"  ++ UniqId),
         {':-', { RuleName,{'Attrs'} }, Tree}.
