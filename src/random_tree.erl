@@ -143,7 +143,7 @@ buildtree(Cols, Rows, CurrentDeep, MaxDeep, Res)->
 
 call_function_tree_has(Col)->
        %% its prolog tree call(random_tree:has_attr(Elem, Attrs), Result)
-       { call, {':',  random_tree, { has_attr,  Col, {'Attrs'} } }, {'Result'} }.
+       { call, {':',  random_tree, { has_attr,  Col, {'Attrs'} } }, true }.
         
 search_best(Cols, Size,  Entropy,  Rows,  Best )->
         search_best(Cols, Size,  Entropy,  Rows, {}, Best, Cols )

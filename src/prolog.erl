@@ -738,12 +738,17 @@ aim(default, { NextBody, PrevIndex,  {'call', ProtoType = {':', _Module, _Call }
                Context, Index , TreeEts, Parent })->
              {_, Module, CallFunc} = prolog_matching:bound_body(ProtoType, Context),      
 %              ?TRACE(Index, TreeEts, {call, Module, CallFunc },  Context),
-             {true, NewContext} = prolog_built_in:api_call(Module, CallFunc, ApiResult, Context),   
+              case prolog_built_in:api_call(Module, CallFunc, ApiResult, Context) of
+                {true, NewContext} ->
 %              ?TRACE2(Index, TreeEts, ApiResult, NewContext),             
-             ?DEBUG("~p next body ~p ~n",[{?MODULE,?LINE}, { NextBody, NewContext, PrevIndex,  Index, TreeEts, Parent } ]),
-             
-             NewParams = { NextBody, NewContext, PrevIndex,  Index, TreeEts, Parent },
-             [aim, conv3, NewParams]             
+                        ?DEBUG("~p next body ~p ~n",[{?MODULE,?LINE},
+                                        { NextBody, NewContext, PrevIndex,  Index, TreeEts, Parent } ]),
+                        NewParams = { NextBody, NewContext, PrevIndex,  Index, TreeEts, Parent },
+                        [aim, conv3, NewParams];
+                _->
+                      ?DEV_DEBUG("~p return false  ~n",[{?MODULE,?LINE}  ]),
+                      aim(next_aim, {Parent, PrevIndex, TreeEts})
+             end
 ;
 % it is 'not' !!!
 aim(default,{ NextBody, PrevIndex, {'\\+', X}, Context, Index , TreeEts, Parent })->
