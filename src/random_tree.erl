@@ -93,13 +93,13 @@ to_record( [ First, Second  ] )->
 
 
          
-buildtree(Rows,  MaxDeep, UniqId )->
+buildtree(Rows,  MaxDeep, ToRuleName )->
         Records = lists:map(fun to_record/1, Rows),
         Cols = get_word_facts_freq(Records),
         Tree =  buildtree(Cols, Records, 0, MaxDeep, true ),
         %%TODO  you can avoid this using variaty of index
-        RuleName =  list_to_atom("random_tree_check"  ++ UniqId),
-        {':-', { RuleName,{'Attrs'} }, Tree}.
+
+        {':-', { ToRuleName, {'Attrs'} }, Tree}.
         
 
 buildtree(_Cols, Rows, MaxDeep, MaxDeep, true)->
