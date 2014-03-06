@@ -16,8 +16,8 @@ inner_to_var(_Atom, _X2, _Context) ->
        false.             
              
 api_call( Module, CallFunc, ApiResult, Context)->
-       case {is_atom(Module), is_tuple(CallFunc), prolog_matching:is_var(ApiResult) } of
-                {true,  true,  positive} ->
+       case {is_atom(Module), is_tuple(CallFunc) } of
+                {true,  true } ->
                        [Name|Params]  = tuple_to_list(CallFunc),
                        Result = erlang:apply(Module, Name, Params ),
                        ?DEBUG("~p got from api, ~p match ~p ~n ",[{?MODULE,?LINE}, ApiResult, Result]),
