@@ -9,7 +9,7 @@
 -export([call/1, call/2, call/3, start_aim_spawn/5]).
 
 %%deprecate this
--export([aim/8]).
+-export([aim/8, aim/7]).
 
 -include("prolog.hrl").
 
@@ -424,6 +424,9 @@ aim_spawn(Prev, BackPid, Goal, TreeEts, Limit  )->
 
 %%TODO move clean tree to the supervisour
 %%%just redesign to tail recursion    
+aim(NextBody, PrevIndex ,  MainBody , Context, Index, TreeEts, Parent)->
+    aim(NextBody, PrevIndex ,  MainBody , Context, Index, TreeEts, Parent, undefined).
+    
 aim(NextBody, PrevIndex ,  MainBody , Context, Index, TreeEts, Parent, undefined)->
     Call = [aim, default,  {NextBody, PrevIndex, MainBody, Context, Index, TreeEts, Parent }],
     loop(Call);
