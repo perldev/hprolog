@@ -31,7 +31,7 @@
 -define(ENABLE_LOG,1).
 
 %%for connect prolog with web console
--define(WEB,1).
+%-define(WEB,1).
 
 -define('WRITE_UNICODE'(Parent,X), common:console_write_unicode(Parent, X) ).
 
@@ -135,8 +135,8 @@
 -ifdef(USE_HBASE).
 -define('INCLUDE_HBASE'(X),  fact_hbase:load_rules2ets(X) ).
 
--define('THRIFT_POOL'(Str, Pars ), true).% lager:warning(Str, Pars) ).
--define('THRIFT_LOG'(Str, Pars ), true). % lager:warning(Str, Pars) ).
+-define('THRIFT_POOL'(Str, Pars ), true). % lager:warning(Str, Pars) ).
+-define('THRIFT_LOG'(Str, Pars ),  lager:warning(Str, Pars) ).
 
 -else.
 -define('THRIFT_POOL'(Str, Pars ),   true ).
@@ -174,7 +174,6 @@
 -endif.
 
 -ifdef(LOGGING).
-
 -define('LOG'(Str, Pars ), lager:info(Str, Pars) ).
 -else.
 -define('LOG'(Str, Pars ), true ).
