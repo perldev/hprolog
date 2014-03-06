@@ -1481,17 +1481,17 @@ add_new_rule(Tree = { ':-', ProtoType, BodyRule}, Pos, TableName, 1 )->
 	?DEBUG("~p new rule to hbase  ~p ~n",[ {?MODULE,?LINE}, Tree ] ),
        [ Name | _ProtoType ] = tuple_to_list(ProtoType),
        PrologCode =  erlog_io:write1(Tree),
-       V2 = unicode:characters_to_binary( lists:flatten(PrologCode)++"." ),
+       V2 = unicode:characters_to_binary( lists:flatten(PrologCode) ),
       	?DEBUG("~p new rule table is  ~p ~n",[ {?MODULE,?LINE}, TableName ] ),
 
        case check_exist_rule( TableName, Name ) of
 	    false -> 
-		store_new_rule(Name, V2, TableName  );
+		store_new_rule(Name, <<V2/binary, ?INNER_DELIMITER >>, TableName  );
 	     PrevCode ->
 		case Pos of 
 		    first ->
-			  store_new_rule(Name, <<V2/binary,PrevCode/binary>>, TableName );
-		    _-> store_new_rule(Name, <<PrevCode/binary, V2/binary >>, TableName )
+			  store_new_rule(Name, <<V2/binary, ?INNER_DELIMITER, PrevCode/binary>>, TableName );
+		    _-> store_new_rule(Name, <<PrevCode/binary, ?INNER_DELIMITER ,V2/binary >>, TableName )
 		end
 	end
 ;
