@@ -223,18 +223,18 @@ has_attr(Head,[_|Tail])->
 
 get_word_facts_freq(Rows)->
         lists:foldl( fun(Item, List)->
-%                       case Item#learn_record.result of                  
-%                            1->     
+                       case Item#learn_record.result of                  
+                            1->     
                                 Attrs = Item#learn_record.attr,
                                 lists:foldl(fun(E, Accum)->
                                                case has_attr(E, Accum) of
-                                                  false-> [E|Accum];
-                                                  true->Accum
+                                                  false -> [E|Accum];
+                                                  true -> Accum
                                                 end
-                                            end, List, Attrs)
-%                            0->
-%                                 List
-%                       end
+                                            end, List, Attrs);
+                            0->
+                                 List
+                       end
                     end,
                     [],
                     Rows    
