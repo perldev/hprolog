@@ -835,12 +835,12 @@ process_indexed_hbase(_Table, _ProtoType, [], _TreeEts)->
     receive
         {PidReciverResult, get_pack_of_facts}->
             PidReciverResult !  [];
+        {'EXIT',_Pid, Reason}->
+              ?WAIT("~p got cut solution ~p ~n",[{?MODULE,?LINE}, Reason ]);
          Some -> 
             ?WAIT("~p got unexpected ~p ~n",[{?MODULE,?LINE}, Some ]),
             throw({hbase_exception, {unexpected_behavior, Some} })
-    end,
-    true
-;
+    end;
 process_indexed_hbase(Table, ProtoType,  [NewKey| NewPreRes] , TreeEts)->
     	?WAIT("~p regis  wait  hbase   indexed fact  ~n",[{?MODULE,?LINE} ]),
         receive 
@@ -850,7 +850,8 @@ process_indexed_hbase(Table, ProtoType,  [NewKey| NewPreRes] , TreeEts)->
                    ?DEBUG("~p got row  ~p  ~n",[{?MODULE,?LINE}, Row ]),
 		   PidReciverResult ! Row,
 		   process_indexed_hbase(Table, ProtoType,  NewPreRes, TreeEts);
-            {'EXIT', _From, _Reason} ->
+            {'EXIT', _From, Reason} ->
+                  ?WAIT("~p got cut solution ~p ~n",[{?MODULE,?LINE}, Reason ]),
                   true;
             {'DOWN', _MonitorRef, _Type, _Object, _Info} ->
                   true;
