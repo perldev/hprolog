@@ -634,14 +634,10 @@ process_code(  Code,  Table )->
 process_hbase_rule(Elem,  Table)->
       [{_Key, _RuleName},{_Cell, Columns }] = Elem,
       ?DEBUG("~p find rule  ~p ~n",[ {?MODULE,?LINE}, Columns ] ),
-
       [ [ _Column, _TimeStamp, {<<"$">>, Code64 } ] ] = Columns,
       Code = base64:decode(Code64),
       ?DEBUG("~p find rule  ~p ~n",[ {?MODULE,?LINE}, Code ] ),
-
       CodeList = binary:split(Code, [ ?INNER_DELIMITER_BIN  ],[global]),
-
-      
       lists:foldl(fun compile_patterns/2,  Table,  CodeList)
 .
 
