@@ -836,7 +836,7 @@ process_indexed_hbase(_Table, _ProtoType, [], _TreeEts)->
         {PidReciverResult, get_pack_of_facts}->
             PidReciverResult !  [];
          Some -> 
-            ?LOG("~p got unexpected ~p ~n",[{?MODULE,?LINE}, Some ]),
+            ?WAIT("~p got unexpected ~p ~n",[{?MODULE,?LINE}, Some ]),
             throw({hbase_exception, {unexpected_behavior, Some} })
     end,
     true
