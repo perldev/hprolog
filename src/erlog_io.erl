@@ -71,7 +71,7 @@ scan_stream(Fd, L0) ->
 %% but cleaned up using try.
 
 read_file(File) ->
-    case file:open(File, [read]) of
+    case file:open(File, [read, {encoding, unicode}]) of
 	{ok,Fd} ->
 	    try
 		{ok,read_stream(Fd, 1)}
