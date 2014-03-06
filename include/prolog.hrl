@@ -8,6 +8,9 @@
 %-define(THRIFT_MAX_RECONNECT_COUNT, 10).
 %-define(INTERVAL_INVOKE_SCANNER, 2000000). %microseconds
 
+-define(INNER_DELIMITER_BIN,<<"\n_rule_delimiter:-true_\n">>).
+-define(INNER_DELIMITER,"\n_rule_delimiter:-true_\n").
+
 
 -define(DEFAULT_TIMEOUT, 210000).%%miliseconds
 %%miliseconds
