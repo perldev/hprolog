@@ -8,6 +8,9 @@
 
 -export([call/1, call/2, call/3, start_aim_spawn/5]).
 
+%%deprecate this
+-export([aim/8]).
+
 -include("prolog.hrl").
 
 inner_meta_predicates(Name)->
