@@ -44,7 +44,7 @@
 	 write1/1]).
 
 scan_file(File) ->
-    case file:open(File, [read]) of
+    case file:open(File, [read,  {encoding, unicode}]) of
 	{ok,Fd} ->
 	    try
 		{ok,scan_stream(Fd, 1)}

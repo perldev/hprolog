@@ -53,7 +53,8 @@ console_write(_, X)->
        io:format("~p",[X]).
       
 console_write_unicode(_,X)->
-     io:format("~ts",[X]).
+     L = unicode:characters_to_binary(X),
+     io:format("~ts",[ unicode:characters_to_list(L) ]).
 
      
 console_writenl(_, X)->      
