@@ -163,7 +163,7 @@ ets_code_record_process( {Name, ProtoType, Body}, In)->
        NormalProtoType  =  list_to_tuple( [ Name| tuple_to_list(ProtoType) ] ),
        PrologCode =  erlog_io:write1({':-',NormalProtoType, Body  }),      
        ?DEBUG("~p process ets code ~p~n",[{?MODULE,?LINE}, PrologCode  ]),  
-       V2 = list_to_binary( lists:flatten(PrologCode)++"." ++ ?INNER_DELIMITER),
+       V2 = list_to_binary( lists:flatten(PrologCode)++ ?INNER_DELIMITER),
        <<In/binary, V2/binary >>
 ;
 ets_code_record_process( { Name,  Body}, In)->
@@ -171,14 +171,14 @@ ets_code_record_process( { Name,  Body}, In)->
        PrologCode =  erlog_io:write1({':-',Name, Body}),
        ?DEBUG("~p process ets code ~p~n",[{?MODULE,?LINE}, PrologCode  ]),  
 
-       V2 = list_to_binary( lists:flatten(PrologCode)++"." ++ ?INNER_DELIMITER),
+       V2 = list_to_binary( lists:flatten(PrologCode)++ ?INNER_DELIMITER),
        <<In/binary, V2/binary >>
 ;
 ets_code_record_process({Name}, In)->
        ?DEBUG("~p process ets code ~p~n",[{?MODULE,?LINE},{Name}  ]),  
        PrologCode =  erlog_io:write1({':-', Name, true }),
        ?DEBUG("~p process ets code ~p~n",[{?MODULE,?LINE}, PrologCode  ]),  
-       V2 = list_to_binary( lists:flatten(PrologCode)++"."++  ?INNER_DELIMITER),
+       V2 = list_to_binary( lists:flatten(PrologCode)++  ?INNER_DELIMITER),
        <<In/binary, V2/binary >>.
 
 
