@@ -57,6 +57,22 @@ clean_tree(TreeEts)->
     
 %%compile inner memory
 compile(Prefix, File)->
+        compile(Prefix, File, 1).
+
+        
+%% do not delete meta info        
+compile(Prefix, File, 0)->
+    {ok, Terms } = erlog_io:read_file(File),
+    only_rules_delete_inner(Prefix),
+    lists:foldl(fun process_term_first/2, Prefix,  Terms ),
+    %%TODO process aim :- 
+    %%and repeat read_file
+    RulesTable = common:get_logical_name(Prefix, ?RULES),
+    lists:foldl(fun process_term/2, {RulesTable, 1 },  Terms ),
+    ok
+;
+
+compile(Prefix, File, 1)->
     {ok, Terms } = erlog_io:read_file(File),
     delete_inner_structs(Prefix),
     lists:foldl(fun process_term_first/2, Prefix,  Terms ),
@@ -87,23 +103,24 @@ inner_change_namespace(true, Name, TreeEts)->
 delete_structs(Prefix)->
       R1 = ( catch ets:delete(common:get_logical_name(Prefix, ?META_WEIGHTS) ) ),
       R2 = ( catch ets:delete(common:get_logical_name(Prefix, ?RULES) ) ),
-      R3 = (catch ets:delete(common:get_logical_name(Prefix, ?DYNAMIC_STRUCTS)) ),
-      R4 = (catch ets:delete(common:get_logical_name(Prefix, ?META) ) ),
-      R5 = (catch ets:delete(common:get_logical_name(Prefix, ?META_LINKS) ) ),
-      R6 = (catch ets:delete(common:get_logical_name(Prefix, ?HBASE_INDEX)) ),
+      R3 = ( catch ets:delete(common:get_logical_name(Prefix, ?DYNAMIC_STRUCTS)) ),
+      R4 = ( catch ets:delete(common:get_logical_name(Prefix, ?META) ) ),
+      R5 = ( catch ets:delete(common:get_logical_name(Prefix, ?META_LINKS) ) ),
+      R6 = ( catch ets:delete(common:get_logical_name(Prefix, ?HBASE_INDEX)) ),
       {R1,R2,R3,R4,R5,R6}
 .
 
 delete_inner_structs(Prefix)->
-      ets:delete_all_objects(common:get_logical_name(Prefix, ?META_WEIGHTS) ),
       ets:delete_all_objects(common:get_logical_name(Prefix, ?RULES) ),
       ets:delete_all_objects(common:get_logical_name(Prefix, ?DYNAMIC_STRUCTS)),
+      ets:delete_all_objects(common:get_logical_name(Prefix, ?META_WEIGHTS) ),
       ets:delete_all_objects(common:get_logical_name(Prefix, ?META) ),
       ets:delete_all_objects(common:get_logical_name(Prefix, ?META_LINKS) ),
       ets:delete_all_objects(common:get_logical_name(Prefix, ?HBASE_INDEX))
+      
 .
 
-
+%%%almost DEPRECATED 
 %for dynamic change cloud rules in web  console
 only_rules_create_inner(Prefix)->
         Pid = erlang:whereis(auth_demon), %%in result all ets tables will be transfered to auth demon
@@ -120,9 +137,8 @@ only_rules_create_inner(Prefix, FileName)->
                 Ets;
             _->
                 ets:new(common:get_logical_name(Prefix, ?RULES),[named_table, bag, public, { heir,Pid, Prefix }])
-    end
-
-.
+    end.
+    
 
 
 only_rules_delete_inner(Prefix)->
