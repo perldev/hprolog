@@ -217,20 +217,20 @@ token_cont(Rest, Line, {error,S}) ->
 
 tokens(Cont, Chars) -> 
 
-%    io:format("~p ~p ~n",[{?MODULE,?LINE} ,{Cont, Chars} ]),
+%     io:format("~p ~p ~n",[{?MODULE,?LINE} ,{Cont, Chars} ]),
 
     tokens(Cont, Chars, 1).
 
 tokens([], Chars, Line) ->
     
-%     io:format("~p ~p ~n",[{?MODULE,?LINE} ,{ Chars} ]),
+%      io:format("~p ~p ~n",[{?MODULE,?LINE} ,{ Chars} ]),
     
     tokens(yystate(), Chars, Line, Chars, 0, Line, [], reject, 0);
 tokens(S = {tokens,State,Line,Tcs,Tlen,Tline,Ts,Action,Alen}, Chars, _) ->
-%     io:format("~p ~p ~n",[{?MODULE,?LINE}, {S, Chars} ]),
+%      io:format("~p ~p ~n",[{?MODULE,?LINE}, {S, Chars} ]),
     tokens(State, Chars, Line, Tcs ++ Chars, Tlen, Tline, Ts, Action, Alen);
 tokens(S = {skip_tokens,State,Line,Tcs,Tlen,Tline,Error,Action,Alen}, Chars, _) ->
-%      io:format("~p ~p ~n",[{?MODULE,?LINE}, {S, Chars} ]),
+%       io:format("~p ~p ~n",[{?MODULE,?LINE}, {S, Chars} ]),
      skip_tokens(State, Chars, Line, Tcs ++ Chars, Tlen, Tline, Error, Action, Alen).
 
 %% tokens(State, InChars, Line, TokenChars, TokenLen, TokenLine, Tokens,
@@ -238,7 +238,7 @@ tokens(S = {skip_tokens,State,Line,Tcs,Tlen,Tline,Error,Action,Alen}, Chars, _) 
 %%    {more,Continuation} | {done,ReturnVal,RestChars}.
 
 tokens(S0, Ics0, L0, Tcs, Tlen0, Tline, Ts, A0, Alen0) ->
-%     io:format("~p ~p ~n",[{?MODULE,?LINE}, Tcs ]),
+%     io:format("~p ~p ~n",[{?MODULE,?LINE}, {S0, Ics0} ]),
     case yystate(S0, Ics0, L0, Tlen0, A0, Alen0) of
         %% Accepting end state, we have a token.
         {A1,Alen1,Ics1,L1} ->
@@ -352,7 +352,7 @@ yystate(45, [C|Ics], Line, Tlen, _, _) when C >= $\v, C =< $' ->
     yystate(45, Ics, Line, Tlen+1, 16, Tlen);
 yystate(45, [C|Ics], Line, Tlen, _, _) when C >= $), C =<255 ->%$ÿ ->
     yystate(45, Ics, Line, Tlen+1, 16, Tlen);
-yystate(45, [C|Ics], Line, Tlen, _, _) when C >= 1024, C =<1279 ->%$ÿ ->
+yystate(45, [C|Ics], Line, Tlen, _, _) when C >= 1024, C =<9279 ->%$ÿ ->
     yystate(45, Ics, Line, Tlen+1, 16, Tlen);
     
 yystate(45, Ics, Line, Tlen, _, _) ->
@@ -417,7 +417,7 @@ yystate(40, [C|Ics], Line, Tlen, Action, Alen) when C >= $\v, C =< $[ ->
     yystate(3, Ics, Line, Tlen+1, Action, Alen);
 yystate(40, [C|Ics], Line, Tlen, Action, Alen) when C >= $],C=< 255 ->  %C =< $ÿ ->
     yystate(3, Ics, Line, Tlen+1, Action, Alen);
-yystate(40, [C|Ics], Line, Tlen, Action, Alen) when C >= 1024,C=< 1279 ->  %C =< $ÿ ->
+yystate(40, [C|Ics], Line, Tlen, Action, Alen) when C >= 1024,C=< 9279 ->  %C =< $ÿ ->
     yystate(3, Ics, Line, Tlen+1, Action, Alen);
     
 yystate(40, Ics, Line, Tlen, Action, Alen) ->
@@ -432,7 +432,7 @@ yystate(39, [C|Ics], Line, Tlen, _, _) when C >= $\v, C =< $' ->
     yystate(45, Ics, Line, Tlen+1, 13, Tlen);
 yystate(39, [C|Ics], Line, Tlen, _, _) when C >= $),C=<255-> % C =< $ÿ ->
     yystate(45, Ics, Line, Tlen+1, 13, Tlen);
-yystate(39, [C|Ics], Line, Tlen, _, _) when C >= 1024,C=<1279-> % C =< $ÿ ->
+yystate(39, [C|Ics], Line, Tlen, _, _) when C >= 1024,C=<9279-> % C =< $ÿ ->
     yystate(45, Ics, Line, Tlen+1, 13, Tlen);
 yystate(39, Ics, Line, Tlen, _, _) ->
     {13,Tlen,Ics,Line,39};
@@ -503,7 +503,7 @@ yystate(38, [C|Ics], Line, Tlen, Action, Alen) when C >= $a, C =< $z ->
     yystate(26, Ics, Line, Tlen+1, Action, Alen);
 yystate(38, [C|Ics], Line, Tlen, Action, Alen) when C >= ${, C =< $} ->
     yystate(34, Ics, Line, Tlen+1, Action, Alen);
-yystate(38, [C|Ics], Line, Tlen, Action, Alen) when C >= 1024, C =< 1279 ->
+yystate(38, [C|Ics], Line, Tlen, Action, Alen) when C >= 1024, C =< 9279 ->
     yystate(34, Ics, Line, Tlen+1, Action, Alen);  
 yystate(38, Ics, Line, Tlen, Action, Alen) ->
     {Action,Alen,Tlen,Ics,Line,38};
@@ -551,7 +551,7 @@ yystate(33, [C|Ics], Line, Tlen, Action, Alen) when C >= $a, C =< $f ->
     yystate(33, Ics, Line, Tlen+1, Action, Alen);
 yystate(33, [C|Ics], Line, Tlen, Action, Alen) when C >= $g,C=<255-> % C =< $ÿ ->
     yystate(6, Ics, Line, Tlen+1, Action, Alen);
-yystate(33, [C|Ics], Line, Tlen, Action, Alen) when C >= 1024,C=<1279-> % C =< $ÿ ->
+yystate(33, [C|Ics], Line, Tlen, Action, Alen) when C >= 1024,C=<9279-> % C =< $ÿ ->
     yystate(6, Ics, Line, Tlen+1, Action, Alen);
 yystate(33, Ics, Line, Tlen, Action, Alen) ->
     {Action,Alen,Tlen,Ics,Line,33};
@@ -567,7 +567,7 @@ yystate(32, [C|Ics], Line, Tlen, _, _) when C >= $8, C =< $w ->
     yystate(3, Ics, Line, Tlen+1, 5, Tlen);
 yystate(32, [C|Ics], Line, Tlen, _, _) when C >= $y, C=<255 -> %C =< $ÿ ->
     yystate(3, Ics, Line, Tlen+1, 5, Tlen);
-yystate(32, [C|Ics], Line, Tlen, _, _) when C >= 1024, C=<1279 -> %C =< $ÿ ->
+yystate(32, [C|Ics], Line, Tlen, _, _) when C >= 1024, C=<9279 -> %C =< $ÿ ->
     yystate(3, Ics, Line, Tlen+1, 5, Tlen);
 yystate(32, Ics, Line, Tlen, _, _) ->
     {5,Tlen,Ics,Line,32};
@@ -585,7 +585,7 @@ yystate(31, [C|Ics], Line, Tlen, Action, Alen) when C >= $(, C =< $[ ->
     yystate(31, Ics, Line, Tlen+1, Action, Alen);
 yystate(31, [C|Ics], Line, Tlen, Action, Alen) when C >= $], C=<255->  %C =< $ÿ ->
     yystate(31, Ics, Line, Tlen+1, Action, Alen);
-yystate(31, [C|Ics], Line, Tlen, Action, Alen) when C >= 1024, C=<1279->  %C =< $ÿ ->
+yystate(31, [C|Ics], Line, Tlen, Action, Alen) when C >= 1024, C=<9279->  %C =< $ÿ ->
     yystate(31, Ics, Line, Tlen+1, Action, Alen);
 yystate(31, Ics, Line, Tlen, Action, Alen) ->
     {Action,Alen,Tlen,Ics,Line,31};
@@ -639,7 +639,7 @@ yystate(25, [C|Ics], Line, Tlen, Action, Alen) when C >= $8, C =< $[ ->
     yystate(6, Ics, Line, Tlen+1, Action, Alen);
 yystate(25, [C|Ics], Line, Tlen, Action, Alen) when C >= $], C=<255-> %C =< $ÿ ->
     yystate(6, Ics, Line, Tlen+1, Action, Alen);
-yystate(25, [C|Ics], Line, Tlen, Action, Alen) when C >= 1024, C=<1279-> %C =< $ÿ ->
+yystate(25, [C|Ics], Line, Tlen, Action, Alen) when C >= 1024, C=<9279-> %C =< $ÿ ->
     yystate(6, Ics, Line, Tlen+1, Action, Alen);
     
 yystate(25, Ics, Line, Tlen, Action, Alen) ->
@@ -755,7 +755,7 @@ yystate(15, [C|Ics], Line, Tlen, Action, Alen) when C >= $], C =< $w ->
 yystate(15, [C|Ics], Line, Tlen, Action, Alen) when C >= $y, C=< 255-> %C =< $ÿ ->
     yystate(31, Ics, Line, Tlen+1, Action, Alen);
     
-yystate(15, [C|Ics], Line, Tlen, Action, Alen) when C >= 1024, C=< 1279-> %C =< $ÿ ->
+yystate(15, [C|Ics], Line, Tlen, Action, Alen) when C >= 1024, C=< 9279-> %C =< $ÿ ->
     yystate(31, Ics, Line, Tlen+1, Action, Alen);
     
 yystate(15, Ics, Line, Tlen, Action, Alen) ->
@@ -797,7 +797,7 @@ yystate(12, [C|Ics], Line, Tlen, Action, Alen) when C >= $a, C =< $f ->
 yystate(12, [C|Ics], Line, Tlen, Action, Alen) when C >= $g,C=<255 -> %C =< $ÿ ->
     yystate(31, Ics, Line, Tlen+1, Action, Alen);
 
-yystate(12, [C|Ics], Line, Tlen, Action, Alen) when C >=1024,C=<1279 -> %C =< $ÿ ->
+yystate(12, [C|Ics], Line, Tlen, Action, Alen) when C >=1024,C=<9279 -> %C =< $ÿ ->
     yystate(31, Ics, Line, Tlen+1, Action, Alen);   
 
 yystate(12, Ics, Line, Tlen, Action, Alen) ->
@@ -831,7 +831,7 @@ yystate(9, [C|Ics], Line, Tlen, Action, Alen) when C >= $], C =< $w ->
 yystate(9, [C|Ics], Line, Tlen, Action, Alen) when C >= $y, C=<255  -> %C =< $ÿ ->
     yystate(6, Ics, Line, Tlen+1, Action, Alen);
 
-yystate(9, [C|Ics], Line, Tlen, Action, Alen) when C >= 1024, C =< 1279  -> 
+yystate(9, [C|Ics], Line, Tlen, Action, Alen) when C >= 1024, C =< 9279  ->  %1279
     yystate(6, Ics, Line, Tlen+1, Action, Alen);
  
 yystate(9, Ics, Line, Tlen, Action, Alen) ->
@@ -858,7 +858,7 @@ yystate(7, [C|Ics], Line, Tlen, _, _) when C >= $(, C =< $[ ->
     yystate(31, Ics, Line, Tlen+1, 10, Tlen);
 yystate(7, [C|Ics], Line, Tlen, _, _) when C >= $], C=< 255-> %C =< $ÿ ->
     yystate(31, Ics, Line, Tlen+1, 10, Tlen);
-yystate(7, [C|Ics], Line, Tlen, _, _) when C >= 1024, C =< 1279 ->
+yystate(7, [C|Ics], Line, Tlen, _, _) when C >= 1024, C =< 9279 ->
     yystate(31, Ics, Line, Tlen+1, 10, Tlen);  
 yystate(7, Ics, Line, Tlen, _, _) ->
     {10,Tlen,Ics,Line,7};
@@ -877,7 +877,7 @@ yystate(6, [C|Ics], Line, Tlen, Action, Alen) when C >= $#, C =< $[ ->
 yystate(6, [C|Ics], Line, Tlen, Action, Alen) when C >= $],C=<255->  %C =< $ÿ ->
     yystate(6, Ics, Line, Tlen+1, Action, Alen);
 %% 6 - means open ", adding cyrrilic symbols
-yystate(6, [C|Ics], Line, Tlen, Action, Alen) when C >= 1024, C =< 1279 ->
+yystate(6, [C|Ics], Line, Tlen, Action, Alen) when C >= 1024, C =< 9279 ->
     yystate(6, Ics, Line, Tlen+1, Action, Alen);    
     
 yystate(6, Ics, Line, Tlen, Action, Alen) ->
@@ -932,7 +932,7 @@ yystate(0, [C|Ics], Line, Tlen, Action, Alen) when C >= $8, C =< $[ ->
 yystate(0, [C|Ics], Line, Tlen, Action, Alen) when C >= $], C=<255-> % C =< $ÿ ->
     yystate(31, Ics, Line, Tlen+1, Action, Alen);
     
-yystate(0, [C|Ics], Line, Tlen, Action, Alen)  when C >= 1024, C =< 1279 ->
+yystate(0, [C|Ics], Line, Tlen, Action, Alen)  when C >= 1024, C =< 9279 ->
     yystate(31, Ics, Line, Tlen+1, Action, Alen);    
     
     
