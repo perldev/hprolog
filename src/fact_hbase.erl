@@ -835,8 +835,10 @@ process_indexed_hbase(_Table, _ProtoType, [], _TreeEts)->
     receive
         {PidReciverResult, get_pack_of_facts}->
             PidReciverResult !  [];
+        {'DOWN', _MonitorRef, _Type, _Object, _Info} ->
+               ?WAIT("~p got exit ~p ~n",[{?MODULE,?LINE}, Reason ]);
         {'EXIT',_Pid, Reason}->
-              ?WAIT("~p got cut solution ~p ~n",[{?MODULE,?LINE}, Reason ]);
+              ?WAIT("~p got exit ~p ~n",[{?MODULE,?LINE}, Reason ]);
          Some -> 
             ?WAIT("~p got unexpected ~p ~n",[{?MODULE,?LINE}, Some ]),
             throw({hbase_exception, {unexpected_behavior, Some} })
