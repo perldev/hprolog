@@ -328,10 +328,9 @@ get_link_meta_info(Scanner, Table)->
 	Host = get_host(Scanner),
         case catch  httpc:request( get, { Scanner,[ {"Accept","application/json"}, {"Host", Host}]},
 				    [{connect_timeout,?DEFAULT_TIMEOUT },
-				     {timeout, ?DEFAULT_TIMEOUT },
-				     { body_format, binary }
+				     {timeout, ?DEFAULT_TIMEOUT }
 				     ],
-				    [ {sync, true} ] ) of
+				    [ {sync, true}, { body_format, binary } ] ) of
                     { ok, { {_NewVersion, 200, _NewReasonPhrase}, _NewHeaders, Text1 } } ->
 			    process_meta_link( Text1, Table ),
 			    get_link_meta_info(Scanner,  Table);%% TODO another solution
@@ -372,8 +371,9 @@ process_meta_link(<<>>, _Table)->
     nothing
 ;
 process_meta_link(Meta, Table)->
+       ?DEBUG("~p got meta ~p ~n and data is ~p ~n",[ {?MODULE,?LINE},Table, Meta] ),
        Json = jsx:decode( Meta ),
-       ?DEBUG("~p got meta ~p ~n and json is ~p ~n",[ {?MODULE,?LINE}, Meta, Json ] ),
+       ?DEBUG("~p got meta ~p ~n and json is ~p ~n",[ {?MODULE,?LINE}, Json ] ),
        [ { _Row, Links } ] = Json, 
        %TODO add weight sorting 
        lists:foreach(fun(Elem)->
