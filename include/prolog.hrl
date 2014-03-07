@@ -157,7 +157,7 @@
 
 
 -ifdef(SYNC_DEBUG).
--define('WAIT'(Str, Pars ), lager:warning(Str, Pars) ).
+-define('WAIT'(Str, Pars ), true ).
 -else.
 -define('WAIT'(Str, Pars ), true ).
 -endif.
