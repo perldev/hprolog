@@ -139,7 +139,7 @@
 -define('INCLUDE_HBASE'(X),  fact_hbase:load_rules2ets(X) ).
 
 -define('THRIFT_POOL'(Str, Pars ), true). % lager:warning(Str, Pars) ).
--define('THRIFT_LOG'(Str, Pars ),  lager:warning(Str, Pars) ).
+-define('THRIFT_LOG'(Str, Pars ),  true). %lager:warning(Str, Pars) ).
 
 -else.
 -define('THRIFT_POOL'(Str, Pars ),   true ).
