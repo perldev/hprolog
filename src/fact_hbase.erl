@@ -812,7 +812,9 @@ process_indexed_hbase(_Table, _ProtoType, {hbase_exception, not_found}, _TreeEts
     receive
         {PidReciverResult, get_pack_of_facts}->
             PidReciverResult !  [];
-         Some ->     
+        finish ->
+             ?WAIT("~p got normal finish  ~n",[{?MODULE,?LINE} ]);
+        Some ->     
             ?LOG("~p got unexpected ~p ~n",[{?MODULE,?LINE}, Some ]),
             throw({hbase_exception, {unexpected_behavior, Some} })
     end,
@@ -824,6 +826,8 @@ process_indexed_hbase(_Table, _ProtoType, {hbase_exception, Reason}, _TreeEts)->
     receive
         {PidReciverResult, get_pack_of_facts}->
             PidReciverResult !  {hbase_exception, Reason};
+         finish ->
+             ?WAIT("~p got normal finish  ~n",[{?MODULE,?LINE} ]);
          Some ->     
             ?LOG("~p got unexpected ~p ~n",[{?MODULE,?LINE}, Some ]),
              throw({hbase_exception, {unexpected_behavior, Some} })
@@ -838,7 +842,9 @@ process_indexed_hbase(_Table, _ProtoType, [], _TreeEts)->
         {'DOWN', _MonitorRef, _Type, _Object, _Info} ->
                ?WAIT("~p got exit ~p ~n",[{?MODULE,?LINE}, Reason ]);
         {'EXIT',_Pid, Reason}->
-              ?WAIT("~p got exit ~p ~n",[{?MODULE,?LINE}, Reason ]);
+             ?WAIT("~p got exit ~p ~n",[{?MODULE,?LINE}, Reason ]);
+        finish ->
+             ?WAIT("~p got normal finish  ~n",[{?MODULE,?LINE} ]);
          Some -> 
             ?WAIT("~p got unexpected ~p ~n",[{?MODULE,?LINE}, Some ]),
             throw({hbase_exception, {unexpected_behavior, Some} })
@@ -857,6 +863,8 @@ process_indexed_hbase(Table, ProtoType,  [NewKey| NewPreRes] , TreeEts)->
                   true;
             {'DOWN', _MonitorRef, _Type, _Object, _Info} ->
                   true;
+            finish ->
+                ?WAIT("~p got normal finish  ~n",[{?MODULE,?LINE} ]);
             Some ->%%may be finish
                   ?WAIT("~p GOT  wait in fact hbase ~p ~n",[{?MODULE,?LINE}, ProtoType ]),
                   ?LOG("~p got unexpected ~p ~n",[{?MODULE,?LINE}, Some ]),
@@ -999,6 +1007,8 @@ process_loop_hbase( {hbase_exception, Reason}, ProtoType)->
     receive 
             {PidReciverResult ,get_pack_of_facts} ->
                     PidReciverResult ! {hbase_exception, Reason};
+             finish ->
+                   ?WAIT("~p got normal finish  ~n",[{?MODULE,?LINE} ]);
              Some ->%%may be finish
                   ?WAIT("~p GOT  wait in fact hbase ~p ~n",[{?MODULE,?LINE}, ProtoType ]),
                   ?LOG("~p got unexpected ~p ~n",[{?MODULE,?LINE}, Some ])
@@ -1014,6 +1024,8 @@ process_loop_hbase( {Scanner, []}, ProtoType)->
 	    {PidReciverResult ,get_pack_of_facts} ->
 		   PidReciverResult ! [],
 		   process_loop_hbase( {Scanner, finish}, ProtoType);
+            finish ->
+                ?WAIT("~p got normal finish  ~n",[{?MODULE,?LINE} ]);
 	    {'EXIT', From, Reason} ->
      	  	  ?WAIT("~p GOT  exit in fact hbase ~p ~n",[{?MODULE,?LINE}, ProtoType ]),
 		  ?LOG("~p got exit signal  ~p ~n",[{?MODULE,?LINE}, {From, Reason} ]);
@@ -1037,6 +1049,8 @@ process_loop_hbase( {Scanner, Res}, ProtoType)->
 		    PidReciverResult ! Res,
 		    NewList = get_data( Scanner, ProtoType),
 		    process_loop_hbase( {Scanner, NewList}, ProtoType);
+            finish ->
+                    ?WAIT("~p got normal finish  ~n",[{?MODULE,?LINE} ]);
             {'EXIT', From, Reason} ->
                   ?WAIT("~p GOT  exit in fact hbase ~p ~n",[{?MODULE,?LINE}, ProtoType ]),
                   ?LOG("~p got exit signal  ~p ~n",[{?MODULE,?LINE}, {From, Reason} ]);
@@ -1096,8 +1110,8 @@ start_recr(Facts, ProtoType)->
 					  case prolog_matching:is_var(Pat) of
 					      positive ->   {In, Index+1 };
 					      _ -> Var = create_hbase_json_filter( {Pat, Elem} ),  
-						    ?DEBUG(" ~p generate ~p~n",[{?MODULE,?LINE}, { Pat, Elem } ]),
-						  {<< In/binary, ",", Var/binary>>, Index+1}
+						   ?DEBUG(" ~p generate ~p~n",[{?MODULE,?LINE}, { Pat, Elem } ]),
+						   {<< In/binary, ",", Var/binary>>, Index+1}
 					  end
 				      end, {<<>>,InIndex}, ProtoType ),
 	  Size = length(ProtoType),
@@ -1936,7 +1950,7 @@ generate_key(ProtoType) when is_tuple(ProtoType)->
 ;
 generate_key(ProtoType)->
    String =  string:join(common:list_to_unicode(ProtoType), ","),
-   hexstring( crypto:md5( unicode:characters_to_binary( String )  ) ).
+   hexstring( crypto:hash(md5, unicode:characters_to_binary( String )  ) ).
 
    
 
