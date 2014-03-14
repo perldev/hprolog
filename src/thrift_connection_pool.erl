@@ -44,7 +44,6 @@ start_pool()->
                       { ok, {Host, Port} } =  application:get_env(eprolog, thrift_connection),
                       { ok, Count } =  application:get_env(eprolog, thrift_pool_size),
                       { ok,  Critical } = application:get_env(eprolog, thrift_busy_critical_timeout), 
-%                     { Host, Port}  = ?THRIFT_CONF,
                       gen_server:cast(?MODULE,{start_reconnect_timer, Critical}),
                       Hosts = 
                             lists:map( fun(E)-> 
@@ -55,8 +54,9 @@ start_pool()->
                                     throw({hbase_thrift_exception, Exception})
                             end
                        end, lists:seq(1, Count) ),
+                       
                        {ok, Thrift_reconnect_timeout} = application:get_env(eprolog, thrift_reconnect_timeout),
-                       ?THRIFT_LOG("~p thrift server will start ~p  connections ~n", [{?MODULE,?LINE}, Count ]),
+                       ?THRIFT_LOG("~p thrift server will start ~p  connections  to ~p ~n", [{?MODULE,?LINE}, Count, {Host, Port} ]),
                        thrift_connection_pool:set_connection_pool(Hosts, Thrift_reconnect_timeout );
                    _->
                        ?THRIFT_LOG("~p thrift server will do nothing ~n",
@@ -158,7 +158,8 @@ handle_cast( { reconnect,  hbase_thrift_exception, Reason }, MyState) ->
 handle_cast( { reconnect,  Key, Reason }, MyState) ->
         ?THRIFT_POOL("~p got back new connection  ~p reason is ~p ~n",
                            [ { ?MODULE, ?LINE }, Key, Reason ]),
-         {Host, Port}  = ?THRIFT_CONF,
+%          {Host, Port}  = ?THRIFT_CONF,
+         { ok, {Host, Port} } =  application:get_env(eprolog, thrift_connection),
          Stack = MyState#thrift_pool.free,
          case ets:lookup( MyState#thrift_pool.busy, Key  ) of
             [ { Key, TClient, Time } ] ->
