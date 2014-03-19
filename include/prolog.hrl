@@ -31,7 +31,7 @@
 -define(LOAD_LOG,1).
 
 
-%-define(ENABLE_LOG,1).
+-define(ENABLE_LOG,1).
 
 %%for connect prolog with web console
 -define(WEB,1).
@@ -139,7 +139,7 @@
 -define('INCLUDE_HBASE'(X),  fact_hbase:load_rules2ets(X) ).
 
 -define('THRIFT_POOL'(Str, Pars ), true). % lager:warning(Str, Pars) ).
--define('THRIFT_LOG'(Str, Pars ),  true). %lager:warning(Str, Pars) ).
+-define('THRIFT_LOG'(Str, Pars ),  lager:warning(Str, Pars) ).
 
 -else.
 -define('THRIFT_POOL'(Str, Pars ),   true ).
@@ -257,35 +257,6 @@
 -define(SCANNERS_HOSTS_LINK, hbase_scanners_hosts ).
 
 
--ifdef(DEV_BUILD).
-
--define(THRIFT_CONF,  { "hd-test-2.ceb.loc", 9091 }  ). 
-
--define(HBASE_HOSTS, 
-        [
-         {"http://avias-db-2.ceb.loc:60050/", "avias-db-2.ceb.loc:60050" },
-         {"http://avias-db-2.ceb.loc:60050/", "avias-db-2.ceb.loc:60050" },
-         {"http://avias-db-2.ceb.loc:60050/", "avias-db-2.ceb.loc:60050" },
-         {"http://avias-db-2.ceb.loc:60050/", "avias-db-2.ceb.loc:60050" },
-         {"http://avias-db-2.ceb.loc:60050/", "avias-db-2.ceb.loc:60050" }
-        ]).
--define(HBASE_HOSTS_COUNT,5).
-
--else.
-
--define(THRIFT_CONF,  { "hd-test-2.ceb.loc", 9090 }  ).
-
--define(HBASE_HOSTS, 
-	[
-	 {"http://hd-test-2.ceb.loc:60050/", "hd-test-2.ceb.loc:60050" },
-	 {"http://hd-test-2.ceb.loc:60050/", "hd-test-2.ceb.loc:60050" },
-	 {"http://hd-test-2.ceb.loc:60050/", "hd-test-2.ceb.loc:60050" },
-	 {"http://hd-test-2.ceb.loc:60050/", "hd-test-2.ceb.loc:60050" }
-         ]).
--define(HBASE_HOSTS_COUNT,4).
-
--endif.
-
 
 
 -define(EMPTY,{}).
@@ -302,6 +273,7 @@
 
 -record(browscap, { browser = null, version = null, majorver = null, minorver = null, platform = null }).
 
+%%to define permissions on erlang modules
 -define(AVALIBLE_ERL_MODULES,
 [
         
@@ -323,7 +295,7 @@
 'to_float',
 'to_integer',
 'to_list',
-'to_atom', %%realize !!
+'to_atom', 
 'write_unicode',
 'length',
 'localtime',
@@ -408,8 +380,11 @@
 'log10' ,
 'pow' ,%(X, Y) ,
 'sqrt' ,
-'pi' %()
-
+'pi', %()
+%%not implemented
+setof,
+bagof,
+findall
 ]
 
 ).

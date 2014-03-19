@@ -3,9 +3,9 @@
 %%% Purpose : A simple  shell.
 -module(prolog_shell).
 
--export([start/0,start_big/1,server/1]).
+-export([start/0,start_big/1,server/1, get_code_memory_html/1, get_code_memory/1,
+         shell_var_match/1, make_temp_aim/1, make_temp_complex_aim/2, api_start/1]).
 
--compile(export_all).
 -include("prolog.hrl").
 
 
@@ -16,7 +16,6 @@ api_start_anon(Prefix, {heir, Heir})->
 ;
 api_start_anon(Prefix, FileName)->
     prolog:only_rules_create_inner(Prefix, FileName)
-        
 .
 
 
@@ -237,10 +236,7 @@ get_hbase_meta_code_html(Prefix)->
 
 get_hbase_meta_code(Prefix)->
 
-%          add_new_rule(Tree = { ':-' ,ProtoType, BodyRule}, Pos )->
-%          ?DEBUG("~p new rule to hbase  ~p ~n",[ {?MODULE,?LINE}, Tree ] ),
-%          [ Name | _ProtoType ] = tuple_to_list(ProtoType),
-            %%if non hbase it can be non existed
+
             case catch
                 ets:tab2list( common:get_logical_name(Prefix, ?META) ) of
             {'EXIT', _ }-> <<"">>;

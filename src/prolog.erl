@@ -1,12 +1,34 @@
 -module(prolog).
--compile(export_all).
 %%% File    : prolog.erl
 %%% Author  : Bogdan Chaicka
 %%% Purpose : A simple  shell.
 %%This module provides prolog kernel work with parsed code before
 %%% code is presented as a tree using tuples
 
--export([call/1, call/2, call/3, start_aim_spawn/5]).
+-export([call/1,
+          delete_structs/1,
+          compile/3,compile/2,
+          create_inner_structs/1,
+          call/2, call/3,
+          start_aim_spawn/5,
+          memory2hbase/2,
+          memory2hbase/6,
+          memory2hbase/4,
+          process_term/2,
+          next_aim/2,
+          next/1,
+          finish/1,
+	  operators/1,
+	  proc_vars_hack/2,
+	  proc_vars_hack/1,
+	  bound_temp_and_original/2,
+	  inner_change_namespace/3,
+	  clean_tree/1,
+	  create_inner_structs/2,
+	  only_rules_create_inner/2,
+	  destroy_mem_namespace/1,
+          load_database_file/2
+          ]).
 
 %%deprecate this
 -export([aim/8, aim/7]).
@@ -52,6 +74,10 @@ clean_tree(TreeEts)->
 .     
 
 
+
+
+
+
         
   
     
@@ -90,16 +116,25 @@ inner_change_namespace(true, Name, TreeEts)->
    %%TODO may be delete after a long time not using
    case ets:info(common:get_logical_name(Name, ?META) ) of
         undefined ->
-%             delete_structs(TreeEts),
             create_inner_structs(Name),
             ?INCLUDE_HBASE( Name );
         _ ->
-           nothing
+            nothing
     end,
     ets:insert(TreeEts,{system_record, ?PREFIX, Name}),
     true
 .
 
+destroy_mem_namespace(Name)->
+        true.
+
+load_database_file(Path, Name)->
+         create_inner_structs(),
+         only_rules_create_inner(Name, Path),
+         true.
+        
+
+%%delete tables
 delete_structs(Prefix)->
       R1 = ( catch ets:delete(common:get_logical_name(Prefix, ?META_WEIGHTS) ) ),
       R2 = ( catch ets:delete(common:get_logical_name(Prefix, ?RULES) ) ),
@@ -110,6 +145,7 @@ delete_structs(Prefix)->
       {R1,R2,R3,R4,R5,R6}
 .
 
+%%delete objects in tables
 delete_inner_structs(Prefix)->
       ets:delete_all_objects(common:get_logical_name(Prefix, ?RULES) ),
       ets:delete_all_objects(common:get_logical_name(Prefix, ?DYNAMIC_STRUCTS)),
@@ -127,10 +163,9 @@ only_rules_create_inner(Prefix)->
         ets:new(common:get_logical_name(Prefix, ?DYNAMIC_STRUCTS),[named_table, set, public, { heir,Pid, Prefix } ]),
         ets:new(common:get_logical_name(Prefix, ?RULES),[named_table, bag, public, { heir,Pid, Prefix}])
 .
-
+%%% USED
 only_rules_create_inner(Prefix, FileName)->
      Pid = erlang:whereis(converter_monitor), %%in result all ets tables will be transfered to converter_monitor
-     ets:new(common:get_logical_name(Prefix, ?DYNAMIC_STRUCTS),[named_table, set, public, { heir,Pid, Prefix } ]),
      case catch ets:tab2file(FileName) of
             {ok, Ets } ->
                 ets:setopts(Ets, [ {heir, Pid, Prefix}]),
@@ -210,6 +245,22 @@ process_code_ets_key(Key, RealRulesTable, RulesTable2)->
     process_code_ets_key(NewKey, RealRulesTable, RulesTable2 )
 .
 
+
+%%copy all from foreign namespace on foreign machine to 
+%% the namespace on Host with Port and NameSpace
+memory2hbase( HostFrom, Port,  NameSpace1, HostTo, ResPort, NameSpace2 )->
+        
+                
+        
+        
+        true.
+
+%%copy all from current namespace on local machine to 
+%% the namespace on Host with Port and NameSpace
+memory2hbase( NameSpace1, Host, ResPort, NameSpace2 )->
+        
+        true.
+%%%only rules
 memory2hbase(NameSpace1, NameSpace2)->
         RealRulesTable = common:get_logical_name(NameSpace1, ?RULES),
         RulesTable2 = common:get_logical_name(NameSpace2, ?RULES_TABLE),
@@ -325,7 +376,7 @@ call(Goal)->
 call(Goal, Tracing)->
         call(Goal, Tracing,  default).
 
--spec call(tuple(), integer(), atom()  )-> false | {true, tuple(), { pid(), reference() }  }.
+-spec call(tuple(), atom(), atom()  )-> false | {true, tuple(), { pid(), reference() }  }.
 
 call(Goal, Tracing,   NameSpace)->
         OperationLimit  =  application:get_env(eprolog, max_operations_limit),
@@ -339,22 +390,22 @@ call(Goal, Tracing,   NameSpace, OperationLimit)->
           {ok, Child} =  proc_spawn(self(), Goal, Tracing,   NameSpace, OperationLimit ),
           receive 
                 false ->
-                        finish({Child, undefined}), 
+%                         finish({Child, undefined}), 
                         false;
                 {true, Context, Prev} ->
                         ?DEBUG("~p result of  ~p ~n",[ {?MODULE,?LINE}, {Context, Prev} ]),
-                        {true, Context, {Child, Prev} };
+                        {true, Context, { erlang:pid_to_list(Child) , Prev} };
                 Unexpected ->
                         finish({Child, undefined}), 
                         throw( Unexpected )          
           end
 .
-
+%%use list_to_pid for avoid problems with transport pids from one node to another
 next({Child, Prev})->
-         Child ! {next, Prev},
+         Pid = erlang:list_to_pid(Child),
+         Pid ! {next, Prev},
          receive 
                 false ->
-                        finish({Child, undefined}), 
                         false;
                 {true, Context, Prev} ->
                         ?DEBUG("~p result of  ~p ~n",[ {?MODULE,?LINE}, {Context, Prev} ]),
@@ -365,7 +416,8 @@ next({Child, Prev})->
           end.
          
 
-finish({Pid,Prev})->
+finish({Child, Prev})->
+        Pid = list_to_pid(Child),
         Pid ! finish.
         
 
@@ -402,7 +454,6 @@ start_aim_spawn( BackPid, Goal, Tracing, NameSpace, Limit )->
          aim_spawn(start, BackPid, Goal, TreeEts, Limit). 
 %% must bee
 aim_spawn(start, BackPid, Goal, TreeEts, Limit  )->
-                
                 Res = ( catch prolog:aim( finish, ?ROOT, Goal,  dict:new(), 1, TreeEts, ?ROOT,  Limit) ),
                 BackPid ! Res,
                 receive 
@@ -466,7 +517,7 @@ loop([aim, Type, Params] )->
 loop(Res)->
      Res.
     
-%  prolog:next_aim(Prev, TreeEts )
+
 next_aim(Prev, TreeEts)->
    loop([ aim, next_aim, {Prev, TreeEts} ])
 .
@@ -854,14 +905,14 @@ aim(default, {NextBody, PrevIndex , Body = {'->', Objection, SecondBody }, Conte
          NewParams = { Parent, Index, TreeEts},
          [aim, next_aim, NewParams ]
 ;
-aim(default, {NextBody, PrevIndex , {'__cut_solution', Head }, Context, Index, TreeEts, Parent})->
+aim(default, {NextBody, PrevIndex, {'__cut_solution', Head }, Context, Index, TreeEts, Parent})->
         [AimRecord] = ets:lookup(TreeEts, Head),
         ets:insert(TreeEts, AimRecord#aim_record{next = one, solutions = [] }),
         NewParams = { NextBody, Context, PrevIndex,  Index, TreeEts, Parent },
         [aim, conv3, NewParams]
         
 ;
-aim(default, {NextBody, PrevIndex , {'__inner_retract', Body }, Context, Index, TreeEts, Parent})->
+aim(default, {NextBody, PrevIndex, {'__inner_retract', Body }, Context, Index, TreeEts, Parent})->
         prolog_built_in:delete_fact(TreeEts, Body, Context,?SIMPLE_HBASE_ASSERT),
         NewParams = { NextBody, Context, PrevIndex,  Index, TreeEts, Parent },
         [aim, conv3, NewParams]
@@ -874,9 +925,7 @@ aim(default, {NextBody, PrevIndex ,  MainBody = {'clause', Head_, Body_ }, Conte
          ?DEV_DEBUG("~p  make clause  ~p ~n",[{?MODULE,?LINE},  {Head, Body} ]),
          Name = element(1, Head),%%from the syntax tree get name of fact
          {TempSearch, _NewContext} = prolog_shell:make_temp_aim(MainBody),%% think about it
-
          RulesTable = common:get_logical_name(TreeEts, ?RULES), 
-        
          RulesList = ets:lookup(RulesTable, Name), 
          
          ?DEV_DEBUG("~p  possible clause  ~p ~n",[{?MODULE,?LINE}, RulesList ]),
@@ -903,11 +952,11 @@ aim(default, {NextBody, PrevIndex ,  MainBody = {'clause', Head_, Body_ }, Conte
 %%%OPTIMIZE IT  %%TODO
 aim(default, {NextBody, PrevIndex , Body = {'once', ProtoType }, Context, Index, TreeEts, Parent})->
           BodyBounded = bound_aim(ProtoType, Context),
-       %%we make just to temp aims with two patterns 
+         %%we make just to temp aims with two patterns 
 
-       ?TRACE(Index, TreeEts, Body, Context),
+        ?TRACE(Index, TreeEts, Body, Context),
         ets:insert(TreeEts,
-         #aim_record{ id = Index,
+        #aim_record{ id = Index,
                       prototype = {once, BodyBounded },
                       temp_prototype = {once, BodyBounded }, 
                       solutions = [ {once, { {'_X_ONCE'} }, {',', {'call', {'_X_ONCE'} }, '!' } } ],
@@ -1323,7 +1372,7 @@ bound_struct_hack({Operator, Var1, Var2}, Context)->
 ;
 bound_struct_hack(Var, Context) when is_tuple(Var)->
 	 
-	 {BoundVar, NewContext }= 
+	 { BoundVar, NewContext }= 
 	      lists:mapfoldl( fun(E, Dict)->
 				    bound_struct_hack(E, Dict)
 			      end , Context, 

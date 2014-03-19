@@ -15,6 +15,7 @@
         start_recr/2,
         generate_key/1,
         delete_all_rules/1,
+        delete_all_rules/3,
         get_facts/1,
         start_fact_process/3,
         del_link_fact/3,
@@ -161,7 +162,19 @@ load_rules2ets(Prefix)->
 
 
 
-
+delete_all_rules(Prefix, Host, Port)->
+       Scanner  = generate_scanner(1024,<<>>),
+       RealTable = common:get_logical_name(Prefix, ?RULES_TABLE),
+%         {"http://hd-test-1.ceb.loc:8080/", "hd-test-1.ceb.loc:8080" }
+       ScannerUrl  = get_scanner(RealTable, Scanner,
+                                 "http://"++Host++":"++Port++"/", Host++":"++Port),
+       Names = get_list_of_rules(ScannerUrl, RealTable, [] ),
+       
+       ?DEBUG("~p delete rules ~p from ~p~n",[{?MODULE,?LINE}, Names, Prefix]),
+       lists:foreach( fun(E)->  
+                         del_key(binary_to_list(E), RealTable)
+                       end, Names)
+.
 
 delete_all_rules(Prefix)->
        Scanner  = generate_scanner(1024,<<>>),
@@ -173,6 +186,7 @@ delete_all_rules(Prefix)->
                          del_key(binary_to_list(E), RealTable)
                        end, Names)
 .
+
 get_list_of_rules([], _Table, In )->
     ?LOG("~p empty scanner ~p ~n",[{?MODULE,?LINE}]), 
     In
@@ -1144,12 +1158,13 @@ generate_scanner(Limit, <<  Filter/binary >>)->
     <<"<Scanner batch=\"",Limit/binary, "\" ><filter>", Filter/binary ,"</filter></Scanner>" >>
 .
 %%TODO ADD SUPERVISOUR FOR all scanners
-
-
 get_scanner(Facts, Scanner)->
-	  
-	{Hbase_Res, Host } = get_rand_host(),
-	  
+        {Hbase_Res, Host } = get_rand_host(),
+        get_scanner(Facts, Scanner, Hbase_Res, Host ).
+        
+
+get_scanner(Facts, Scanner, Hbase_Res, Host  )->
+	  	  
 
  	 ?LOG("~p send to ~p ~n",[ {?MODULE,?LINE}, {Scanner, 
 				      Hbase_Res++Facts++"/scanner",
@@ -1174,7 +1189,7 @@ get_scanner(Facts, Scanner)->
                             ?LOG("~p got from hbase ~p ",[?LINE,Headers]),
                             case  lists:keysearch("location",1, Headers) of
 				{ value, { _H ,Location } } -> store_host(Location, Host ), Location;
-				false -> get_scanner(Facts, Scanner)
+				false -> get_scanner(Facts, Scanner, Hbase_Res, Host)
 			    end;
                       Res ->
                             ?LOG("~p got from hbase ~p ",[?LINE,Res]),
