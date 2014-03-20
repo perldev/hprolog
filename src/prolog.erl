@@ -12,7 +12,6 @@
           call/2, call/3,
           start_aim_spawn/5,
           memory2hbase/2,
-          memory2hbase/6,
           memory2hbase/4,
           process_term/2,
           next_aim/2,
@@ -26,8 +25,8 @@
 	  clean_tree/1,
 	  create_inner_structs/2,
 	  only_rules_create_inner/2,
-	  destroy_mem_namespace/1,
-          load_database_file/2
+          load_database_file/2,
+          save_database_file/2
           ]).
 
 %%deprecate this
@@ -124,15 +123,20 @@ inner_change_namespace(true, Name, TreeEts)->
     ets:insert(TreeEts,{system_record, ?PREFIX, Name}),
     true
 .
+%%save namespace to file
+save_database_file(Name, Path)->
+        NormalName  = common:get_logical_name(Name, ?RULES),
+        ets:tab2file(NormalName, Path)
+.
 
-destroy_mem_namespace(Name)->
-        true.
-
+%%load namespace from file
 load_database_file(Path, Name)->
-         create_inner_structs(),
-         only_rules_create_inner(Name, Path),
-         true.
-        
+         create_inner_structs(Name),
+         NormalName  = common:get_logical_name(Name, ?RULES),
+         ( catch ets:delete( NormalName) ),
+         Ets = only_rules_create_inner(Name, Path), %%% load from file
+         ets:rename(Ets, NormalName).
+          
 
 %%delete tables
 delete_structs(Prefix)->
@@ -156,23 +160,22 @@ delete_inner_structs(Prefix)->
       
 .
 
-%%%almost DEPRECATED 
 %for dynamic change cloud rules in web  console
 only_rules_create_inner(Prefix)->
         Pid = erlang:whereis(auth_demon), %%in result all ets tables will be transfered to auth demon
         ets:new(common:get_logical_name(Prefix, ?DYNAMIC_STRUCTS),[named_table, set, public, { heir,Pid, Prefix } ]),
         ets:new(common:get_logical_name(Prefix, ?RULES),[named_table, bag, public, { heir,Pid, Prefix}])
 .
-%%% USED
+% %%% USED
 only_rules_create_inner(Prefix, FileName)->
-     Pid = erlang:whereis(converter_monitor), %%in result all ets tables will be transfered to converter_monitor
-     case catch ets:tab2file(FileName) of
-            {ok, Ets } ->
-                ets:setopts(Ets, [ {heir, Pid, Prefix}]),
-                Ets;
-            _->
-                ets:new(common:get_logical_name(Prefix, ?RULES),[named_table, bag, public, { heir,Pid, Prefix }])
-    end.
+      Pid = erlang:whereis(converter_monitor), %%in result all ets tables will be transfered to converter_monitor
+      case catch ets:file2tab(FileName) of
+             {ok, Ets } ->
+                 ets:setopts(Ets, [ {heir, Pid, Prefix}]),
+                 Ets;
+             _->
+                 ets:new(common:get_logical_name(Prefix, ?RULES),[named_table, bag, public, { heir,Pid, Prefix }])
+     end.
     
 
 
@@ -249,17 +252,16 @@ process_code_ets_key(Key, RealRulesTable, RulesTable2)->
 %%copy all from foreign namespace on foreign machine to 
 %% the namespace on Host with Port and NameSpace
 memory2hbase( HostFrom, Port,  NameSpace1, HostTo, ResPort, NameSpace2 )->
-        
-                
-        
-        
-        true.
+    throw(not_implemented)
+.
 
 %%copy all from current namespace on local machine to 
 %% the namespace on Host with Port and NameSpace
 memory2hbase( NameSpace1, Host, ResPort, NameSpace2 )->
-        
-        true.
+         fact_hbase:delete_all_rules(NameSpace2, Host, ResPort),
+         RealRulesTable = common:get_logical_name(NameSpace1, ?RULES),
+         RulesTable2 = common:get_logical_name(NameSpace2, ?RULES_TABLE)
+          .
 %%%only rules
 memory2hbase(NameSpace1, NameSpace2)->
         RealRulesTable = common:get_logical_name(NameSpace1, ?RULES),

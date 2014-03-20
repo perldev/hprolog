@@ -772,11 +772,8 @@ inner_defined_aim(_NextBody, _PrevIndex , Body = {'copy_namespace',  NameSpace2 
       Res = prolog:memory2hbase( NameSpace1, NameSpace2),
       {Res, Context}      
 ;
-inner_defined_aim(_NextBody, _PrevIndex , Body = {'copy_namespace', HostFrom, Port, NameSpace1,
-      Res = prolog:memory2hbase( HostFrom, Port,  NameSpace1, HostTo, ResPort, NameSpace2 ),
-      {Res, Context}      
-;
-inner_defined_aim(_NextBody, _PrevIndex , Body = {'copy_namespace', Host, ResPort, NameSpace2 },  Context, _Index, TreeEts)->
+inner_defined_aim(_NextBody, _PrevIndex , Body = {'copy_namespace', Host, ResPort, NameSpace2 }, 
+                   Context, _Index, TreeEts)->
       [ { system_record, ?PREFIX, NameSpace1 } ] = ets:lookup(TreeEts, ?PREFIX),
       Res = prolog:memory2hbase( NameSpace1, Host, ResPort, NameSpace2 ),
       {Res, Context}      
