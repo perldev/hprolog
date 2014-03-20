@@ -7,6 +7,7 @@
 
 -export([call/1,
           delete_structs/1,
+          delete_inner_structs/1,
           compile/3,compile/2,
           create_inner_structs/1,
           call/2, call/3,
