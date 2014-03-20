@@ -178,7 +178,8 @@ only_rules_create_inner(Prefix, FileName)->
              {ok, Ets } ->
                  ets:setopts(Ets, [ {heir, Pid, Prefix}]),
                  Ets;
-             _->
+             Res ->
+                 ?DEBUG("~p process result of creating code ~p~n",[{?MODULE,?LINE}, Res  ]),  
                  ets:new(common:get_logical_name(Prefix, ?RULES),[named_table, bag, public, { heir,Pid, Prefix }])
      end.
     
