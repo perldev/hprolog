@@ -31,7 +31,7 @@
 -define(LOAD_LOG,1).
 
 
--define(ENABLE_LOG,1).
+%-define(ENABLE_LOG,1).
 
 %%for connect prolog with web console
 -define(WEB,1).
