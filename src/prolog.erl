@@ -269,12 +269,16 @@ memory2hbase( NameSpace1, Host, ResPort, NameSpace2 )->
 memory2hbase(NameSpace1, NameSpace2)->
         RealRulesTable = common:get_logical_name(NameSpace1, ?RULES),
         RulesTable2 = common:get_logical_name(NameSpace2, ?RULES_TABLE),
-        ?DEBUG("~p move ~p to ~p table ~p ~n",[ {?MODULE,?LINE},NameSpace1, NameSpace2,RulesTable2]),
-        
+        ?DEBUG("~p move ~p to ~p table ~p ~n rules ~p ~n",[ {?MODULE,?LINE},NameSpace1,
+                                                            NameSpace2,RulesTable2,
+                                                            ets:tab2list(RealRulesTable)
+                                                            ]),
+        throw({hbase_exception,create_namespace}),
         case fact_hbase:check_exist_table(RulesTable2) of
             true->
                  fact_hbase:delete_all_rules(NameSpace2),
-                 FirstKey = ets:first(RealRulesTable),        
+                 FirstKey = ets:first(RealRulesTable),   
+                 
                  case catch  process_code_ets_key(FirstKey, RealRulesTable, RulesTable2 ) of
                         {'EXIT', Reason}->
                                 throw(Reason);
