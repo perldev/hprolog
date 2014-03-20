@@ -27,7 +27,8 @@
 	  create_inner_structs/2,
 	  only_rules_create_inner/2,
           load_database_file/2,
-          save_database_file/2
+          save_database_file/2,
+          cut_all_solutions/3
           ]).
 
 %%deprecate this
