@@ -274,7 +274,6 @@ memory2hbase(NameSpace1, NameSpace2)->
                                                             NameSpace2,RulesTable2,
                                                             ets:tab2list(RealRulesTable)
                                                             ]),
-        throw({hbase_exception,create_namespace}),
         case fact_hbase:check_exist_table(RulesTable2) of
             true->
                  fact_hbase:delete_all_rules(NameSpace2),
