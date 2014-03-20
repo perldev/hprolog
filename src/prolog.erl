@@ -136,7 +136,11 @@ load_database_file(Path, Name)->
          NormalName  = common:get_logical_name(Name, ?RULES),
          ( catch ets:delete( NormalName) ),
          Ets = only_rules_create_inner(Name, Path), %%% load from file
-         ets:rename(Ets, NormalName).
+         case Ets of
+                NormalName-> ok;
+                _->
+                        ets:rename(Ets, NormalName)
+         end.
           
 
 %%delete tables
