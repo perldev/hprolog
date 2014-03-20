@@ -4,7 +4,7 @@
 -module(prolog_shell).
 
 -export([start/0,start_big/1,server/1, get_code_memory_html/1, get_code_memory/1,
-         shell_var_match/1, make_temp_aim/1, make_temp_complex_aim/2, api_start/1]).
+         shell_var_match/1, make_temp_aim/1, make_temp_complex_aim/2, api_start/1, api_start_anon/2]).
 
 -include("prolog.hrl").
 
