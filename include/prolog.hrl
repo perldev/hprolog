@@ -11,7 +11,8 @@
 -define(INNER_DELIMITER_BIN,<<".%#_rule_delimiter:-true_#%">>).
 -define(INNER_DELIMITER,".%#_rule_delimiter:-true_#%").
 
-
+%%move to config
+-define(DEFAULT_WAIT_NEXT_TIMEOUT, 10000).
 -define(DEFAULT_TIMEOUT, 210000).%%miliseconds
 %%miliseconds
 -define(FATAL_WAIT_TIME,210000).% 60000).

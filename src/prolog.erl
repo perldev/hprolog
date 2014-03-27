@@ -409,14 +409,15 @@ call(Goal, Tracing,   NameSpace)->
 call(Goal, Tracing,   NameSpace, {ok, Count})->
         call(Goal, Tracing,   NameSpace, Count);
 call(Goal, Tracing,   NameSpace, OperationLimit)->
-          {ok, Child} =  proc_spawn(self(), Goal, Tracing,   NameSpace, OperationLimit ),
+          {ok, ChildP} =  proc_spawn(self(), Goal, Tracing,   NameSpace, OperationLimit ),
+	  Child = erlang:pid_to_list(ChildP),
           receive 
                 false ->
 %                         finish({Child, undefined}), 
                         false;
                 {true, Context, Prev} ->
                         ?DEBUG("~p result of  ~p ~n",[ {?MODULE,?LINE}, {Context, Prev} ]),
-                        {true, Context, { erlang:pid_to_list(Child) , Prev} };
+                        {true, Context, { Child , Prev} };
                 Unexpected ->
                         finish({Child, undefined}), 
                         throw( Unexpected )          
@@ -490,6 +491,9 @@ aim_spawn(start, BackPid, Goal, TreeEts, Limit  )->
                           clean_tree(TreeEts), 
                           BackPid ! {unexpected, Signal},
                           exit(normal)
+		     after ?DEFAULT_WAIT_NEXT_TIMEOUT ->
+			 clean_tree(TreeEts), 
+                        exit(normal)
                 end;
 aim_spawn(Prev, BackPid, Goal, TreeEts, Limit  )->
                 ?DEBUG("~p next aim ~p~n",[{?MODULE,?LINE}, {Prev,Goal} ]),
@@ -508,6 +512,10 @@ aim_spawn(Prev, BackPid, Goal, TreeEts, Limit  )->
                         BackPid ! {unexpected, Signal},
                         clean_tree(TreeEts), 
                         exit(normal)
+		    after ?DEFAULT_WAIT_NEXT_TIMEOUT ->
+			 clean_tree(TreeEts), 
+                        exit(normal)
+	  
                 end
 .
 
