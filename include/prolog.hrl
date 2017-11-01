@@ -247,28 +247,28 @@
 
 -ifdef(DEV_BUILD).
 
--define(THRIFT_CONF,  { "hd-test-2.ceb.loc", 9091 }  ). 
+-define(THRIFT_CONF,  { "hceb.loc", 9091 }  ). 
 
 -define(HBASE_HOSTS, 
         [
-         {"http://avias-db-2.ceb.loc:60050/", "avias-db-2.ceb.loc:60050" },
-         {"http://avias-db-2.ceb.loc:60050/", "avias-db-2.ceb.loc:60050" },
-         {"http://avias-db-2.ceb.loc:60050/", "avias-db-2.ceb.loc:60050" },
-         {"http://avias-db-2.ceb.loc:60050/", "avias-db-2.ceb.loc:60050" },
-         {"http://avias-db-2.ceb.loc:60050/", "avias-db-2.ceb.loc:60050" }
+         {"h-db/", "0" },
+         {"http://0050/", "aoc:60050" },
+         {"http:60050/", "avias:60050" },
+         {"http050/", "avias.loc:60050" },
+         {"http://av0050/", "avias-:60050" }
         ]).
 -define(HBASE_HOSTS_COUNT,5).
 
 -else.
 
--define(THRIFT_CONF,  { "hd-test-2.ceb.loc", 9090 }  ).
+-define(THRIFT_CONF,  { "h.loc", 9090 }  ).
 
 -define(HBASE_HOSTS, 
 	[
-	 {"http://hd-test-2.ceb.loc:60050/", "hd-test-2.ceb.loc:60050" },
-	 {"http://hd-test-2.ceb.loc:60050/", "hd-test-2.ceb.loc:60050" },
-	 {"http://hd-test-2.ceb.loc:60050/", "hd-test-2.ceb.loc:60050" },
-	 {"http://hd-test-2.ceb.loc:60050/", "hd-test-2.ceb.loc:60050" }
+	 {"http:/.loc:60050/", "t-b.loc:60050" },
+	 {"http://h.loc:60050/", "hd-te050" },
+	 {"http://hd-tloc:60050/", "hd-t050" },
+	 {"http://hd-eb.loc:60050/", "hd-tec:60050" }
          ]).
 -define(HBASE_HOSTS_COUNT,4).
 
